@@ -10,6 +10,7 @@ export default function HomeScreen() {
       <Text style={styles.instruction}>
         📷 Scanner - Scan barcodes with camera{'\n'}
         🔢 Manual - Type UPC codes manually{'\n'}
+        🔍 Search - Find products & ingredients{'\n'}
         🕒 History - View your past scans
       </Text>
     </View>

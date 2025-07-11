@@ -86,28 +86,57 @@ export class OpenFoodFactsService {
     return VeganStatus.VEGAN;
   }
 
-  // Helper method to search for products by name (for future features)
-  static async searchProducts(query: string, page: number = 1): Promise<Product[]> {
+  // Enhanced product search with pagination and better error handling
+  static async searchProducts(query: string, page: number = 1, pageSize: number = 20): Promise<{
+    products: Product[];
+    totalCount: number;
+    currentPage: number;
+    hasNextPage: boolean;
+  }> {
     try {
       const response = await axios.get(
-        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page=${page}`
+        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page=${page}&page_size=${pageSize}`
       );
 
-      if (!response.data.products) return [];
+      if (!response.data.products) {
+        return {
+          products: [],
+          totalCount: 0,
+          currentPage: page,
+          hasNextPage: false,
+        };
+      }
 
-      return response.data.products.map((product: any) => ({
-        id: product.code || product._id,
-        barcode: product.code || product._id,
-        name: product.product_name || 'Unknown Product',
-        brand: product.brands || undefined,
-        ingredients: this.parseIngredients(product.ingredients_text || ''),
-        veganStatus: this.determineVeganStatus(product.ingredients_text || ''),
-        imageUrl: product.image_url || undefined,
-        lastScanned: new Date(),
-      }));
+      const products = response.data.products
+        .filter((product: any) => product.product_name && product.code) // Filter out incomplete products
+        .map((product: any) => ({
+          id: product.code || product._id,
+          barcode: product.code || product._id,
+          name: product.product_name || 'Unknown Product',
+          brand: product.brands || undefined,
+          ingredients: this.parseIngredients(product.ingredients_text || ''),
+          veganStatus: this.determineVeganStatus(product.ingredients_text || ''),
+          imageUrl: product.image_url || undefined,
+          lastScanned: new Date(),
+        }));
+
+      const totalCount = response.data.count || 0;
+      const hasNextPage = (page * pageSize) < totalCount;
+
+      return {
+        products,
+        totalCount,
+        currentPage: page,
+        hasNextPage,
+      };
     } catch (error) {
       console.error('Error searching products:', error);
-      return [];
+      return {
+        products: [],
+        totalCount: 0,
+        currentPage: page,
+        hasNextPage: false,
+      };
     }
   }
 }
