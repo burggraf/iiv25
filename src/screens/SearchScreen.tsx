@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../components/Logo';
 import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector';
@@ -33,6 +33,7 @@ export default function SearchScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setIsLoading(true);
     
     if (searchMode === 'products') {
@@ -125,7 +126,7 @@ export default function SearchScreen() {
   if (selectedProduct) {
     return (
       <View style={styles.container}>
-        <ProductResult product={selectedProduct} />
+        <ProductResult product={selectedProduct} onBack={handleBackToSearch} />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleBackToSearch}>
             <Text style={styles.backButton}>← Back to Search Results</Text>
@@ -142,12 +143,13 @@ export default function SearchScreen() {
 
   // Main search interface
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Logo size={32} />
-        <Text style={styles.appTitle}>Search</Text>
-      </View>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Logo size={32} />
+          <Text style={styles.appTitle}>Search</Text>
+        </View>
 
       {/* Search Mode Selector */}
       <SearchModeSelector
@@ -228,7 +230,8 @@ export default function SearchScreen() {
           />
         </View>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 

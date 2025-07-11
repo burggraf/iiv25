@@ -7,9 +7,10 @@ import Logo from './Logo';
 
 interface ProductResultProps {
   product: Product;
+  onBack?: () => void;
 }
 
-export default function ProductResult({ product }: ProductResultProps) {
+export default function ProductResult({ product, onBack }: ProductResultProps) {
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -74,7 +75,7 @@ export default function ProductResult({ product }: ProductResultProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* App Header */}
       <View style={styles.appHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack || (() => router.back())}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.centerHeader}>
