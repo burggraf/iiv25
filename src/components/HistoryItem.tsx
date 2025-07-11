@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Product, VeganStatus } from '../types';
+import LogoWhite from './LogoWhite';
 
 interface HistoryItemProps {
   product: Product;
@@ -23,18 +24,18 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
     }
   };
 
-  const getStatusIcon = (status: VeganStatus): string => {
+  const getStatusIcon = (status: VeganStatus) => {
     switch (status) {
       case VeganStatus.VEGAN:
-        return '🌱';
+        return <LogoWhite size={28} />;
       case VeganStatus.VEGETARIAN:
-        return '🥛';
+        return <Text style={styles.statusIconText}>🥛</Text>;
       case VeganStatus.NOT_VEGAN:
-        return '🥩';
+        return <Text style={styles.statusIconText}>🥩</Text>;
       case VeganStatus.UNKNOWN:
-        return '❓';
+        return <Text style={styles.unknownIconText}>?</Text>;
       default:
-        return '❓';
+        return <Text style={styles.unknownIconText}>?</Text>;
     }
   };
 
@@ -104,7 +105,7 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
         {/* Status Badge */}
         <View style={styles.statusContainer}>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(product.veganStatus) }]}>
-            <Text style={styles.statusIcon}>{getStatusIcon(product.veganStatus)}</Text>
+            <View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
             <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
           </View>
         </View>
@@ -185,11 +186,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     alignItems: 'center',
-    minWidth: 80,
+    width: 110,
+    height: 50,
+    justifyContent: 'center',
   },
-  statusIcon: {
-    fontSize: 16,
+  statusIconContainer: {
     marginBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconText: {
+    fontSize: 16,
+  },
+  unknownIconText: {
+    fontSize: 20,
+    color: 'white',
+    fontWeight: 'bold',
   },
   statusText: {
     fontSize: 10,

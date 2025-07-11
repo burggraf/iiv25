@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Product, VeganStatus } from '../types';
 import Logo from './Logo';
+import LogoWhite from './LogoWhite';
 
 interface ProductResultProps {
   product: Product;
@@ -26,18 +27,18 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
     }
   };
 
-  const getStatusIcon = (status: VeganStatus): string => {
+  const getStatusIcon = (status: VeganStatus) => {
     switch (status) {
       case VeganStatus.VEGAN:
-        return '🌱';
+        return <LogoWhite size={64} />;
       case VeganStatus.VEGETARIAN:
-        return '🥛';
+        return <Text style={styles.statusIconText}>🥛</Text>;
       case VeganStatus.NOT_VEGAN:
-        return '🥩';
+        return <Text style={styles.statusIconText}>🥩</Text>;
       case VeganStatus.UNKNOWN:
-        return '❓';
+        return <Text style={styles.unknownIconText}>?</Text>;
       default:
-        return '❓';
+        return <Text style={styles.unknownIconText}>?</Text>;
     }
   };
 
@@ -88,7 +89,7 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
       <ScrollView style={styles.scrollView}>
         {/* Status Header */}
         <View style={[styles.statusHeader, { backgroundColor: getStatusColor(product.veganStatus) }]}>
-          <Text style={styles.statusIcon}>{getStatusIcon(product.veganStatus)}</Text>
+          <View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
           <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
         </View>
 
@@ -184,9 +185,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusIcon: {
-    fontSize: 48,
+  statusIconContainer: {
     marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconText: {
+    fontSize: 48,
+  },
+  unknownIconText: {
+    fontSize: 60,
+    color: 'white',
+    fontWeight: 'bold',
   },
   statusText: {
     fontSize: 24,
