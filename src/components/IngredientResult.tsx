@@ -1,16 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { VeganStatus } from '../types';
 import { IngredientInfo } from '../services/ingredientDatabase';
 import Logo from './Logo';
 
 interface IngredientResultProps {
   ingredient: IngredientInfo;
+  onBack: () => void;
 }
 
-export default function IngredientResult({ ingredient }: IngredientResultProps) {
+export default function IngredientResult({ ingredient, onBack }: IngredientResultProps) {
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -75,7 +75,7 @@ export default function IngredientResult({ ingredient }: IngredientResultProps) 
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.centerHeader}>

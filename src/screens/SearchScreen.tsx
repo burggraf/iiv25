@@ -137,7 +137,7 @@ export default function SearchScreen() {
 
   // Show ingredient result
   if (ingredientResult) {
-    return <IngredientResult ingredient={ingredientResult} />;
+    return <IngredientResult ingredient={ingredientResult} onBack={handleBackToSearch} />;
   }
 
   // Main search interface
