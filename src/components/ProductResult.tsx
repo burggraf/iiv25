@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Product, VeganStatus } from '../types';
+import Logo from './Logo';
 
 interface ProductResultProps {
   product: Product;
@@ -70,6 +71,12 @@ export default function ProductResult({ product }: ProductResultProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* App Header */}
+      <View style={styles.appHeader}>
+        <Logo size={32} />
+        <Text style={styles.appTitle}>Is It Vegan?</Text>
+      </View>
+      
       <ScrollView style={styles.scrollView}>
         {/* Status Header */}
         <View style={[styles.statusHeader, { backgroundColor: getStatusColor(product.veganStatus) }]}>
@@ -129,6 +136,21 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  appHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  appTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    color: '#333',
   },
   statusHeader: {
     padding: 20,

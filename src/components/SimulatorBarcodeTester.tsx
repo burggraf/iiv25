@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { isDevice } from 'expo-device';
+import Logo from './Logo';
 
 interface SimulatorBarcodeTesterProps {
   onBarcodeScanned: (barcode: string) => void;
@@ -29,6 +30,7 @@ export default function SimulatorBarcodeTester({ onBarcodeScanned }: SimulatorBa
 
   return (
     <View style={styles.container}>
+      <Logo size={80} style={styles.logo} />
       <Text style={styles.title}>📱 Simulator Testing Mode</Text>
       <Text style={styles.subtitle}>Enter a barcode manually or use samples:</Text>
       
@@ -71,6 +73,10 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     backgroundColor: 'white',
+  },
+  logo: {
+    marginBottom: 20,
+    alignSelf: 'center',
   },
   title: {
     fontSize: 18,

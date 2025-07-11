@@ -4,6 +4,7 @@ import { isDevice } from 'expo-device';
 import BarcodeScanner from '../components/BarcodeScanner';
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester';
 import ProductResult from '../components/ProductResult';
+import Logo from '../components/Logo';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
 import { Product } from '../types';
 
@@ -50,6 +51,7 @@ export default function ScannerScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
+        <Logo size={60} style={styles.loadingLogo} />
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Looking up product...</Text>
       </View>
@@ -76,6 +78,7 @@ export default function ScannerScreen() {
   if (error) {
     return (
       <View style={styles.errorContainer}>
+        <Logo size={60} style={styles.errorLogo} />
         <Text style={styles.errorText}>❌ {error}</Text>
         <TouchableOpacity onPress={handleScanAgain}>
           <Text style={styles.scanAgainButton}>
@@ -114,6 +117,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
+  loadingLogo: {
+    marginBottom: 20,
+  },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
@@ -125,6 +131,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
     padding: 20,
+  },
+  errorLogo: {
+    marginBottom: 20,
   },
   errorText: {
     fontSize: 16,
