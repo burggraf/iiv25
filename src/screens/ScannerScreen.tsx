@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Platform, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { isDevice } from 'expo-device';
 import BarcodeScanner from '../components/BarcodeScanner';
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester';
@@ -44,7 +45,8 @@ export default function ScannerScreen() {
   };
 
   const handleCloseScanner = () => {
-    setIsScannerVisible(false);
+    // Navigate back to home tab
+    router.back();
   };
 
   // Show loading screen

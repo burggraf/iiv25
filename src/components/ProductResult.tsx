@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Product, VeganStatus } from '../types';
 import Logo from './Logo';
 
@@ -73,8 +74,14 @@ export default function ProductResult({ product }: ProductResultProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* App Header */}
       <View style={styles.appHeader}>
-        <Logo size={32} />
-        <Text style={styles.appTitle}>Is It Vegan?</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <View style={styles.centerHeader}>
+          <Logo size={32} />
+          <Text style={styles.appTitle}>Is It Vegan?</Text>
+        </View>
+        <View style={styles.rightSpacer} />
       </View>
       
       <ScrollView style={styles.scrollView}>
@@ -140,17 +147,36 @@ const styles = StyleSheet.create({
   appHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  centerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   appTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
     color: '#333',
+  },
+  rightSpacer: {
+    width: 60, // Same width as back button for centering
   },
   statusHeader: {
     padding: 20,

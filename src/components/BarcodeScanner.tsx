@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
 import { ScannerProps } from '../types';
@@ -69,8 +69,14 @@ export default function BarcodeScanner({
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header with Logo and Instructions */}
       <View style={styles.header}>
-        <Logo size={32} />
-        <Text style={styles.appTitle}>Is It Vegan?</Text>
+        <TouchableOpacity style={styles.backButton} onPress={onClose}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <View style={styles.centerHeader}>
+          <Logo size={32} />
+          <Text style={styles.appTitle}>Is It Vegan?</Text>
+        </View>
+        <View style={styles.rightSpacer} />
       </View>
       
       <View style={styles.instructionsContainer}>
@@ -120,17 +126,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  centerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   appTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
     color: '#333',
+  },
+  rightSpacer: {
+    width: 60, // Same width as back button for centering
   },
   instructionsContainer: {
     paddingVertical: 16,
