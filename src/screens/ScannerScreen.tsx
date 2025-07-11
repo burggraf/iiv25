@@ -7,9 +7,11 @@ import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester';
 import ProductResult from '../components/ProductResult';
 import Logo from '../components/Logo';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
+import { useApp } from '../context/AppContext';
 import { Product } from '../types';
 
 export default function ScannerScreen() {
+  const { addToHistory } = useApp();
   const [isScannerVisible, setIsScannerVisible] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
@@ -27,6 +29,7 @@ export default function ScannerScreen() {
       
       if (productData) {
         setProduct(productData);
+        addToHistory(productData); // Add to history
       } else {
         setError(`Product not found for barcode: ${barcode}`);
       }

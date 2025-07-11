@@ -6,9 +6,11 @@ import Logo from '../components/Logo';
 import NumericKeypad from '../components/NumericKeypad';
 import ProductResult from '../components/ProductResult';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
+import { useApp } from '../context/AppContext';
 import { Product } from '../types';
 
 export default function ManualEntryScreen() {
+  const { addToHistory } = useApp();
   const [upcCode, setUpcCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
@@ -43,6 +45,7 @@ export default function ManualEntryScreen() {
       
       if (productData) {
         setProduct(productData);
+        addToHistory(productData); // Add to history
       } else {
         setError(`Product not found for UPC: ${upcCode}`);
       }

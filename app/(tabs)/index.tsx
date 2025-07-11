@@ -8,8 +8,9 @@ export default function HomeScreen() {
       <Text style={styles.title}>Is It Vegan?</Text>
       <Text style={styles.subtitle}>Check if products are vegan instantly!</Text>
       <Text style={styles.instruction}>
-        📷 Use Scanner tab to scan barcodes{'\n'}
-        🔢 Use Manual tab to type UPC codes
+        📷 Scanner - Scan barcodes with camera{'\n'}
+        🔢 Manual - Type UPC codes manually{'\n'}
+        🕒 History - View your past scans
       </Text>
     </View>
   );
