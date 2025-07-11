@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
 import { ScannerProps } from '../types';
+import Logo from './Logo';
 
 interface BarcodeScannerProps extends ScannerProps {
   isVisible: boolean;
@@ -64,34 +66,84 @@ export default function BarcodeScanner({
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing="back"
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8', 'code128', 'code39'],
-        }}
-      />
-      <View style={styles.overlay}>
-        <View style={styles.unfocusedContainer}></View>
-        <View style={styles.middleContainer}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header with Logo and Instructions */}
+      <View style={styles.header}>
+        <Logo size={32} />
+        <Text style={styles.appTitle}>Is It Vegan?</Text>
+      </View>
+      
+      <View style={styles.instructionsContainer}>
+        <Text style={styles.instructionText}>
+          {scanned ? '✅ Barcode Scanned Successfully!' : '📷 Point your camera at a product barcode'}
+        </Text>
+      </View>
+
+      {/* Camera View */}
+      <View style={styles.cameraContainer}>
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8', 'code128', 'code39'],
+          }}
+        />
+        <View style={styles.overlay}>
           <View style={styles.unfocusedContainer}></View>
-          <View style={styles.focusedContainer}>
-            <Text style={styles.scanText}>
-              {scanned ? 'Barcode Scanned!' : 'Point camera at barcode'}
-            </Text>
+          <View style={styles.middleContainer}>
+            <View style={styles.unfocusedContainer}></View>
+            <View style={styles.focusedContainer}>
+              <View style={styles.scanningFrame} />
+            </View>
+            <View style={styles.unfocusedContainer}></View>
           </View>
           <View style={styles.unfocusedContainer}></View>
         </View>
-        <View style={styles.unfocusedContainer}></View>
       </View>
-    </View>
+      
+      {/* Bottom Instructions */}
+      <View style={styles.bottomInstructions}>
+        <Text style={styles.tipText}>
+          💡 Tip: Hold steady and make sure the barcode is clearly visible
+        </Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  appTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    color: '#333',
+  },
+  instructionsContainer: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: 'white',
+  },
+  instructionText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#333',
+    fontWeight: '500',
+  },
+  cameraContainer: {
     flex: 1,
     backgroundColor: 'black',
   },
@@ -131,18 +183,26 @@ const styles = StyleSheet.create({
   focusedContainer: {
     flex: 6,
     backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#00ff00',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scanText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  scanningFrame: {
+    width: '80%',
+    height: '60%',
+    borderWidth: 3,
+    borderColor: '#00ff00',
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  bottomInstructions: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: 'white',
+  },
+  tipText: {
+    fontSize: 14,
     textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 8,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
