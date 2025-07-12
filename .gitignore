@@ -37,4 +37,13 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# EAS configuration with potentially sensitive info
+eas.json
+
+# Google Play service account keys
+android/keys/
+google-services.json
+*.json.key
+*-service-account*.json
+
 app-example

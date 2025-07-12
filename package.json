@@ -1,7 +1,7 @@
 {
   "name": "isitvegan",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "scripts": {
     "start": "expo start",
     "tunnel": "expo start --tunnel",
@@ -9,7 +9,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "eas build --platform android --profile apk",
+    "build:ios": "eas build --platform ios --profile testflight",
+    "build:preview": "eas build --platform all --profile preview",
+    "submit:ios": "eas submit --platform ios",
+    "build:production": "eas build --platform all --profile production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -21,7 +26,6 @@
     "axios": "^1.10.0",
     "expo": "~53.0.17",
     "expo-asset": "~11.1.7",
-    "expo-barcode-scanner": "^13.0.1",
     "expo-blur": "~14.1.5",
     "expo-camera": "^16.1.10",
     "expo-constants": "~17.1.7",
@@ -44,11 +48,11 @@
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
+    "react-native-svg": "15.11.2",
     "react-native-vector-icons": "^10.2.0",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
-    "use-latest-callback": "^0.2.4",
-    "react-native-svg": "15.11.2"
+    "use-latest-callback": "^0.2.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
