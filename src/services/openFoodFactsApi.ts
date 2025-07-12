@@ -50,19 +50,7 @@ export class OpenFoodFactsService {
     nonVeganIngredients: ClassificationDetail[];
     method: 'structured' | 'product-level' | 'text-based';
   } {
-    // Strategy 1: Use structured ingredients data (most accurate)
-    if (product.ingredients && Array.isArray(product.ingredients)) {
-      const result = this.analyzeStructuredIngredients(product.ingredients);
-      if (result.status !== VeganStatus.UNKNOWN) {
-        return {
-          status: result.status,
-          nonVeganIngredients: result.nonVeganIngredients,
-          method: 'structured'
-        };
-      }
-    }
-
-    // Strategy 2: Use product-level vegan/vegetarian fields
+    // Strategy 1: Check product-level vegan/vegetarian fields first (most authoritative)
     if (product.vegan || product.vegetarian) {
       const productLevelResult = this.analyzeProductLevelFields(product.vegan, product.vegetarian);
       if (productLevelResult !== VeganStatus.UNKNOWN) {
@@ -70,6 +58,18 @@ export class OpenFoodFactsService {
           status: productLevelResult,
           nonVeganIngredients: [],
           method: 'product-level'
+        };
+      }
+    }
+
+    // Strategy 2: Use structured ingredients data (detailed analysis)
+    if (product.ingredients && Array.isArray(product.ingredients)) {
+      const result = this.analyzeStructuredIngredients(product.ingredients);
+      if (result.status !== VeganStatus.UNKNOWN) {
+        return {
+          status: result.status,
+          nonVeganIngredients: result.nonVeganIngredients,
+          method: 'structured'
         };
       }
     }
@@ -87,81 +87,62 @@ export class OpenFoodFactsService {
     status: VeganStatus;
     nonVeganIngredients: ClassificationDetail[];
   } {
-    let hasNonVeganIngredient = false;
+    let hasDefinitelyNonVeganIngredient = false;
     let hasVegetarianOnlyIngredient = false;
-    let hasUnknownIngredient = false;
+    let veganIngredientCount = 0;
+    let totalIngredientCount = ingredients.length;
     const nonVeganIngredients: ClassificationDetail[] = [];
 
     for (const ingredient of ingredients) {
-      let isProblematic = false;
-      let reason = '';
-
-      // Check vegan status
-      if (ingredient.vegan === 'no') {
-        hasNonVeganIngredient = true;
-        isProblematic = true;
-        reason = 'Contains animal products';
-      } else if (ingredient.vegan === 'maybe' || !ingredient.vegan) {
-        hasUnknownIngredient = true;
-        isProblematic = true;
-        reason = 'Vegan status uncertain';
-      }
-
-      // Check vegetarian status
+      // Check for definitely non-vegan (meat/animal products)
       if (ingredient.vegetarian === 'no') {
-        hasNonVeganIngredient = true;
-        isProblematic = true;
-        reason = 'Contains meat or animal products';
-      } else if (ingredient.vegetarian === 'maybe' || !ingredient.vegetarian) {
-        hasUnknownIngredient = true;
-        if (!isProblematic) {
-          isProblematic = true;
-          reason = 'Vegetarian status uncertain';
-        }
+        hasDefinitelyNonVeganIngredient = true;
+        nonVeganIngredients.push({
+          ingredient: ingredient.text,
+          reason: 'Contains meat or animal products',
+          verdict: 'not_vegan'
+        });
+        continue;
       }
 
       // Check for vegetarian-only ingredients (dairy/eggs)
       if (ingredient.vegan === 'no' && ingredient.vegetarian === 'yes') {
         hasVegetarianOnlyIngredient = true;
-        if (!isProblematic) {
-          isProblematic = true;
-          reason = 'Contains dairy or eggs';
-        }
-      }
-
-      // Add to non-vegan list if problematic
-      if (isProblematic) {
-        // Determine final verdict for this ingredient
-        let verdict: 'vegan' | 'vegetarian' | 'not_vegan' | 'unknown';
-        
-        if (ingredient.vegan === 'yes') {
-          verdict = 'vegan';
-        } else if (ingredient.vegan === 'no' && ingredient.vegetarian === 'yes') {
-          verdict = 'vegetarian';
-        } else if (ingredient.vegetarian === 'no') {
-          verdict = 'not_vegan';
-        } else {
-          verdict = 'unknown';
-        }
-
         nonVeganIngredients.push({
           ingredient: ingredient.text,
-          reason: reason,
-          verdict: verdict
+          reason: 'Contains dairy or eggs',
+          verdict: 'vegetarian'
+        });
+        continue;
+      }
+
+      // Count clearly vegan ingredients
+      if (ingredient.vegan === 'yes') {
+        veganIngredientCount++;
+      }
+
+      // Only flag as problematic if explicitly marked as non-vegan
+      if (ingredient.vegan === 'no') {
+        nonVeganIngredients.push({
+          ingredient: ingredient.text,
+          reason: 'Contains animal products',
+          verdict: 'not_vegan'
         });
       }
     }
 
-    // Determine final status
+    // Determine final status based on definitive evidence
     let status: VeganStatus;
-    if (hasNonVeganIngredient && !hasVegetarianOnlyIngredient) {
+    if (hasDefinitelyNonVeganIngredient) {
       status = VeganStatus.NOT_VEGAN;
-    } else if (hasVegetarianOnlyIngredient && !hasNonVeganIngredient) {
+    } else if (hasVegetarianOnlyIngredient) {
       status = VeganStatus.VEGETARIAN;
-    } else if (hasUnknownIngredient) {
-      status = VeganStatus.UNKNOWN;
-    } else {
+    } else if (veganIngredientCount > 0 && veganIngredientCount >= totalIngredientCount * 0.6) {
+      // If 60% or more ingredients are explicitly vegan, consider the product vegan
       status = VeganStatus.VEGAN;
+    } else {
+      // If we don't have enough clear evidence, return unknown to try other methods
+      status = VeganStatus.UNKNOWN;
     }
 
     return {
@@ -176,24 +157,24 @@ export class OpenFoodFactsService {
     const vegetarianValue = vegetarian?.toLowerCase();
 
     // Check for explicit vegan status
-    if (veganValue === 'yes' || veganValue === '1' || veganValue === 'true') {
+    if (veganValue === 'yes' || veganValue === '1' || veganValue === 'true' || veganValue === 'vegan') {
       return VeganStatus.VEGAN;
     }
     
-    if (veganValue === 'no' || veganValue === '0' || veganValue === 'false') {
+    if (veganValue === 'no' || veganValue === '0' || veganValue === 'false' || veganValue === 'non-vegan') {
       // Check if it's at least vegetarian
-      if (vegetarianValue === 'yes' || vegetarianValue === '1' || vegetarianValue === 'true') {
+      if (vegetarianValue === 'yes' || vegetarianValue === '1' || vegetarianValue === 'true' || vegetarianValue === 'vegetarian') {
         return VeganStatus.VEGETARIAN;
       }
       return VeganStatus.NOT_VEGAN;
     }
 
     // Check vegetarian status if vegan is unclear
-    if (vegetarianValue === 'yes' || vegetarianValue === '1' || vegetarianValue === 'true') {
+    if (vegetarianValue === 'yes' || vegetarianValue === '1' || vegetarianValue === 'true' || vegetarianValue === 'vegetarian') {
       return VeganStatus.VEGETARIAN;
     }
     
-    if (vegetarianValue === 'no' || vegetarianValue === '0' || vegetarianValue === 'false') {
+    if (vegetarianValue === 'no' || vegetarianValue === '0' || vegetarianValue === 'false' || vegetarianValue === 'non-vegetarian') {
       return VeganStatus.NOT_VEGAN;
     }
 
@@ -211,50 +192,59 @@ export class OpenFoodFactsService {
       };
     }
 
-    const ingredients = ingredientsText.toLowerCase();
+    // Parse individual ingredients first
+    const individualIngredients = this.parseIngredients(ingredientsText);
     const nonVeganIngredients: ClassificationDetail[] = [];
     
-    // Non-vegan ingredients (animal products)
+    // Non-vegan ingredients (exact matches for full ingredient names)
     const nonVeganIngredients_list = [
-      'milk', 'dairy', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose',
+      'milk', 'whole milk', 'skim milk', 'dairy', 'cheese', 'butter', 'cream', 'heavy cream',
+      'yogurt', 'whey', 'whey protein', 'casein', 'lactose',
       'meat', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'fish', 'salmon', 'tuna',
-      'egg', 'eggs', 'albumin', 'ovalbumin',
+      'egg', 'eggs', 'egg white', 'egg yolk', 'albumin', 'ovalbumin',
       'honey', 'beeswax', 'royal jelly', 'propolis',
       'gelatin', 'gelatine', 'collagen',
       'lard', 'tallow', 'suet',
       'shellac', 'carmine', 'cochineal', 'isinglass',
       'rennet', 'pepsin', 'lipase',
-      'anchovies', 'worcestershire',
+      'anchovies', 'worcestershire sauce',
     ];
 
     // Vegetarian-only ingredients (dairy/eggs but no meat)
     const vegetarianIngredients = [
-      'milk', 'dairy', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose',
-      'egg', 'eggs', 'albumin', 'ovalbumin',
+      'milk', 'whole milk', 'skim milk', 'dairy', 'cheese', 'butter', 'cream', 'heavy cream',
+      'yogurt', 'whey', 'whey protein', 'casein', 'lactose',
+      'egg', 'eggs', 'egg white', 'egg yolk', 'albumin', 'ovalbumin',
     ];
 
     let hasNonVeganIngredient = false;
     let hasVegetarianOnlyIngredient = false;
 
-    // Check for non-vegan ingredients
-    for (const ingredient of nonVeganIngredients_list) {
-      if (ingredients.includes(ingredient)) {
-        const isVegetarianOnly = vegetarianIngredients.includes(ingredient);
-        
-        if (isVegetarianOnly) {
-          hasVegetarianOnlyIngredient = true;
-          nonVeganIngredients.push({
-            ingredient: ingredient,
-            reason: 'Contains dairy or eggs',
-            verdict: 'vegetarian'
-          });
-        } else {
-          hasNonVeganIngredient = true;
-          nonVeganIngredients.push({
-            ingredient: ingredient,
-            reason: 'Contains animal products',
-            verdict: 'not_vegan'
-          });
+    // Check each individual ingredient against our lists
+    for (const ingredient of individualIngredients) {
+      const cleanIngredient = ingredient.trim().toLowerCase();
+      
+      // Check for exact matches (case-insensitive)
+      for (const nonVeganItem of nonVeganIngredients_list) {
+        if (cleanIngredient === nonVeganItem) {
+          const isVegetarianOnly = vegetarianIngredients.includes(nonVeganItem);
+          
+          if (isVegetarianOnly) {
+            hasVegetarianOnlyIngredient = true;
+            nonVeganIngredients.push({
+              ingredient: ingredient,
+              reason: 'Contains dairy or eggs',
+              verdict: 'vegetarian'
+            });
+          } else {
+            hasNonVeganIngredient = true;
+            nonVeganIngredients.push({
+              ingredient: ingredient,
+              reason: 'Contains animal products',
+              verdict: 'not_vegan'
+            });
+          }
+          break; // Found a match, no need to check other items
         }
       }
     }

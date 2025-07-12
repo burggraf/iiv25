@@ -162,18 +162,28 @@ export default function SearchScreen() {
 
       {/* Search Input */}
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder={
-            searchMode === 'products'
-              ? 'Search for products (e.g., "organic oat milk")'
-              : 'Search for ingredients (e.g., "milk", "tofu")'
-          }
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
+        <View style={styles.searchInputContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={
+              searchMode === 'products'
+                ? 'Search for products'
+                : 'Search for ingredients'
+            }
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={() => setSearchQuery('')}
+            >
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity
           style={[styles.searchButton, !searchQuery.trim() && styles.searchButtonDisabled]}
           onPress={handleSearch}
@@ -263,6 +273,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  searchInputContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   searchInput: {
     flex: 1,
     borderWidth: 1,
@@ -270,8 +284,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingRight: 40, // Make room for clear button
     fontSize: 16,
     backgroundColor: 'white',
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: [{ translateY: -12 }],
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'white',
   },
   searchButton: {
     marginLeft: 12,
