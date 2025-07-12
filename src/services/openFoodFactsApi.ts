@@ -121,13 +121,28 @@ export class OpenFoodFactsService {
         veganIngredientCount++;
       }
 
-      // Only flag as problematic if explicitly marked as non-vegan
+      // Handle remaining non-vegan ingredients that aren't clearly vegetarian
       if (ingredient.vegan === 'no') {
-        nonVeganIngredients.push({
-          ingredient: ingredient.text,
-          reason: 'Contains animal products',
-          verdict: 'not_vegan'
-        });
+        // Apply domain knowledge for common dairy ingredients that might be misclassified
+        const knownDairyIngredients = ['milk', 'whey', 'casein', 'lactose', 'cheese', 'butter', 'cream', 'yogurt'];
+        const isDairyIngredient = knownDairyIngredients.some(dairy => 
+          ingredient.text.toLowerCase().includes(dairy)
+        );
+        
+        if (isDairyIngredient) {
+          hasVegetarianOnlyIngredient = true;
+          nonVeganIngredients.push({
+            ingredient: ingredient.text,
+            reason: 'Contains dairy products',
+            verdict: 'vegetarian'
+          });
+        } else {
+          nonVeganIngredients.push({
+            ingredient: ingredient.text,
+            reason: 'Contains animal products',
+            verdict: 'not_vegan'
+          });
+        }
       }
     }
 
