@@ -12,6 +12,36 @@ interface ProductResultProps {
 }
 
 export default function ProductResult({ product, onBack }: ProductResultProps) {
+  const getVerdictColor = (verdict: string): string => {
+    switch (verdict) {
+      case 'vegan':
+        return '#4CAF50'; // Green
+      case 'vegetarian':
+        return '#FF9800'; // Orange/Yellow
+      case 'not_vegan':
+        return '#F44336'; // Red
+      case 'unknown':
+        return '#9E9E9E'; // Gray
+      default:
+        return '#9E9E9E';
+    }
+  };
+
+  const getVerdictText = (verdict: string): string => {
+    switch (verdict) {
+      case 'vegan':
+        return 'VEGAN';
+      case 'vegetarian':
+        return 'VEGETARIAN';
+      case 'not_vegan':
+        return 'NOT VEGAN';
+      case 'unknown':
+        return 'UNKNOWN';
+      default:
+        return 'UNKNOWN';
+    }
+  };
+
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -112,10 +142,45 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         </Text>
       </View>
 
+      {/* Non-Vegan Ingredients Analysis */}
+      {product.nonVeganIngredients && product.nonVeganIngredients.length > 0 && (
+        <View style={styles.analysisSection}>
+          <Text style={styles.analysisSectionTitle}>⚠️ Classification Analysis</Text>
+          <Text style={styles.analysisSubtitle}>
+            {product.veganStatus === 'vegetarian' 
+              ? 'Contains dairy or eggs but no meat:' 
+              : product.veganStatus === 'not_vegan'
+              ? 'Contains animal products:'
+              : 'Uncertain ingredients:'
+            }
+          </Text>
+          <View style={styles.analysisItemsList}>
+            {product.nonVeganIngredients.map((detail, index) => (
+              <View key={index} style={styles.analysisItem}>
+                <Text style={styles.analysisIngredient}>• {detail.ingredient}</Text>
+                <Text style={styles.analysisReason}>{detail.reason}</Text>
+                <View style={styles.analysisLabels}>
+                  <Text style={[styles.analysisLabel, { 
+                    backgroundColor: getVerdictColor(detail.verdict)
+                  }]}>
+                    {getVerdictText(detail.verdict)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          {product.classificationMethod && (
+            <Text style={styles.classificationMethod}>
+              Classification method: {product.classificationMethod}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Ingredients */}
       {product.ingredients.length > 0 && (
         <View style={styles.ingredientsSection}>
-          <Text style={styles.sectionTitle}>Ingredients:</Text>
+          <Text style={styles.sectionTitle}>All Ingredients:</Text>
           <View style={styles.ingredientsList}>
             {product.ingredients.map((ingredient, index) => (
               <Text key={index} style={styles.ingredient}>
@@ -256,6 +321,68 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 4,
     textTransform: 'capitalize',
+  },
+  analysisSection: {
+    padding: 20,
+    backgroundColor: '#fff5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  analysisSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F44336',
+    marginBottom: 8,
+  },
+  analysisSubtitle: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  analysisItemsList: {
+    gap: 12,
+  },
+  analysisItem: {
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  analysisIngredient: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  analysisReason: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  analysisLabels: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  analysisLabel: {
+    fontSize: 12,
+    color: 'white',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  classificationMethod: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   disclaimer: {
     padding: 20,
