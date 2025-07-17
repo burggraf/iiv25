@@ -76,6 +76,55 @@ export default function SearchScreen() {
       // First try Supabase database search
       const supabaseResults = await SupabaseService.searchIngredientsByTitle(query);
       
+      // Check for rate limit response
+      if (supabaseResults.length === 1 && supabaseResults[0].title === '__RATE_LIMIT_EXCEEDED__') {
+        const rateLimitInfo = supabaseResults[0];
+        const subscriptionLevel = rateLimitInfo.class;
+        const rateLimit = rateLimitInfo.productcount;
+        
+        // Create user-friendly message
+        let upgradeMessage = '';
+        if (subscriptionLevel === 'free') {
+          upgradeMessage = '\n\nUpgrade to Standard (20/hour) or Premium (250/hour) for more searches.';
+        } else if (subscriptionLevel === 'standard') {
+          upgradeMessage = '\n\nUpgrade to Premium (250/hour) for more searches.';
+        }
+        
+        const alertTitle = 'Search Limit Reached';
+        const alertMessage = `You've reached your hourly search limit.\n\nRate limit exceeded: ${subscriptionLevel} tier allows ${rateLimit} searches per hour.${upgradeMessage}`;
+        
+        // Use appropriate alert method based on platform
+        if (Platform.OS === 'web') {
+          // Web environment - use browser confirm dialog
+          if (upgradeMessage) {
+            const result = window.confirm(alertMessage + '\n\nWould you like to upgrade your subscription?');
+            if (result) {
+              // TODO: Navigate to subscription/upgrade screen
+              console.log('Should navigate to upgrade screen');
+            }
+          } else {
+            window.alert(alertMessage);
+          }
+        } else {
+          // Native environment - use React Native Alert
+          Alert.alert(
+            alertTitle,
+            alertMessage,
+            [
+              { text: 'OK' },
+              ...(upgradeMessage ? [{ 
+                text: 'Upgrade', 
+                onPress: () => {
+                  // TODO: Navigate to subscription/upgrade screen
+                  console.log('Should navigate to upgrade screen');
+                }
+              }] : [])
+            ]
+          );
+        }
+        return;
+      }
+      
       if (supabaseResults.length > 0) {
         setSupabaseIngredients(supabaseResults);
         setIngredientResult(null); // Clear fallback result
@@ -99,8 +148,11 @@ export default function SearchScreen() {
     } catch (error: any) {
       console.error('Ingredient search error:', error);
       
+      // Get the error message from various possible locations
+      const errorMessage = error?.message || error?.details || error?.error_description || '';
+      
       // Check if it's an authentication error
-      if (error?.message === 'not logged in') {
+      if (errorMessage === 'not logged in') {
         Alert.alert(
           'Authentication Required',
           'You need to be logged in to search ingredients. Please log in and try again.',
@@ -121,6 +173,13 @@ export default function SearchScreen() {
       if (localResult) {
         setIngredientResult(localResult);
         setSupabaseIngredients([]);
+        
+        // Show a notice that we're using fallback data
+        Alert.alert(
+          'Using Offline Data',
+          'We\'re having trouble connecting to our servers, so we\'re showing results from our offline database. Some ingredients may not be available.',
+          [{ text: 'OK' }]
+        );
       } else {
         Alert.alert(
           'Search Error',
