@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, Keyboard, TouchableWithoutFeedback, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../components/Logo';
 import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector';
@@ -17,6 +17,7 @@ export default function SearchScreen() {
   const [searchMode, setSearchMode] = useState<SearchMode>('products');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   
   // Product search state
   const [productResults, setProductResults] = useState<Product[]>([]);
@@ -276,13 +277,24 @@ export default function SearchScreen() {
         onModeChange={(mode) => {
           setSearchMode(mode);
           handleNewSearch();
+          // Focus the search input after mode change on web
+          if (Platform.OS === 'web') {
+            setTimeout(() => {
+              searchInputRef.current?.focus();
+            }, 100);
+          }
         }}
       />
 
       {/* Search Input */}
       <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
+        <TouchableOpacity 
+          style={styles.searchInputContainer}
+          onPress={() => searchInputRef.current?.focus()}
+          activeOpacity={1}
+        >
           <TextInput
+            ref={searchInputRef}
             style={styles.searchInput}
             placeholder={
               searchMode === 'products'
@@ -293,6 +305,9 @@ export default function SearchScreen() {
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
+            autoFocus={Platform.OS === 'web'}
+            selectTextOnFocus={Platform.OS === 'web'}
+            blurOnSubmit={false}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
@@ -302,7 +317,7 @@ export default function SearchScreen() {
               <Text style={styles.clearButtonText}>✕</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.searchButton, !searchQuery.trim() && styles.searchButtonDisabled]}
           onPress={handleSearch}
@@ -395,6 +410,9 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flex: 1,
     position: 'relative',
+    ...(Platform.OS === 'web' && {
+      cursor: 'text',
+    }),
   },
   searchInput: {
     flex: 1,
@@ -406,6 +424,10 @@ const styles = StyleSheet.create({
     paddingRight: 40, // Make room for clear button
     fontSize: 16,
     backgroundColor: 'white',
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none',
+      cursor: 'text',
+    }),
   },
   clearButton: {
     position: 'absolute',
