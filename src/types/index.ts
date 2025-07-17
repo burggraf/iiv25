@@ -80,3 +80,36 @@ export interface AppContextType {
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
 }
+
+// Supabase database types
+export interface SupabaseIngredient {
+  id: number;
+  title: string;
+  vegan?: boolean;
+  vegetarian?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupabaseProduct {
+  id: number;
+  upc?: string;
+  ean13?: string;
+  product_name?: string;
+  brand?: string;
+  ingredients?: string;
+  calculated_code?: string;
+  override_code?: string;
+  image_url?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Data source tracking
+export type DataSource = 'supabase' | 'openfoodfacts' | 'manual';
+
+// Enhanced product interface with data source
+export interface EnhancedProduct extends Product {
+  dataSource: DataSource;
+  confidenceScore?: number;
+}
