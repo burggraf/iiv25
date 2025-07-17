@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Logo from '../components/Logo';
@@ -20,6 +20,12 @@ export default function ManualEntryScreen() {
     if (upcCode.length < 13) { // Max length for EAN-13
       setUpcCode(prev => prev + number);
     }
+  };
+
+  const handleDirectInput = (text: string) => {
+    // Only allow numeric input and limit to 13 characters
+    const numericText = text.replace(/[^0-9]/g, '').slice(0, 13);
+    setUpcCode(numericText);
   };
 
   const handleBackspace = () => {
@@ -109,7 +115,7 @@ export default function ManualEntryScreen() {
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionTitle}>Enter UPC Code Manually</Text>
         <Text style={styles.instructionText}>
-          Type the barcode number using the keypad below
+          Tap the box below to type or use the keypad
         </Text>
       </View>
 
@@ -117,10 +123,16 @@ export default function ManualEntryScreen() {
       <View style={styles.upcContainer}>
         <Text style={styles.upcLabel}>UPC Code:</Text>
         <View style={styles.upcDisplay}>
-          <Text style={styles.upcText}>
-            {upcCode || 'Enter digits below...'}
-          </Text>
-          <View style={styles.cursor} />
+          <TextInput
+            style={styles.upcTextInput}
+            value={upcCode}
+            onChangeText={handleDirectInput}
+            placeholder="Enter digits"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+            maxLength={13}
+            selectTextOnFocus
+          />
         </View>
         <Text style={styles.digitCount}>
           {upcCode.length}/13 digits
@@ -240,18 +252,17 @@ const styles = StyleSheet.create({
     minWidth: 280,
     justifyContent: 'center',
   },
-  upcText: {
+  upcTextInput: {
     fontSize: 24,
     fontWeight: '600',
     color: '#333',
     letterSpacing: 2,
     fontFamily: 'monospace',
-  },
-  cursor: {
-    width: 2,
-    height: 24,
-    backgroundColor: '#007AFF',
-    marginLeft: 4,
+    flex: 1,
+    textAlign: 'center',
+    padding: 0,
+    margin: 0,
+    minHeight: 30,
   },
   digitCount: {
     fontSize: 14,
