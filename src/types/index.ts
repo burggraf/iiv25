@@ -132,3 +132,16 @@ export enum ActionType {
   HISTORY_VIEW = 'history_view',
   SETTINGS_UPDATE = 'settings_update'
 }
+
+// Subscription types
+export type SubscriptionLevel = 'free' | 'standard' | 'premium';
+
+export interface UserSubscription {
+  id: string;
+  user_id: string;
+  subscription_level: SubscriptionLevel;
+  created_at: Date;
+  updated_at: Date;
+  expires_at?: Date;
+  is_active: boolean;
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -9,10 +9,14 @@ import ManualIcon from '../../src/components/icons/ManualIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import { useAuth } from '../../src/context/AuthContext';
+import { SupabaseService } from '../../src/services/supabaseService';
+import { SubscriptionLevel } from '../../src/types';
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const [showUserModal, setShowUserModal] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionLevel>('free');
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
   
   const navigateToTab = (tabName: string) => {
     router.push(`/(tabs)/${tabName}`);
@@ -28,6 +32,58 @@ export default function HomeScreen() {
         { text: 'Sign Out', style: 'destructive', onPress: signOut },
       ]
     );
+  };
+
+  const loadSubscriptionStatus = async () => {
+    if (!user || user.is_anonymous) {
+      setSubscriptionStatus('free');
+      return;
+    }
+
+    setLoadingSubscription(true);
+    try {
+      const status = await SupabaseService.getSubscriptionStatus();
+      setSubscriptionStatus(status);
+    } catch (error: any) {
+      console.error('Error loading subscription status:', error);
+      // Default to free if there's an error
+      setSubscriptionStatus('free');
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
+
+  // Load subscription status when modal opens
+  useEffect(() => {
+    if (showUserModal) {
+      loadSubscriptionStatus();
+    }
+  }, [showUserModal, user]);
+
+  const getSubscriptionDisplayText = (level: SubscriptionLevel) => {
+    switch (level) {
+      case 'free':
+        return 'Free';
+      case 'standard':
+        return 'Standard';
+      case 'premium':
+        return 'Premium';
+      default:
+        return 'Free';
+    }
+  };
+
+  const getSubscriptionColor = (level: SubscriptionLevel) => {
+    switch (level) {
+      case 'free':
+        return '#666';
+      case 'standard':
+        return '#FF9800';
+      case 'premium':
+        return '#14A44A';
+      default:
+        return '#666';
+    }
   };
 
   return (
@@ -167,6 +223,28 @@ export default function HomeScreen() {
                 <Text style={styles.anonymousText}>Anonymous Session</Text>
               )}
               
+              <View style={styles.subscriptionRow}>
+                <View style={styles.subscriptionInfo}>
+                  <Text style={styles.subscriptionLabel}>Subscription:</Text>
+                  <Text 
+                    style={[
+                      styles.subscriptionValue,
+                      { color: getSubscriptionColor(subscriptionStatus) }
+                    ]}
+                  >
+                    {loadingSubscription ? 'Loading...' : getSubscriptionDisplayText(subscriptionStatus)}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.subscriptionBadge,
+                  { backgroundColor: getSubscriptionColor(subscriptionStatus) }
+                ]}>
+                  <Text style={styles.subscriptionBadgeText}>
+                    {getSubscriptionDisplayText(subscriptionStatus).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              
               <TouchableOpacity 
                 style={styles.modalLogoutButton}
                 onPress={handleLogout}
@@ -296,6 +374,38 @@ const styles = StyleSheet.create({
     color: '#14A44A',
     fontWeight: '500',
     marginBottom: 20,
+  },
+  subscriptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  subscriptionLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  subscriptionValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  subscriptionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  subscriptionBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.5,
   },
   modalLogoutButton: {
     flexDirection: 'row',

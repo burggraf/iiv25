@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { ActionLog, ActionType } from '../types';
+import { ActionLog, ActionType, SubscriptionLevel } from '../types';
 
 export interface SupabaseIngredient {
   title: string;
@@ -267,6 +267,32 @@ export class SupabaseService {
       return data || [];
     } catch (error) {
       console.error('Failed to get user action logs by type:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current user's subscription status
+   * @returns Promise with subscription level ('free', 'standard', or 'premium')
+   * @throws Error if user is not authenticated ('not logged in')
+   */
+  static async getSubscriptionStatus(): Promise<SubscriptionLevel> {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_subscription_status');
+
+      if (error) {
+        // Check if it's an authentication error
+        if (error.message === 'not logged in') {
+          throw new Error('not logged in');
+        }
+        console.error('Error getting subscription status:', error);
+        throw error;
+      }
+
+      return data as SubscriptionLevel;
+    } catch (error) {
+      console.error('Failed to get subscription status:', error);
       throw error;
     }
   }
