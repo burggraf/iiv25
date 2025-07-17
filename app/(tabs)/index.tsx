@@ -1,6 +1,8 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Logo from '../../src/components/Logo';
 import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
@@ -10,12 +12,14 @@ import { useAuth } from '../../src/context/AuthContext';
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
+  const [showUserModal, setShowUserModal] = useState(false);
   
   const navigateToTab = (tabName: string) => {
     router.push(`/(tabs)/${tabName}`);
   };
 
   const handleLogout = () => {
+    setShowUserModal(false);
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -36,28 +40,22 @@ export default function HomeScreen() {
           <Text style={styles.subtitle}>Check if products are vegan instantly!</Text>
         </View>
 
-        {/* User Section */}
-        <View style={styles.userSection}>
-          <View style={styles.userInfo}>
-            <Text style={styles.welcomeText}>
-              Welcome, {user?.email || 'Anonymous User'}!
-            </Text>
-            <Text style={styles.userStatus}>
-              {user?.is_anonymous ? 'Anonymous Session' : 'Signed In'}
-            </Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.logoutButtonText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Quick Actions Section */}
         <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsSectionHeader}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <TouchableOpacity 
+              style={styles.userIconButton}
+              onPress={() => setShowUserModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={user?.is_anonymous ? "person-outline" : "person-circle-outline"} 
+                size={28} 
+                color="#14A44A" 
+              />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.actionGrid}>
             <TouchableOpacity 
@@ -132,6 +130,55 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* User Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showUserModal}
+        onRequestClose={() => setShowUserModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Account Information</Text>
+              <TouchableOpacity 
+                onPress={() => setShowUserModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <View style={styles.userInfoRow}>
+                <Ionicons 
+                  name={user?.is_anonymous ? "person-outline" : "person-circle-outline"} 
+                  size={24} 
+                  color="#14A44A" 
+                  style={styles.userIcon}
+                />
+                <Text style={styles.userEmail}>
+                  {user?.email || 'Anonymous User'}
+                </Text>
+              </View>
+              
+              {user?.is_anonymous && (
+                <Text style={styles.anonymousText}>Anonymous Session</Text>
+              )}
+              
+              <TouchableOpacity 
+                style={styles.modalLogoutButton}
+                onPress={handleLogout}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="log-out-outline" size={20} color="white" />
+                <Text style={styles.modalLogoutText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -145,6 +192,19 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  userIconButton: {
+    padding: 8,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   header: {
     alignItems: 'center',
@@ -177,55 +237,94 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 22,
   },
-  userSection: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
     backgroundColor: 'white',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: '80%',
+    maxWidth: 320,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
-  userInfo: {
-    flex: 1,
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  welcomeText: {
-    fontSize: 16,
+  modalTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
   },
-  userStatus: {
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  userIcon: {
+    marginRight: 12,
+  },
+  userEmail: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    flex: 1,
+  },
+  anonymousText: {
     fontSize: 12,
-    color: '#666',
+    color: '#14A44A',
+    fontWeight: '500',
+    marginBottom: 20,
   },
-  logoutButton: {
+  modalLogoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F44336',
     borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
-  logoutButtonText: {
+  modalLogoutText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
   actionsSection: {
     marginBottom: 32,
+  },
+  actionsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 16,
   },
   actionGrid: {
     flexDirection: 'row',
