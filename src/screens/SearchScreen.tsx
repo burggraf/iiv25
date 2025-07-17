@@ -96,10 +96,26 @@ export default function SearchScreen() {
         setSupabaseIngredients([]);
         setIngredientResult(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Ingredient search error:', error);
       
-      // Fallback to local database on error
+      // Check if it's an authentication error
+      if (error?.message === 'not logged in') {
+        Alert.alert(
+          'Authentication Required',
+          'You need to be logged in to search ingredients. Please log in and try again.',
+          [
+            { text: 'OK', onPress: () => {
+              // TODO: Navigate to login screen
+              // This should be implemented based on your navigation setup
+              console.log('Should navigate to login screen');
+            }}
+          ]
+        );
+        return;
+      }
+      
+      // Fallback to local database on other errors
       const localResult = IngredientService.searchIngredient(query);
       
       if (localResult) {
@@ -223,7 +239,7 @@ export default function SearchScreen() {
           
           <FlatList
             data={supabaseIngredients}
-            keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
+            keyExtractor={(item, index) => `${item.title}-${index}`}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.ingredientItem}

@@ -83,7 +83,6 @@ export interface AppContextType {
 
 // Supabase database types
 export interface SupabaseIngredient {
-  id?: number;
   title: string;
   class?: string;
   productcount?: number;
@@ -112,4 +111,24 @@ export type DataSource = 'supabase' | 'openfoodfacts' | 'manual';
 export interface EnhancedProduct extends Product {
   dataSource: DataSource;
   confidenceScore?: number;
+}
+
+// Action logging types
+export interface ActionLog {
+  id: string;
+  type: ActionType;
+  input: string;
+  userid: string;
+  created_at: Date;
+  result?: string;
+  metadata?: Record<string, any>;
+}
+
+export enum ActionType {
+  SCAN = 'scan',
+  PRODUCT_SEARCH = 'product_search',
+  INGREDIENT_SEARCH = 'ingredient_search',
+  MANUAL_ENTRY = 'manual_entry',
+  HISTORY_VIEW = 'history_view',
+  SETTINGS_UPDATE = 'settings_update'
 }
