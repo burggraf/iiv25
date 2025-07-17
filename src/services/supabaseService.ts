@@ -39,7 +39,7 @@ export class SupabaseService {
   /**
    * Search for ingredients by title
    * @param title - The ingredient title to search for
-   * @returns Promise with matching ingredients
+   * @returns Promise with matching ingredients (limited to 100 results)
    */
   static async searchIngredientsByTitle(title: string): Promise<SupabaseIngredient[]> {
     try {
@@ -48,7 +48,8 @@ export class SupabaseService {
         .select('*')
         .ilike('title', `%${title}%`)
         .in('class', this.VALID_CLASSES)
-        .order('title');
+        .order('title')
+        .limit(100);
 
       if (error) {
         console.error('Error searching ingredients:', error);
