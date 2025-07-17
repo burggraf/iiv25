@@ -28,6 +28,22 @@ export default function ManualEntryScreen() {
     setUpcCode(numericText);
   };
 
+  const validateUPC = (code: string): boolean => {
+    // Check minimum length (8 digits for UPC-8, 12 for UPC-A, 13 for EAN-13)
+    if (code.length < 8) {
+      return false;
+    }
+    
+    // Check if it's all numeric
+    if (!/^\d+$/.test(code)) {
+      return false;
+    }
+    
+    // Check for valid UPC/EAN lengths
+    const validLengths = [8, 12, 13];
+    return validLengths.includes(code.length);
+  };
+
   const handleBackspace = () => {
     setUpcCode(prev => prev.slice(0, -1));
   };
@@ -38,8 +54,15 @@ export default function ManualEntryScreen() {
   };
 
   const handleLookup = async () => {
-    if (upcCode.length < 8) {
-      setError('Please enter at least 8 digits');
+    // Validate UPC before proceeding
+    if (!validateUPC(upcCode)) {
+      if (upcCode.length < 8) {
+        setError('Please enter at least 8 digits');
+      } else if (![8, 12, 13].includes(upcCode.length)) {
+        setError('Please enter a valid UPC code (8, 12, or 13 digits)');
+      } else {
+        setError('Please enter a valid UPC code');
+      }
       return;
     }
 
@@ -114,9 +137,6 @@ export default function ManualEntryScreen() {
       {/* Instructions */}
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionTitle}>Enter UPC Code Manually</Text>
-        <Text style={styles.instructionText}>
-          Tap the box below to type or use the keypad
-        </Text>
       </View>
 
       {/* UPC Display */}
@@ -127,11 +147,13 @@ export default function ManualEntryScreen() {
             style={styles.upcTextInput}
             value={upcCode}
             onChangeText={handleDirectInput}
+            onSubmitEditing={handleLookup}
             placeholder="Enter digits"
             placeholderTextColor="#999"
             keyboardType="numeric"
             maxLength={13}
             selectTextOnFocus
+            returnKeyType="search"
           />
         </View>
         <Text style={styles.digitCount}>
@@ -151,14 +173,14 @@ export default function ManualEntryScreen() {
         <TouchableOpacity
           style={[
             styles.lookupButton,
-            upcCode.length < 8 && styles.lookupButtonDisabled
+            !validateUPC(upcCode) && styles.lookupButtonDisabled
           ]}
           onPress={handleLookup}
-          disabled={upcCode.length < 8}
+          disabled={!validateUPC(upcCode)}
         >
           <Text style={[
             styles.lookupButtonText,
-            upcCode.length < 8 && styles.lookupButtonTextDisabled
+            !validateUPC(upcCode) && styles.lookupButtonTextDisabled
           ]}>
             🔍 Lookup Product
           </Text>
