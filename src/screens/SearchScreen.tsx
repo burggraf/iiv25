@@ -233,7 +233,10 @@ export default function SearchScreen() {
                 }}
               >
                 <View style={styles.ingredientInfo}>
-                  <Text style={styles.ingredientName}>{item.title}</Text>
+                  <View style={styles.ingredientDetails}>
+                    <Text style={styles.ingredientName}>{item.title}</Text>
+                    <Text style={styles.ingredientClass}>{item.class || 'unknown'}</Text>
+                  </View>
                   <View style={styles.statusContainer}>
                     <View style={[
                       styles.statusBadge,
@@ -559,11 +562,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  ingredientDetails: {
+    flex: 1,
+  },
   ingredientName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    flex: 1,
+    marginBottom: 2,
+  },
+  ingredientClass: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
   },
   statusContainer: {
     marginLeft: 12,
