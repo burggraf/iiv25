@@ -163,14 +163,19 @@ export default function SearchScreen() {
     
     switch (supabaseIngredient.class) {
       case 'vegan':
+      case 'typically vegan':
         status = VeganStatus.VEGAN;
         break;
       case 'vegetarian':
+      case 'typically vegetarian':
         status = VeganStatus.VEGETARIAN;
         break;
-      case 'not-vegan':
+      case 'non-vegetarian':
+      case 'typically non-vegan':
+      case 'typically non-vegetarian':
         status = VeganStatus.NOT_VEGAN;
         break;
+      case 'may be non-vegetarian':
       default:
         status = VeganStatus.UNKNOWN;
     }
@@ -232,15 +237,16 @@ export default function SearchScreen() {
                   <View style={styles.statusContainer}>
                     <View style={[
                       styles.statusBadge,
-                      item.class === 'vegan' && styles.veganBadge,
-                      item.class === 'not-vegan' && styles.notVeganBadge,
-                      item.class === 'vegetarian' && styles.vegetarianBadge,
-                      (!item.class || item.class === 'ignore' || item.class === 'NULL') && styles.unknownBadge
+                      (item.class === 'vegan' || item.class === 'typically vegan') && styles.veganBadge,
+                      (item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian') && styles.notVeganBadge,
+                      (item.class === 'vegetarian' || item.class === 'typically vegetarian') && styles.vegetarianBadge,
+                      (item.class === 'may be non-vegetarian' || !item.class) && styles.unknownBadge
                     ]}>
                       <Text style={styles.statusText}>
-                        {item.class === 'vegan' ? 'VEGAN' : 
-                         item.class === 'not-vegan' ? 'NOT VEGAN' : 
-                         item.class === 'vegetarian' ? 'VEGETARIAN' : 'UNKNOWN'}
+                        {item.class === 'vegan' || item.class === 'typically vegan' ? 'VEGAN' : 
+                         item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian' ? 'NOT VEGAN' : 
+                         item.class === 'vegetarian' || item.class === 'typically vegetarian' ? 'VEGETARIAN' : 
+                         item.class === 'may be non-vegetarian' ? 'MAYBE NOT VEGAN' : 'UNKNOWN'}
                       </Text>
                     </View>
                   </View>

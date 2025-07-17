@@ -24,6 +24,18 @@ export interface SupabaseProduct {
 }
 
 export class SupabaseService {
+  // Valid ingredient classes to filter by
+  private static readonly VALID_CLASSES = [
+    'may be non-vegetarian',
+    'non-vegetarian',
+    'typically non-vegan',
+    'typically non-vegetarian',
+    'typically vegan',
+    'typically vegetarian',
+    'vegan',
+    'vegetarian'
+  ];
+
   /**
    * Search for ingredients by title
    * @param title - The ingredient title to search for
@@ -35,6 +47,7 @@ export class SupabaseService {
         .from('ingredients')
         .select('*')
         .ilike('title', `%${title}%`)
+        .in('class', this.VALID_CLASSES)
         .order('title');
 
       if (error) {
@@ -60,6 +73,7 @@ export class SupabaseService {
         .from('ingredients')
         .select('*')
         .eq('title', title)
+        .in('class', this.VALID_CLASSES)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
