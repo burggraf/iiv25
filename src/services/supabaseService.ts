@@ -37,26 +37,70 @@ export class SupabaseService {
   ];
 
   /**
-   * Search for ingredients by title
+   * Search for ingredients by title using hierarchical search strategy
    * @param title - The ingredient title to search for
    * @returns Promise with matching ingredients (limited to 100 results)
    */
   static async searchIngredientsByTitle(title: string): Promise<SupabaseIngredient[]> {
     try {
-      const { data, error } = await supabase
+      // Step 1 & 2: Trim and convert to lowercase
+      const searchTerm = title.trim().toLowerCase();
+      
+      if (!searchTerm) {
+        return [];
+      }
+
+      // Step 3: Search for exact match first
+      const { data: exactMatch, error: exactError } = await supabase
         .from('ingredients')
         .select('*')
-        .ilike('title', `%${title}%`)
+        .eq('title', searchTerm)
         .in('class', this.VALID_CLASSES)
         .order('title')
         .limit(100);
 
-      if (error) {
-        console.error('Error searching ingredients:', error);
-        throw error;
+      if (exactError) {
+        console.error('Error in exact search:', exactError);
       }
 
-      return data || [];
+      // Step 4: If exact match found, return it
+      if (exactMatch && exactMatch.length > 0) {
+        return exactMatch;
+      }
+
+      // Step 5: Search for starts with pattern
+      const { data: startsWithMatch, error: startsWithError } = await supabase
+        .from('ingredients')
+        .select('*')
+        .ilike('title', `${searchTerm}%`)
+        .in('class', this.VALID_CLASSES)
+        .order('title')
+        .limit(100);
+
+      if (startsWithError) {
+        console.error('Error in starts with search:', startsWithError);
+      }
+
+      // Step 6: If starts with match found, return it
+      if (startsWithMatch && startsWithMatch.length > 0) {
+        return startsWithMatch;
+      }
+
+      // Step 7: Search for contains pattern
+      const { data: containsMatch, error: containsError } = await supabase
+        .from('ingredients')
+        .select('*')
+        .ilike('title', `%${searchTerm}%`)
+        .in('class', this.VALID_CLASSES)
+        .order('title')
+        .limit(100);
+
+      if (containsError) {
+        console.error('Error in contains search:', containsError);
+        throw containsError;
+      }
+
+      return containsMatch || [];
     } catch (error) {
       console.error('Failed to search ingredients:', error);
       throw error;
