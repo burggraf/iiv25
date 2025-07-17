@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Logo from '../../src/components/Logo';
@@ -6,10 +6,24 @@ import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function HomeScreen() {
+  const { user, signOut } = useAuth();
+  
   const navigateToTab = (tabName: string) => {
     router.push(`/(tabs)/${tabName}`);
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      ]
+    );
   };
 
   return (
@@ -20,6 +34,25 @@ export default function HomeScreen() {
           <Logo size={100} style={styles.logo} />
           <Text style={styles.title}>Is It Vegan?</Text>
           <Text style={styles.subtitle}>Check if products are vegan instantly!</Text>
+        </View>
+
+        {/* User Section */}
+        <View style={styles.userSection}>
+          <View style={styles.userInfo}>
+            <Text style={styles.welcomeText}>
+              Welcome, {user?.email || 'Anonymous User'}!
+            </Text>
+            <Text style={styles.userStatus}>
+              {user?.is_anonymous ? 'Anonymous Session' : 'Signed In'}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions Section */}
@@ -143,6 +176,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
     lineHeight: 22,
+  },
+  userSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  userStatus: {
+    fontSize: 12,
+    color: '#666',
+  },
+  logoutButton: {
+    backgroundColor: '#F44336',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   actionsSection: {
     marginBottom: 32,

@@ -1,3 +1,4 @@
+import '../utils/rn-polyfill'; // Import polyfills first
 import { AppState, Platform } from 'react-native';
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,6 +42,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web',
+    flowType: 'pkce',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-react-native',
+    },
   },
 });
 
