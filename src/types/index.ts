@@ -83,12 +83,12 @@ export interface AppContextType {
 
 // Supabase database types
 export interface SupabaseIngredient {
-  id: number;
+  id?: number;
   title: string;
-  vegan?: boolean;
-  vegetarian?: boolean;
-  created_at?: string;
-  updated_at?: string;
+  class?: string;
+  productcount?: number;
+  lastupdated?: string;
+  created?: string;
 }
 
 export interface SupabaseProduct {

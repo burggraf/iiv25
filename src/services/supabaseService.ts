@@ -1,12 +1,12 @@
 import { supabase } from './supabaseClient';
 
 export interface SupabaseIngredient {
-  id: number;
+  id?: number;
   title: string;
-  vegan?: boolean;
-  vegetarian?: boolean;
-  created_at?: string;
-  updated_at?: string;
+  class?: string;
+  productcount?: number;
+  lastupdated?: string;
+  created?: string;
 }
 
 export interface SupabaseProduct {
@@ -131,7 +131,7 @@ export class SupabaseService {
    */
   static async testConnection(): Promise<boolean> {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('ingredients')
         .select('count')
         .limit(1);

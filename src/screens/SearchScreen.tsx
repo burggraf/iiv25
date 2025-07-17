@@ -8,8 +8,9 @@ import IngredientResult from '../components/IngredientResult';
 import ProductResult from '../components/ProductResult';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
+import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
 import { useApp } from '../context/AppContext';
-import { Product } from '../types';
+import { Product, VeganStatus } from '../types';
 
 export default function SearchScreen() {
   const { addToHistory } = useApp();
@@ -26,6 +27,7 @@ export default function SearchScreen() {
   
   // Ingredient search state
   const [ingredientResult, setIngredientResult] = useState<IngredientInfo | null>(null);
+  const [supabaseIngredients, setSupabaseIngredients] = useState<SupabaseIngredient[]>([]);
   
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -39,7 +41,7 @@ export default function SearchScreen() {
     if (searchMode === 'products') {
       await searchProducts(searchQuery, 1);
     } else {
-      searchIngredient(searchQuery);
+      await searchIngredient(searchQuery);
     }
     
     setIsLoading(false);
@@ -68,16 +70,46 @@ export default function SearchScreen() {
     }
   };
 
-  const searchIngredient = (query: string) => {
-    const result = IngredientService.searchIngredient(query);
-    
-    if (result) {
-      setIngredientResult(result);
-    } else {
-      Alert.alert(
-        'Ingredient Not Found',
-        `We don't have information about "${query}" in our database. Try a more common ingredient name or contact the manufacturer for clarification.`
-      );
+  const searchIngredient = async (query: string) => {
+    try {
+      // First try Supabase database search
+      const supabaseResults = await SupabaseService.searchIngredientsByTitle(query);
+      
+      if (supabaseResults.length > 0) {
+        setSupabaseIngredients(supabaseResults);
+        setIngredientResult(null); // Clear fallback result
+        return;
+      }
+      
+      // Fallback to local ingredient database
+      const localResult = IngredientService.searchIngredient(query);
+      
+      if (localResult) {
+        setIngredientResult(localResult);
+        setSupabaseIngredients([]);
+      } else {
+        Alert.alert(
+          'Ingredient Not Found',
+          `We don't have information about "${query}" in our database. Try a more common ingredient name or contact the manufacturer for clarification.`
+        );
+        setSupabaseIngredients([]);
+        setIngredientResult(null);
+      }
+    } catch (error) {
+      console.error('Ingredient search error:', error);
+      
+      // Fallback to local database on error
+      const localResult = IngredientService.searchIngredient(query);
+      
+      if (localResult) {
+        setIngredientResult(localResult);
+        setSupabaseIngredients([]);
+      } else {
+        Alert.alert(
+          'Search Error',
+          'Failed to search ingredients. Please check your connection and try again.'
+        );
+      }
     }
   };
 
@@ -110,16 +142,44 @@ export default function SearchScreen() {
   const handleBackToSearch = () => {
     setSelectedProduct(null);
     setIngredientResult(null);
+    setSupabaseIngredients([]);
   };
 
   const handleNewSearch = () => {
     setSearchQuery('');
     setProductResults([]);
     setIngredientResult(null);
+    setSupabaseIngredients([]);
     setSelectedProduct(null);
     setCurrentPage(1);
     setHasNextPage(false);
     setTotalResults(0);
+  };
+
+  // Convert Supabase ingredient to IngredientInfo format
+  const convertSupabaseIngredient = (supabaseIngredient: SupabaseIngredient): IngredientInfo => {
+    let status: VeganStatus = VeganStatus.UNKNOWN;
+    
+    switch (supabaseIngredient.class) {
+      case 'vegan':
+        status = VeganStatus.VEGAN;
+        break;
+      case 'vegetarian':
+        status = VeganStatus.VEGETARIAN;
+        break;
+      case 'not-vegan':
+        status = VeganStatus.NOT_VEGAN;
+        break;
+      default:
+        status = VeganStatus.UNKNOWN;
+    }
+    
+    return {
+      name: supabaseIngredient.title,
+      status,
+      description: `Database ingredient: ${supabaseIngredient.title}${supabaseIngredient.productcount ? ` (found in ${supabaseIngredient.productcount} products)` : ''}`,
+      alternatives: []
+    };
   };
 
   // Show selected product details
@@ -136,9 +196,68 @@ export default function SearchScreen() {
     );
   }
 
-  // Show ingredient result
+  // Show ingredient result (fallback)
   if (ingredientResult) {
     return <IngredientResult ingredient={ingredientResult} onBack={handleBackToSearch} />;
+  }
+
+  // Show Supabase ingredients results
+  if (supabaseIngredients.length > 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Logo size={32} />
+          <Text style={styles.appTitle}>Ingredient Results</Text>
+        </View>
+        
+        <View style={styles.resultsContainer}>
+          <Text style={styles.resultsHeader}>
+            {supabaseIngredients.length} ingredient{supabaseIngredients.length !== 1 ? 's' : ''} found
+          </Text>
+          
+          <FlatList
+            data={supabaseIngredients}
+            keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.ingredientItem}
+                onPress={() => {
+                  setIngredientResult(convertSupabaseIngredient(item));
+                  setSupabaseIngredients([]);
+                }}
+              >
+                <View style={styles.ingredientInfo}>
+                  <Text style={styles.ingredientName}>{item.title}</Text>
+                  <View style={styles.statusContainer}>
+                    <View style={[
+                      styles.statusBadge,
+                      item.class === 'vegan' && styles.veganBadge,
+                      item.class === 'not-vegan' && styles.notVeganBadge,
+                      item.class === 'vegetarian' && styles.vegetarianBadge,
+                      (!item.class || item.class === 'ignore' || item.class === 'NULL') && styles.unknownBadge
+                    ]}>
+                      <Text style={styles.statusText}>
+                        {item.class === 'vegan' ? 'VEGAN' : 
+                         item.class === 'not-vegan' ? 'NOT VEGAN' : 
+                         item.class === 'vegetarian' ? 'VEGETARIAN' : 'UNKNOWN'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+            style={styles.resultsList}
+            contentContainerStyle={styles.resultsListContent}
+          />
+        </View>
+        
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity onPress={handleBackToSearch}>
+            <Text style={styles.backButton}>← Back to Search</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   // Main search interface
@@ -390,5 +509,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     fontWeight: 'bold',
+  },
+  ingredientItem: {
+    backgroundColor: 'white',
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ingredientInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ingredientName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  statusContainer: {
+    marginLeft: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  veganBadge: {
+    backgroundColor: '#4CAF50',
+  },
+  notVeganBadge: {
+    backgroundColor: '#F44336',
+  },
+  vegetarianBadge: {
+    backgroundColor: '#FF9800',
+  },
+  unknownBadge: {
+    backgroundColor: '#9E9E9E',
   },
 });
