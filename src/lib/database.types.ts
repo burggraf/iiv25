@@ -121,7 +121,7 @@ export type Database = {
           created: string
           ean13: string
           gs1cat: string
-          imageUrl: string | null
+          imageurl: string | null
           ingredients: string | null
           ingredientsaddedtomasterlist: number | null
           lastupdated: string
@@ -141,7 +141,7 @@ export type Database = {
           created?: string
           ean13: string
           gs1cat?: string
-          imageUrl?: string | null
+          imageurl?: string | null
           ingredients?: string | null
           ingredientsaddedtomasterlist?: number | null
           lastupdated?: string
@@ -161,7 +161,7 @@ export type Database = {
           created?: string
           ean13?: string
           gs1cat?: string
-          imageUrl?: string | null
+          imageurl?: string | null
           ingredients?: string | null
           ingredientsaddedtomasterlist?: number | null
           lastupdated?: string
@@ -221,6 +221,21 @@ export type Database = {
           productcount: number
           lastupdated: string
           created: string
+        }[]
+      }
+      search_product: {
+        Args: { barcode: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          calculated_code: number
+          override_code: number
+          imageurl: string
+          created: string
+          lastupdated: string
         }[]
       }
     }

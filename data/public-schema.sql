@@ -270,6 +270,174 @@ $$;
 ALTER FUNCTION "public"."search_ingredients"("search_term" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."search_product"("barcode" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "calculated_code" integer, "override_code" integer, "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    current_user_id UUID;
+    subscription_level TEXT;
+    recent_searches INTEGER;
+    rate_limit INTEGER;
+    expires_at TIMESTAMP WITH TIME ZONE;
+    found_product RECORD;
+    decision_reasoning TEXT;
+BEGIN
+    -- Check if user is authenticated
+    current_user_id := auth.uid();
+    
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'not logged in';
+    END IF;
+    
+    -- Validate input
+    IF barcode IS NULL OR trim(barcode) = '' THEN
+        RAISE EXCEPTION 'barcode cannot be empty';
+    END IF;
+    
+    -- Get user's subscription status
+    SELECT 
+        us.subscription_level,
+        us.expires_at
+    INTO 
+        subscription_level,
+        expires_at
+    FROM public.user_subscription us
+    WHERE us.user_id = current_user_id
+    AND us.is_active = TRUE;
+    
+    -- If no subscription record found, default to 'free'
+    IF subscription_level IS NULL THEN
+        subscription_level := 'free';
+    END IF;
+    
+    -- Check if subscription has expired
+    IF expires_at IS NOT NULL AND expires_at < NOW() THEN
+        -- Update subscription to inactive
+        UPDATE public.user_subscription 
+        SET is_active = FALSE 
+        WHERE user_id = current_user_id;
+        
+        subscription_level := 'free';
+    END IF;
+    
+    -- Set rate limits based on subscription level
+    CASE subscription_level
+        WHEN 'free' THEN rate_limit := 3;
+        WHEN 'standard' THEN rate_limit := 20;
+        WHEN 'premium' THEN rate_limit := 250;
+        ELSE rate_limit := 3; -- Default to free tier
+    END CASE;
+    
+    -- Check recent searches in the last hour
+    SELECT COUNT(*)
+    INTO recent_searches
+    FROM public.actionlog al
+    WHERE al.userid = current_user_id
+    AND al.type = 'product_lookup'
+    AND al.created_at > NOW() - INTERVAL '1 hour';
+    
+    -- Check if user has exceeded rate limit
+    IF recent_searches >= rate_limit THEN
+        -- Return special rate limit response instead of throwing error
+        RETURN QUERY
+        SELECT 
+            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as ean13,
+            subscription_level::VARCHAR(255) as upc,
+            'Rate limit exceeded'::VARCHAR(255) as product_name,
+            rate_limit::VARCHAR(255) as brand,
+            'You have exceeded your search limit'::VARCHAR(255) as ingredients,
+            -1::INTEGER as calculated_code,
+            -1::INTEGER as override_code,
+            NULL::TEXT as imageUrl,
+            NOW() as created,
+            NOW() as lastupdated;
+        RETURN;
+    END IF;
+    
+    -- Clean barcode
+    barcode := trim(barcode);
+    
+    -- Search for product by UPC or EAN13
+    SELECT 
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.calculated_code,
+        p.override_code,
+        p.imageUrl,
+        p.created,
+        p.lastupdated
+    INTO found_product
+    FROM public.products p
+    WHERE p.upc = barcode OR p.ean13 = barcode
+    ORDER BY p.ean13
+    LIMIT 1;
+    
+    -- Determine decision reasoning based on whether product was found
+    IF found_product IS NOT NULL THEN
+        -- Map calculated_code to vegan status for reasoning
+        CASE found_product.calculated_code
+            WHEN 100 THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
+            WHEN 200 THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
+            WHEN 300 THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
+            WHEN 400 THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
+            WHEN 500 THEN decision_reasoning := 'Database hit: Not Sure (code 500) - will fall back to Open Food Facts';
+            WHEN 600 THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
+            WHEN 700 THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
+            WHEN 800 THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
+            ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', found_product.calculated_code);
+        END CASE;
+        
+        -- Return the found product
+        RETURN QUERY
+        SELECT 
+            found_product.ean13,
+            found_product.upc,
+            found_product.product_name,
+            found_product.brand,
+            found_product.ingredients,
+            found_product.calculated_code,
+            found_product.override_code,
+            found_product.imageUrl,
+            found_product.created,
+            found_product.lastupdated;
+    ELSE
+        decision_reasoning := 'Database miss: Product not found in database - will fall back to Open Food Facts';
+    END IF;
+    
+    -- Log the search operation
+    INSERT INTO public.actionlog (type, input, userid, result, metadata)
+    VALUES (
+        'product_lookup',
+        barcode,
+        current_user_id,
+        CASE 
+            WHEN found_product IS NOT NULL THEN 'Product found in database'
+            ELSE 'Product not found in database'
+        END,
+        json_build_object(
+            'barcode', barcode,
+            'database_hit', found_product IS NOT NULL,
+            'calculated_code', CASE WHEN found_product IS NOT NULL THEN found_product.calculated_code ELSE NULL END,
+            'decision_reasoning', decision_reasoning,
+            'subscription_level', subscription_level,
+            'rate_limit', rate_limit,
+            'searches_used', recent_searches + 1,
+            'search_timestamp', NOW()
+        )
+    );
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_product"("barcode" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_user_subscription_updated_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -341,14 +509,14 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "calculated_code_sugar_vegetarian" integer DEFAULT '-1'::integer NOT NULL,
     "gs1cat" character varying(8) DEFAULT ''::character varying NOT NULL,
     "rerun" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    "imageUrl" "text"
+    "imageurl" "text"
 );
 
 
 ALTER TABLE "public"."products" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."products"."imageUrl" IS 'url of product image';
+COMMENT ON COLUMN "public"."products"."imageurl" IS 'url of product image';
 
 
 
@@ -487,6 +655,12 @@ GRANT ALL ON FUNCTION "public"."get_subscription_status"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "service_role";
 
 
 

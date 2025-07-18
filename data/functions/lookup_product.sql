@@ -1,6 +1,6 @@
--- Search Product PostgreSQL Function with Rate Limiting
+-- Lookup Product PostgreSQL Function with Rate Limiting
 -- Created: 2025-01-18
--- Purpose: Secure product lookup by barcode with authentication check, rate limiting, and automatic logging
+-- Purpose: Secure product lookup by UPC/EAN barcode with authentication check, rate limiting, and automatic logging
 -- 
 -- This function provides barcode-based product lookup with rate limiting:
 -- 1. Authentication check (requires valid auth.uid())
@@ -198,8 +198,8 @@ END;
 $$;
 
 -- Usage Examples:
--- SELECT * FROM search_product('1234567890123');
--- SELECT * FROM search_product('0123456789012');
+-- SELECT * FROM lookup_product('1234567890123');
+-- SELECT * FROM lookup_product('0123456789012');
 
 -- Rate Limits by Subscription Level:
 -- Free: 3 searches per hour

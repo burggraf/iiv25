@@ -185,7 +185,7 @@ export class SupabaseService {
       }
 
       const { data, error } = await supabase
-        .rpc('search_product', { barcode: searchBarcode });
+        .rpc('lookup_product', { barcode: searchBarcode });
 
       if (error) {
         // Check if it's an authentication error
