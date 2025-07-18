@@ -6,9 +6,9 @@
 -- This function provides a hierarchical search strategy for ingredients with rate limiting:
 -- 1. Authentication check (requires valid auth.uid())
 -- 2. Rate limit check based on subscription level:
---    - Free: 3 searches per hour
---    - Standard: 20 searches per hour  
---    - Premium: 250 searches per hour
+--    - Free: 10 searches per hour
+--    - Basic: 100 searches per hour  
+--    - Premium: 1000 searches per hour
 -- 3. Hierarchical search (exact → starts with → contains)
 -- 4. Automatic logging with subscription and rate limit metadata
 --
@@ -36,11 +36,8 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     current_user_id UUID;
-    subscription_level TEXT;
     search_result_count INTEGER;
-    recent_searches INTEGER;
-    rate_limit INTEGER;
-    expires_at TIMESTAMP WITH TIME ZONE;
+    rate_info RECORD;
 BEGIN
     -- Check if user is authenticated
     current_user_id := auth.uid();
@@ -54,56 +51,17 @@ BEGIN
         RAISE EXCEPTION 'search term cannot be empty';
     END IF;
     
-    -- Get user's subscription status
-    SELECT 
-        us.subscription_level,
-        us.expires_at
-    INTO 
-        subscription_level,
-        expires_at
-    FROM public.user_subscription us
-    WHERE us.user_id = current_user_id
-    AND us.is_active = TRUE;
-    
-    -- If no subscription record found, default to 'free'
-    IF subscription_level IS NULL THEN
-        subscription_level := 'free';
-    END IF;
-    
-    -- Check if subscription has expired
-    IF expires_at IS NOT NULL AND expires_at < NOW() THEN
-        -- Update subscription to inactive
-        UPDATE public.user_subscription 
-        SET is_active = FALSE 
-        WHERE user_id = current_user_id;
-        
-        subscription_level := 'free';
-    END IF;
-    
-    -- Set rate limits based on subscription level
-    CASE subscription_level
-        WHEN 'free' THEN rate_limit := 3;
-        WHEN 'standard' THEN rate_limit := 20;
-        WHEN 'premium' THEN rate_limit := 250;
-        ELSE rate_limit := 3; -- Default to free tier
-    END CASE;
-    
-    -- Check recent searches in the last hour
-    SELECT COUNT(*)
-    INTO recent_searches
-    FROM public.actionlog
-    WHERE userid = current_user_id
-    AND type = 'ingredient_search'
-    AND created_at > NOW() - INTERVAL '1 hour';
+    -- Get rate limit information
+    SELECT * INTO rate_info FROM get_rate_limits('ingredient_search');
     
     -- Check if user has exceeded rate limit
-    IF recent_searches >= rate_limit THEN
+    IF rate_info.is_rate_limited THEN
         -- Return special rate limit response instead of throwing error
         RETURN QUERY
         SELECT 
             '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as title,
-            subscription_level::VARCHAR(255) as class,
-            rate_limit::INTEGER as productcount,
+            rate_info.subscription_level::VARCHAR(255) as class,
+            rate_info.rate_limit::INTEGER as productcount,
             NOW() as lastupdated,
             NOW() as created;
         RETURN;
@@ -148,9 +106,9 @@ BEGIN
                     'search_strategy', 'exact_match',
                     'result_count', search_result_count,
                     'search_term_length', length(search_term),
-                    'subscription_level', subscription_level,
-                    'rate_limit', rate_limit,
-                    'searches_used', recent_searches + 1
+                    'subscription_level', rate_info.subscription_level,
+                    'rate_limit', rate_info.rate_limit,
+                    'searches_used', rate_info.recent_searches + 1
                 )
             );
             RETURN;
@@ -179,9 +137,9 @@ BEGIN
                     'search_strategy', 'starts_with',
                     'result_count', search_result_count,
                     'search_term_length', length(search_term),
-                    'subscription_level', subscription_level,
-                    'rate_limit', rate_limit,
-                    'searches_used', recent_searches + 1
+                    'subscription_level', rate_info.subscription_level,
+                    'rate_limit', rate_info.rate_limit,
+                    'searches_used', rate_info.recent_searches + 1
                 )
             );
             RETURN;
@@ -211,9 +169,9 @@ BEGIN
                 'search_strategy', 'contains',
                 'result_count', search_result_count,
                 'search_term_length', length(search_term),
-                'subscription_level', subscription_level,
-                'rate_limit', rate_limit,
-                'searches_used', recent_searches + 1
+                'subscription_level', rate_info.subscription_level,
+                'rate_limit', rate_info.rate_limit,
+                'searches_used', rate_info.recent_searches + 1
             )
         );
         
@@ -227,9 +185,9 @@ $$;
 -- SELECT * FROM search_ingredients('milk powder');
 
 -- Rate Limits by Subscription Level:
--- Free: 3 searches per hour
--- Standard: 20 searches per hour
--- Premium: 250 searches per hour
+-- Free: 10 searches per hour
+-- Basic: 100 searches per hour
+-- Premium: 1000 searches per hour
 
 -- Error Messages:
 -- 'not logged in' - User must be authenticated
@@ -238,7 +196,7 @@ $$;
 -- Rate Limit Handling:
 -- When rate limit is exceeded, function returns a special record with:
 -- - title: '__RATE_LIMIT_EXCEEDED__'
--- - class: subscription level (free/standard/premium)
+-- - class: subscription level (free/basic/premium)
 -- - productcount: rate limit for that tier
 -- This allows client-side graceful handling without throwing errors
 
