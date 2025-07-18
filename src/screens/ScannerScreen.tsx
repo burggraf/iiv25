@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Platform, View, ActivityIndicator, Text, TouchableOpacity, Image, Animated } from 'react-native';
 import { router } from 'expo-router';
 import { isDevice } from 'expo-device';
@@ -25,6 +25,7 @@ export default function ScannerScreen() {
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
   const [isParsingIngredients, setIsParsingIngredients] = useState(false);
   const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null);
+  const processingBarcodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -36,13 +37,22 @@ export default function ScannerScreen() {
   }, []);
 
   const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
-    // Prevent scanning the same barcode repeatedly within a short time
+    // Synchronous check using ref to prevent race conditions
+    if (processingBarcodeRef.current === data) {
+      console.log(`🚫 Ignoring duplicate/concurrent scan: ${data} (already processing)`);
+      return;
+    }
+
+    // Additional check against last scanned barcode
     if (data === lastScannedBarcode) {
+      console.log(`🚫 Ignoring duplicate scan: ${data} (recently scanned)`);
       return;
     }
 
     console.log(`Bar code with type ${type} and data ${data} has been scanned!`);
     
+    // Set processing flag immediately in ref (synchronous)
+    processingBarcodeRef.current = data;
     setLastScannedBarcode(data);
     setIsLoading(true);
     setError(null);
@@ -50,20 +60,42 @@ export default function ScannerScreen() {
     try {
       const productData = await OpenFoodFactsService.getProductByBarcode(data);
       
+      // Debug: Log Open Food Facts API response data
+      console.log('='.repeat(80));
+      console.log('🍎 OPEN FOOD FACTS API RESPONSE');
+      console.log('='.repeat(80));
+      console.log(`📊 Barcode: ${data}`);
+      console.log(`🎯 Product Found: ${productData ? 'YES' : 'NO'}`);
+      
       if (productData) {
+        console.log('📦 PRODUCT DATA:');
+        console.log(JSON.stringify(productData, null, 2));
+        console.log('='.repeat(80));
+        
         setScannedProduct(productData);
         addToHistory(productData);
         showOverlay();
       } else {
+        console.log('❌ No product data returned');
+        console.log('='.repeat(80));
         setError(`Product not found for barcode: ${data}`);
         showErrorOverlay();
       }
     } catch (err) {
+      console.log('='.repeat(80));
+      console.log('🚨 OPEN FOOD FACTS API ERROR');
+      console.log('='.repeat(80));
+      console.log(`📊 Barcode: ${data}`);
+      console.log('❌ Error Details:');
+      console.log(JSON.stringify(err, null, 2));
+      console.log('='.repeat(80));
+      
       setError('Failed to lookup product. Please try again.');
       console.error('Error looking up product:', err);
       showErrorOverlay();
     } finally {
       setIsLoading(false);
+      processingBarcodeRef.current = null;
       // Reset the last scanned barcode after 3 seconds to allow rescanning
       setTimeout(() => {
         setLastScannedBarcode(null);
