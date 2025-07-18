@@ -1,6 +1,13 @@
-# Welcome to your Expo app 👋
+# Is It Vegan? 🌱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native/Expo app that helps users determine if food products are vegan by scanning barcodes and ingredient labels.
+
+## Features
+
+- **Barcode Scanning**: Scan product barcodes to instantly check vegan status
+- **Ingredient Analysis**: Take photos of ingredient lists for AI-powered analysis
+- **Product Database**: Powered by Supabase with 400K+ products
+- **Smart Classification**: Multi-strategy vegan detection system
 
 ## Get started
 
@@ -10,7 +17,15 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure Supabase secrets (required for ingredient scanning)
+
+   ```bash
+   supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+   Get your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+3. Start the app
 
    ```bash
    npx expo start

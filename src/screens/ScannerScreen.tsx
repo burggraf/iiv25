@@ -4,11 +4,13 @@ import { router } from 'expo-router';
 import { isDevice } from 'expo-device';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester';
 import ProductResult from '../components/ProductResult';
 import Logo from '../components/Logo';
 import LogoWhite from '../components/LogoWhite';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
+import { IngredientOCRService } from '../services/ingredientOCRService';
 import { useApp } from '../context/AppContext';
 import { Product, VeganStatus } from '../types';
 
@@ -21,6 +23,8 @@ export default function ScannerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [overlayHeight] = useState(new Animated.Value(0));
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
+  const [isParsingIngredients, setIsParsingIngredients] = useState(false);
+  const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -68,8 +72,10 @@ export default function ScannerScreen() {
   };
 
   const showOverlay = () => {
+    // Use larger height if product is UNKNOWN (to accommodate scan button)
+    const height = scannedProduct?.veganStatus === VeganStatus.UNKNOWN ? 160 : 120;
     Animated.timing(overlayHeight, {
-      toValue: 120,
+      toValue: height,
       duration: 300,
       useNativeDriver: false,
     }).start();
@@ -77,15 +83,12 @@ export default function ScannerScreen() {
 
   const showErrorOverlay = () => {
     Animated.timing(overlayHeight, {
-      toValue: 80,
+      toValue: 120, // Increased height to accommodate button
       duration: 300,
       useNativeDriver: false,
     }).start();
     
-    // Hide error overlay after 3 seconds
-    setTimeout(() => {
-      hideOverlay();
-    }, 3000);
+    // Don't auto-hide error overlay anymore since it has interaction
   };
 
   const hideOverlay = () => {
@@ -94,6 +97,68 @@ export default function ScannerScreen() {
       duration: 300,
       useNativeDriver: false,
     }).start();
+  };
+
+  const handleScanIngredients = async () => {
+    try {
+      setIsParsingIngredients(true);
+      setParsedIngredients(null);
+
+      // Request camera permission for image picker
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        setError('Camera permission is required to scan ingredients');
+        return;
+      }
+
+      // Launch camera to take photo
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      if (!result.assets[0].base64) {
+        setError('Failed to capture image data');
+        return;
+      }
+
+      // Call ingredient OCR service
+      const data = await IngredientOCRService.parseIngredientsFromImage(result.assets[0].base64);
+
+
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
+
+      if (!data.isValidIngredientsList || data.confidence < 0.7) {
+        setError('Could not clearly read ingredients from the image. Please try again with better lighting.');
+        return;
+      }
+
+      setParsedIngredients(data.ingredients);
+      setError(null);
+      
+      // Update overlay to show parsed ingredients
+      Animated.timing(overlayHeight, {
+        toValue: 200, // Larger height for ingredients list
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+
+    } catch (err) {
+      console.error('Error parsing ingredients:', err);
+      setError('Failed to parse ingredients. Please try again.');
+    } finally {
+      setIsParsingIngredients(false);
+    }
   };
 
   const handleOverlayPress = () => {
@@ -242,35 +307,82 @@ export default function ScannerScreen() {
 
         {/* Product Overlay */}
         <Animated.View style={[styles.productOverlay, { height: overlayHeight }]}>
-          {scannedProduct && !error ? (
-            <TouchableOpacity style={styles.overlayContent} onPress={handleOverlayPress}>
-              <View style={styles.overlayLeft}>
-                {scannedProduct.imageUrl && (
-                  <Image source={{ uri: scannedProduct.imageUrl }} style={styles.overlayImage} />
+          {parsedIngredients ? (
+            <View style={styles.overlayIngredientsContent}>
+              <Text style={styles.overlayIngredientsTitle}>Parsed Ingredients:</Text>
+              <View style={styles.ingredientsList}>
+                {parsedIngredients.slice(0, 6).map((ingredient, index) => (
+                  <Text key={index} style={styles.ingredientItem}>• {ingredient}</Text>
+                ))}
+                {parsedIngredients.length > 6 && (
+                  <Text style={styles.ingredientItem}>... and {parsedIngredients.length - 6} more</Text>
                 )}
               </View>
-              <View style={styles.overlayCenter}>
-                <Text style={styles.overlayProductName} numberOfLines={1}>
-                  {scannedProduct.name}
-                </Text>
-                {scannedProduct.brand && (
-                  <Text style={styles.overlayProductBrand} numberOfLines={1}>
-                    {scannedProduct.brand}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.overlayRight}>
-                <View style={[styles.overlayStatusBadge, { backgroundColor: getStatusColor(scannedProduct.veganStatus) }]}>
-                  {getStatusIcon(scannedProduct.veganStatus)}
-                  <Text style={styles.overlayStatusText}>
-                    {getStatusText(scannedProduct.veganStatus)}
-                  </Text>
+              <TouchableOpacity 
+                style={styles.dismissButton} 
+                onPress={() => {
+                  setParsedIngredients(null);
+                  hideOverlay();
+                }}
+              >
+                <Text style={styles.dismissButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          ) : scannedProduct && !error ? (
+            <View style={styles.overlayContent}>
+              <TouchableOpacity style={styles.overlayProductInfo} onPress={handleOverlayPress}>
+                <View style={styles.overlayLeft}>
+                  {scannedProduct.imageUrl && (
+                    <Image source={{ uri: scannedProduct.imageUrl }} style={styles.overlayImage} />
+                  )}
                 </View>
-              </View>
-            </TouchableOpacity>
-          ) : error ? (
+                <View style={styles.overlayCenter}>
+                  <Text style={styles.overlayProductName} numberOfLines={1}>
+                    {scannedProduct.name}
+                  </Text>
+                  {scannedProduct.brand && (
+                    <Text style={styles.overlayProductBrand} numberOfLines={1}>
+                      {scannedProduct.brand}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.overlayRight}>
+                  <View style={[styles.overlayStatusBadge, { backgroundColor: getStatusColor(scannedProduct.veganStatus) }]}>
+                    {getStatusIcon(scannedProduct.veganStatus)}
+                    <Text style={styles.overlayStatusText}>
+                      {getStatusText(scannedProduct.veganStatus)}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+              {scannedProduct.veganStatus === VeganStatus.UNKNOWN && (
+                <TouchableOpacity 
+                  style={styles.scanIngredientsButtonSmall} 
+                  onPress={handleScanIngredients}
+                  disabled={isParsingIngredients}
+                >
+                  {isParsingIngredients ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.scanIngredientsButtonTextSmall}>📷 Scan Ingredients</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : error && !parsedIngredients ? (
             <View style={styles.overlayErrorContent}>
               <Text style={styles.overlayErrorText}>❌ {error}</Text>
+              <TouchableOpacity 
+                style={styles.scanIngredientsButton} 
+                onPress={handleScanIngredients}
+                disabled={isParsingIngredients}
+              >
+                {isParsingIngredients ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.scanIngredientsButtonText}>📷 Scan Ingredients</Text>
+                )}
+              </TouchableOpacity>
             </View>
           ) : null}
         </Animated.View>
@@ -425,10 +537,13 @@ const styles = StyleSheet.create({
   },
   overlayContent: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  overlayProductInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   overlayLeft: {
     width: 60,
@@ -492,6 +607,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#F44336',
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  scanIngredientsButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  scanIngredientsButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  scanIngredientsButtonSmall: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  scanIngredientsButtonTextSmall: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  overlayIngredientsContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  overlayIngredientsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  ingredientsList: {
+    flex: 1,
+    marginBottom: 12,
+  },
+  ingredientItem: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  dismissButton: {
+    backgroundColor: '#666',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignSelf: 'center',
+  },
+  dismissButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
   bottomInstructions: {
     paddingVertical: 16,
