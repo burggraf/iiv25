@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { isDevice } from 'expo-device';
+import { BarcodeScanningResult } from 'expo-camera';
 import Logo from './Logo';
 
 interface SimulatorBarcodeTesterProps {
-  onBarcodeScanned: (barcode: string) => void;
+  onBarcodeScanned: (result: BarcodeScanningResult) => void;
 }
 
 export default function SimulatorBarcodeTester({ onBarcodeScanned }: SimulatorBarcodeTesterProps) {
@@ -24,7 +25,10 @@ export default function SimulatorBarcodeTester({ onBarcodeScanned }: SimulatorBa
   ];
 
   const handleTestScan = (barcode: string) => {
-    onBarcodeScanned(barcode);
+    onBarcodeScanned({
+      type: 'ean13',
+      data: barcode
+    });
     setTestBarcode('');
   };
 

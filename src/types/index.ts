@@ -127,6 +127,7 @@ export interface ActionLog {
 export enum ActionType {
   SCAN = 'scan',
   PRODUCT_SEARCH = 'product_search',
+  PRODUCT_LOOKUP = 'product_lookup',
   INGREDIENT_SEARCH = 'ingredient_search',
   MANUAL_ENTRY = 'manual_entry',
   HISTORY_VIEW = 'history_view',

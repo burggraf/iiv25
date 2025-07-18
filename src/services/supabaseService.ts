@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { ActionLog, ActionType, SubscriptionLevel } from '../types';
+import { ActionLog, ActionType, SubscriptionLevel, VeganStatus } from '../types';
 
 export interface SupabaseIngredient {
   title: string;
@@ -10,17 +10,16 @@ export interface SupabaseIngredient {
 }
 
 export interface SupabaseProduct {
-  id: number;
+  ean13: string;
   upc?: string;
-  ean13?: string;
   product_name?: string;
   brand?: string;
   ingredients?: string;
-  calculated_code?: string;
-  override_code?: string;
-  image_url?: string;
-  created_at?: string;
-  updated_at?: string;
+  calculated_code?: number;
+  override_code?: number;
+  imageurl?: string;
+  created?: string;
+  lastupdated?: string;
 }
 
 export class SupabaseService {
@@ -35,6 +34,49 @@ export class SupabaseService {
     'vegan',
     'vegetarian'
   ];
+
+  /**
+   * Map calculated_code from database to VeganStatus enum
+   * Based on product-code-map.txt mapping
+   * @param calculatedCode - The calculated_code from the database
+   * @returns VeganStatus enum value
+   */
+  static mapCalculatedCodeToVeganStatus(calculatedCode: number | null | undefined): VeganStatus {
+    if (!calculatedCode) {
+      return VeganStatus.UNKNOWN;
+    }
+
+    switch (calculatedCode) {
+      case 100: // Definitely Vegan
+        return VeganStatus.VEGAN;
+      case 200: // Definitely Vegetarian
+      case 400: // Probably Vegetarian
+        return VeganStatus.VEGETARIAN;
+      case 300: // Probably Not Vegan
+      case 600: // May Not Be Vegetarian
+      case 700: // Probably Not Vegetarian
+      case 800: // Definitely Not Vegetarian
+        return VeganStatus.NOT_VEGAN;
+      case 500: // Not Sure
+      default:
+        return VeganStatus.UNKNOWN;
+    }
+  }
+
+  /**
+   * Check if calculated_code represents a valid/actionable result
+   * We only trust codes other than 500 (Not Sure)
+   * @param calculatedCode - The calculated_code from the database
+   * @returns true if the code represents a confident classification
+   */
+  static isValidCalculatedCode(calculatedCode: number | null | undefined): boolean {
+    if (!calculatedCode) {
+      return false;
+    }
+    
+    // We trust all codes except 500 (Not Sure)
+    return [100, 200, 300, 400, 600, 700, 800].includes(calculatedCode);
+  }
 
   /**
    * Search for ingredients by title using PostgreSQL function with auth check and logging
@@ -116,6 +158,64 @@ export class SupabaseService {
       return data || null;
     } catch (error) {
       console.error('Failed to get product:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search for products by barcode using PostgreSQL function with auth check, rate limiting, and logging
+   * @param barcode - The barcode to search for
+   * @returns Promise with the product if found, null if not found, or throws error for rate limiting
+   * @throws Error if user is not authenticated ('not logged in')
+   * @throws Error if rate limit exceeded ('rate limit exceeded')
+   */
+  static async searchProductByBarcode(barcode: string): Promise<{
+    product: SupabaseProduct | null;
+    isRateLimited: boolean;
+    rateLimitInfo?: {
+      subscriptionLevel: string;
+      rateLimit: number;
+    };
+  }> {
+    try {
+      const searchBarcode = barcode.trim();
+      
+      if (!searchBarcode) {
+        return { product: null, isRateLimited: false };
+      }
+
+      const { data, error } = await supabase
+        .rpc('search_product', { barcode: searchBarcode });
+
+      if (error) {
+        // Check if it's an authentication error
+        if (error.message === 'not logged in') {
+          throw new Error('not logged in');
+        }
+        console.error('Error searching product:', error);
+        throw error;
+      }
+
+      // Check if we got a rate limit response
+      if (data && data.length > 0 && data[0].ean13 === '__RATE_LIMIT_EXCEEDED__') {
+        return {
+          product: null,
+          isRateLimited: true,
+          rateLimitInfo: {
+            subscriptionLevel: data[0].upc || 'free',
+            rateLimit: parseInt(data[0].brand || '3')
+          }
+        };
+      }
+
+      // Return the product data (or null if not found)
+      const product = data && data.length > 0 ? data[0] : null;
+      return {
+        product,
+        isRateLimited: false
+      };
+    } catch (error) {
+      console.error('Failed to search product:', error);
       throw error;
     }
   }

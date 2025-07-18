@@ -11,6 +11,7 @@ import Logo from '../components/Logo';
 import LogoWhite from '../components/LogoWhite';
 import { OpenFoodFactsService } from '../services/openFoodFactsApi';
 import { IngredientOCRService } from '../services/ingredientOCRService';
+import { SupabaseService } from '../services/supabaseService';
 import { useApp } from '../context/AppContext';
 import { Product, VeganStatus } from '../types';
 
@@ -58,32 +59,133 @@ export default function ScannerScreen() {
     setError(null);
     
     try {
-      const productData = await OpenFoodFactsService.getProductByBarcode(data);
+      let finalProduct: Product | null = null;
+      let dataSource: string = '';
+      let decisionLog: string[] = [];
       
-      // Debug: Log Open Food Facts API response data
+      // Step 1: Check our Supabase database first
       console.log('='.repeat(80));
-      console.log('🍎 OPEN FOOD FACTS API RESPONSE');
+      console.log('🔍 HYBRID PRODUCT LOOKUP');
       console.log('='.repeat(80));
       console.log(`📊 Barcode: ${data}`);
-      console.log(`🎯 Product Found: ${productData ? 'YES' : 'NO'}`);
+      console.log('🏪 Step 1: Checking Supabase database...');
       
-      if (productData) {
-        console.log('📦 PRODUCT DATA:');
-        console.log(JSON.stringify(productData, null, 2));
+      try {
+        const supabaseResult = await SupabaseService.searchProductByBarcode(data);
+        
+        if (supabaseResult.isRateLimited) {
+          console.log('⏰ Rate limit exceeded - showing error');
+          decisionLog.push('⏰ Rate limit exceeded for database lookup');
+          setError(`Rate limit exceeded. You can search ${supabaseResult.rateLimitInfo?.rateLimit} products per hour on ${supabaseResult.rateLimitInfo?.subscriptionLevel} plan.`);
+          showErrorOverlay();
+          return;
+        }
+        
+        if (supabaseResult.product) {
+          console.log('✅ Found product in Supabase database');
+          console.log(`📝 Product: ${supabaseResult.product.product_name}`);
+          console.log(`🔢 Calculated Code: ${supabaseResult.product.calculated_code}`);
+          
+          // Check if we have a valid calculated code
+          if (SupabaseService.isValidCalculatedCode(supabaseResult.product.calculated_code)) {
+            // Use database result as primary source
+            const veganStatus = SupabaseService.mapCalculatedCodeToVeganStatus(supabaseResult.product.calculated_code);
+            console.log(`🎯 Using database result: ${veganStatus}`);
+            decisionLog.push(`✅ Database hit: Using calculated_code ${supabaseResult.product.calculated_code} → ${veganStatus}`);
+            
+            // Create product from database data
+            finalProduct = {
+              id: supabaseResult.product.ean13 || data,
+              barcode: data,
+              name: supabaseResult.product.product_name || 'Unknown Product',
+              brand: supabaseResult.product.brand || undefined,
+              ingredients: supabaseResult.product.ingredients ? supabaseResult.product.ingredients.split(',').map(i => i.trim()) : [],
+              veganStatus: veganStatus,
+              imageUrl: supabaseResult.product.imageurl || undefined,
+              lastScanned: new Date(),
+              classificationMethod: 'structured'
+            };
+            
+            dataSource = 'supabase';
+            
+            // Still fetch image from OpenFoodFacts for display
+            console.log('🖼️ Fetching product image from OpenFoodFacts...');
+            try {
+              const offProduct = await OpenFoodFactsService.getProductByBarcode(data);
+              if (offProduct?.imageUrl) {
+                finalProduct.imageUrl = offProduct.imageUrl;
+                console.log('✅ Got product image from OpenFoodFacts');
+                decisionLog.push('🖼️ Product image fetched from OpenFoodFacts');
+              } else {
+                console.log('❌ No image available from OpenFoodFacts');
+                decisionLog.push('❌ No image available from OpenFoodFacts');
+              }
+            } catch (imgErr) {
+              console.log('⚠️ Failed to fetch image from OpenFoodFacts:', imgErr);
+              decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts');
+            }
+          } else {
+            console.log(`❓ Database result has uncertain calculated_code (${supabaseResult.product.calculated_code}) - falling back to OpenFoodFacts`);
+            decisionLog.push(`❓ Database result uncertain (code: ${supabaseResult.product.calculated_code}) - falling back to OpenFoodFacts`);
+          }
+        } else {
+          console.log('❌ Product not found in Supabase database');
+          decisionLog.push('❌ Product not found in Supabase database');
+        }
+      } catch (supabaseErr) {
+        console.log('⚠️ Supabase lookup error:', supabaseErr);
+        decisionLog.push('⚠️ Supabase lookup error - falling back to OpenFoodFacts');
+      }
+      
+      // Step 2: Fall back to OpenFoodFacts if no valid database result
+      if (!finalProduct) {
+        console.log('🌐 Step 2: Falling back to OpenFoodFacts API...');
+        
+        try {
+          const productData = await OpenFoodFactsService.getProductByBarcode(data);
+          
+          if (productData) {
+            console.log('✅ Found product in OpenFoodFacts');
+            console.log(`📝 Product: ${productData.name}`);
+            console.log(`🎯 Vegan Status: ${productData.veganStatus}`);
+            
+            finalProduct = productData;
+            dataSource = 'openfoodfacts';
+            decisionLog.push(`✅ OpenFoodFacts hit: ${productData.veganStatus} (${productData.classificationMethod})`);
+          } else {
+            console.log('❌ Product not found in OpenFoodFacts');
+            decisionLog.push('❌ Product not found in OpenFoodFacts');
+          }
+        } catch (offErr) {
+          console.log('⚠️ OpenFoodFacts lookup error:', offErr);
+          decisionLog.push('⚠️ OpenFoodFacts lookup error');
+        }
+      }
+      
+      // Step 3: Process results
+      console.log('='.repeat(40));
+      console.log('📋 DECISION SUMMARY:');
+      decisionLog.forEach((log, index) => {
+        console.log(`${index + 1}. ${log}`);
+      });
+      console.log('='.repeat(40));
+      
+      if (finalProduct) {
+        console.log(`🎉 Final Result: ${finalProduct.name} (${finalProduct.veganStatus}) from ${dataSource}`);
         console.log('='.repeat(80));
         
-        setScannedProduct(productData);
-        addToHistory(productData);
+        setScannedProduct(finalProduct);
+        addToHistory(finalProduct);
         showOverlay();
       } else {
-        console.log('❌ No product data returned');
+        console.log('❌ No product data found from any source');
         console.log('='.repeat(80));
         setError(`Product not found for barcode: ${data}`);
         showErrorOverlay();
       }
     } catch (err) {
       console.log('='.repeat(80));
-      console.log('🚨 OPEN FOOD FACTS API ERROR');
+      console.log('🚨 PRODUCT LOOKUP ERROR');
       console.log('='.repeat(80));
       console.log(`📊 Barcode: ${data}`);
       console.log('❌ Error Details:');
