@@ -161,8 +161,11 @@ export default function ScannerScreen() {
         return;
       }
 
-      // Call ingredient OCR service
-      const data = await IngredientOCRService.parseIngredientsFromImage(result.assets[0].base64);
+      // Call ingredient OCR service with Open Food Facts data if available
+      const data = await IngredientOCRService.parseIngredientsFromImage(
+        result.assets[0].base64,
+        scannedProduct || undefined
+      );
 
 
       if (data.error) {

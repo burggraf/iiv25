@@ -14,7 +14,7 @@ export class IngredientOCRService {
   private static readonly EDGE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/parse-ingredients`;
   private static readonly ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-  static async parseIngredientsFromImage(imageBase64: string): Promise<ParseIngredientsResponse> {
+  static async parseIngredientsFromImage(imageBase64: string, openFoodFactsData?: any): Promise<ParseIngredientsResponse> {
     try {
       const response = await fetch(this.EDGE_FUNCTION_URL, {
         method: 'POST',
@@ -24,6 +24,7 @@ export class IngredientOCRService {
         },
         body: JSON.stringify({
           imageBase64,
+          openFoodFactsData,
         }),
       });
 
