@@ -119,6 +119,7 @@ export interface ActionLog {
   type: ActionType;
   input: string;
   userid: string;
+  deviceid?: string | null;
   created_at: Date;
   result?: string;
   metadata?: Record<string, any>;

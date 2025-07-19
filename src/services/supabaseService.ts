@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { ActionLog, ActionType, SubscriptionLevel, VeganStatus } from '../types';
+import deviceIdService from './deviceIdService';
 
 export interface SupabaseIngredient {
   title: string;
@@ -156,8 +157,14 @@ export class SupabaseService {
         return [];
       }
 
+      // Get device ID for logging
+      const deviceId = await deviceIdService.getDeviceId();
+
       const { data, error } = await supabase
-        .rpc('search_ingredients', { search_term: searchTerm });
+        .rpc('search_ingredients', { 
+          search_term: searchTerm,
+          device_id: deviceId
+        });
 
       if (error) {
         // Check if it's an authentication error
@@ -248,8 +255,14 @@ export class SupabaseService {
         return { product: null, isRateLimited: false };
       }
 
+      // Get device ID for logging
+      const deviceId = await deviceIdService.getDeviceId();
+
       const { data, error } = await supabase
-        .rpc('lookup_product', { barcode: searchBarcode });
+        .rpc('lookup_product', { 
+          barcode: searchBarcode,
+          device_id: deviceId
+        });
 
       if (error) {
         // Check if it's an authentication error
@@ -339,6 +352,7 @@ export class SupabaseService {
    * @param type - The type of action performed
    * @param input - User input (barcode, search term, etc.)
    * @param userid - ID of the user performing the action
+   * @param deviceid - Optional ID of the device performing the action
    * @param result - Optional result of the action
    * @param metadata - Optional metadata about the action
    * @returns Promise with the created action log
@@ -347,6 +361,7 @@ export class SupabaseService {
     type: ActionType,
     input: string,
     userid: string,
+    deviceid?: string | null,
     result?: string,
     metadata?: Record<string, any>
   ): Promise<ActionLog | null> {
@@ -357,6 +372,7 @@ export class SupabaseService {
           type,
           input,
           userid,
+          deviceid,
           result,
           metadata
         })

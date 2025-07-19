@@ -21,13 +21,13 @@
 -- - Limited results: Returns single product match or null
 -- - Graceful rate limits: Returns special response instead of throwing errors
 
-CREATE OR REPLACE FUNCTION lookup_product(barcode TEXT)
+CREATE OR REPLACE FUNCTION lookup_product(barcode TEXT, device_id TEXT)
 RETURNS TABLE (
     ean13 VARCHAR(255),
     upc VARCHAR(255),
     product_name VARCHAR(255),
     brand VARCHAR(255),
-    ingredients TEXT,
+    ingredients VARCHAR(4096),
     calculated_code INTEGER,
     override_code INTEGER,
     classification TEXT,
@@ -41,7 +41,8 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     current_user_id UUID;
-    product_found BOOLEAN := FALSE;
+    device_uuid UUID;
+    product_found INTEGER := 0;
     final_vegan_status TEXT;
     product_classification TEXT;
     decision_reasoning TEXT;
@@ -54,10 +55,21 @@ BEGIN
         RAISE EXCEPTION 'not logged in';
     END IF;
     
-    -- Validate input
+    -- Validate inputs
     IF barcode IS NULL OR trim(barcode) = '' THEN
         RAISE EXCEPTION 'barcode cannot be empty';
     END IF;
+    
+    IF device_id IS NULL OR trim(device_id) = '' THEN
+        RAISE EXCEPTION 'device_id cannot be empty';
+    END IF;
+    
+    -- Validate and convert device_id to UUID
+    BEGIN
+        device_uuid := device_id::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
     
     -- Get rate limit information
     SELECT * INTO rate_info FROM get_rate_limits('product_lookup');
@@ -71,7 +83,7 @@ BEGIN
             rate_info.subscription_level::VARCHAR(255) as upc,
             'Rate limit exceeded'::VARCHAR(255) as product_name,
             rate_info.rate_limit::VARCHAR(255) as brand,
-            'You have exceeded your search limit'::TEXT as ingredients,
+            'You have exceeded your search limit'::VARCHAR(4096) as ingredients,
             -1::INTEGER as calculated_code,
             NULL::INTEGER as override_code,
             'RATE_LIMIT'::TEXT as classification,
@@ -104,10 +116,10 @@ BEGIN
     LIMIT 1;
     
     -- Check if product was found
-    GET DIAGNOSTICS product_found = FOUND;
+    GET DIAGNOSTICS product_found = ROW_COUNT;
     
     -- Determine final vegan status and reasoning
-    IF product_found THEN
+    IF product_found > 0 THEN
         -- Get both classification and calculated_code from the returned product
         SELECT p.classification, p.calculated_code::TEXT INTO product_classification, final_vegan_status
         FROM public.products p
@@ -144,18 +156,20 @@ BEGIN
     END IF;
     
     -- Log the search operation
-    INSERT INTO public.actionlog (type, input, userid, result, metadata)
+    INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
     VALUES (
         'product_lookup',
         barcode,
         current_user_id,
+        device_uuid,
         CASE 
-            WHEN product_found THEN 'Product found in database'
+            WHEN product_found > 0 THEN 'Product found in database'
             ELSE 'Product not found in database'
         END,
         json_build_object(
             'barcode', barcode,
-            'database_hit', product_found,
+            'device_id', device_id,
+            'database_hit', product_found > 0,
             'classification', product_classification,
             'calculated_code', final_vegan_status,
             'decision_reasoning', decision_reasoning,
@@ -171,8 +185,8 @@ END;
 $$;
 
 -- Usage Examples:
--- SELECT * FROM lookup_product('1234567890123');
--- SELECT * FROM lookup_product('0123456789012');
+-- SELECT * FROM lookup_product('1234567890123', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+-- SELECT * FROM lookup_product('0123456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
 
 -- Rate Limits by Subscription Level:
 -- Free: 10 searches per hour
@@ -182,6 +196,8 @@ $$;
 -- Error Messages:
 -- 'not logged in' - User must be authenticated
 -- 'barcode cannot be empty' - Valid barcode required
+-- 'device_id cannot be empty' - Valid device_id required
+-- 'device_id must be a valid UUID' - device_id must be in valid UUID format
 
 -- Rate Limit Handling:
 -- When rate limit is exceeded, function returns a special record with:
@@ -195,13 +211,15 @@ $$;
 
 -- Function Requirements:
 -- 1. User must be authenticated (auth.uid() IS NOT NULL)
--- 2. products table must exist with columns: id, upc, ean13, product_name, brand, ingredients, calculated_code, override_code, image_url, created_at, updated_at
--- 3. actionlog table must exist with columns: type, input, userid, result, metadata, created_at
--- 4. user_subscription table must exist with columns: user_id, subscription_level, expires_at, is_active
+-- 2. Device ID must be provided as valid UUID format
+-- 3. products table must exist with columns: id, upc, ean13, product_name, brand, ingredients, calculated_code, override_code, image_url, created_at, updated_at
+-- 4. actionlog table must exist with columns: type, input, userid, deviceid, result, metadata, created_at
+-- 5. user_subscription table must exist with columns: user_id, subscription_level, expires_at, is_active
 
 -- Enhanced Metadata Logging:
 -- The function logs comprehensive metadata including:
 -- - barcode: The searched barcode
+-- - device_id: The device ID making the request
 -- - database_hit: Whether product was found in database
 -- - calculated_code: The calculated_code value from database (if found)
 -- - decision_reasoning: Human-readable explanation of the decision path

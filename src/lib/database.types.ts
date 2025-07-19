@@ -42,6 +42,7 @@ export type Database = {
       actionlog: {
         Row: {
           created_at: string | null
+          deviceid: string | null
           id: string
           input: string
           metadata: Json | null
@@ -51,6 +52,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          deviceid?: string | null
           id?: string
           input: string
           metadata?: Json | null
@@ -60,6 +62,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          deviceid?: string | null
           id?: string
           input?: string
           metadata?: Json | null
@@ -297,22 +300,23 @@ export type Database = {
         Returns: string
       }
       lookup_product: {
-        Args: { barcode: string }
+        Args: { barcode: string; device_id: string }
         Returns: {
           ean13: string
           upc: string
           product_name: string
           brand: string
-          ingredients: string
+          ingredients: string | null
           calculated_code: number
           override_code: number
-          imageurl: string
+          classification: string | null
+          imageurl: string | null
           created: string
           lastupdated: string
         }[]
       }
       search_ingredients: {
-        Args: { search_term: string }
+        Args: { search_term: string; device_id: string }
         Returns: {
           title: string
           class: string
