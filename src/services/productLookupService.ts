@@ -85,32 +85,35 @@ export class ProductLookupService {
 
 						dataSource = 'supabase'
 
-						// Still fetch image from OpenFoodFacts for display
-						console.log('🖼️ Fetching product image from OpenFoodFacts...')
-						try {
-							const offProduct = await OpenFoodFactsService.getProductByBarcode(barcode)
-							console.log('🌐 OpenFoodFacts image fetch result:', offProduct)
-							if (offProduct?.imageUrl) {
-								finalProduct.imageUrl = offProduct.imageUrl
-								console.log('✅ Got product image from OpenFoodFacts')
-								decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
-								
-								// If database had no image but OpenFoodFacts does, trigger async update
-								if (!supabaseResult.product.imageurl) {
+						// Check if we need to fetch image from OpenFoodFacts
+						if (supabaseResult.product.imageurl) {
+							console.log('✅ Using image from database')
+							decisionLog.push('🖼️ Using existing image from database')
+						} else {
+							console.log('🖼️ No image in database - fetching from OpenFoodFacts...')
+							try {
+								const offProduct = await OpenFoodFactsService.getProductByBarcode(barcode)
+								console.log('🌐 OpenFoodFacts image fetch result:', offProduct)
+								if (offProduct?.imageUrl) {
+									finalProduct.imageUrl = offProduct.imageUrl
+									console.log('✅ Got product image from OpenFoodFacts')
+									decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
+									
+									// Trigger async update to save image to database
 									console.log('🔄 Database missing image - triggering async update...')
 									// Fire and forget - don't await this
 									ProductLookupService.updateProductImageAsync(barcode).catch((err) => {
 										console.log('⚠️ Async image update failed (non-blocking):', err)
 									})
 									decisionLog.push('🔄 Triggered async database image update')
+								} else {
+									console.log('❌ No image available from OpenFoodFacts')
+									decisionLog.push('❌ No image available from OpenFoodFacts')
 								}
-							} else {
-								console.log('❌ No image available from OpenFoodFacts')
-								decisionLog.push('❌ No image available from OpenFoodFacts')
+							} catch (imgErr) {
+								console.log('⚠️ Failed to fetch image from OpenFoodFacts:', imgErr)
+								decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts')
 							}
-						} catch (imgErr) {
-							console.log('⚠️ Failed to fetch image from OpenFoodFacts:', imgErr)
-							decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts')
 						}
 					} else {
 						console.log(
