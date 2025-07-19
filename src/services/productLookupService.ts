@@ -1,5 +1,6 @@
 import { OpenFoodFactsService } from './openFoodFactsApi'
 import { SupabaseService } from './supabaseService'
+import { supabase } from './supabaseClient'
 import { Product, VeganStatus } from '../types'
 
 export interface ProductLookupResult {
@@ -93,6 +94,16 @@ export class ProductLookupService {
 								finalProduct.imageUrl = offProduct.imageUrl
 								console.log('✅ Got product image from OpenFoodFacts')
 								decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
+								
+								// If database had no image but OpenFoodFacts does, trigger async update
+								if (!supabaseResult.product.imageurl) {
+									console.log('🔄 Database missing image - triggering async update...')
+									// Fire and forget - don't await this
+									ProductLookupService.updateProductImageAsync(barcode).catch((err) => {
+										console.log('⚠️ Async image update failed (non-blocking):', err)
+									})
+									decisionLog.push('🔄 Triggered async database image update')
+								}
 							} else {
 								console.log('❌ No image available from OpenFoodFacts')
 								decisionLog.push('❌ No image available from OpenFoodFacts')
@@ -190,6 +201,29 @@ export class ProductLookupService {
 				error: 'Failed to lookup product. Please try again.',
 				isRateLimited: false,
 			}
+		}
+	}
+
+	/**
+	 * Asynchronously trigger the update-product-image-from-off edge function
+	 * This is a fire-and-forget operation that doesn't block the main flow
+	 */
+	private static async updateProductImageAsync(barcode: string): Promise<void> {
+		try {
+			console.log(`🔄 Calling update-product-image-from-off for barcode: ${barcode}`)
+			
+			const { data, error } = await supabase.functions.invoke('update-product-image-from-off', {
+				body: { upc: barcode }
+			})
+			
+			if (error) {
+				console.log(`⚠️ Edge function error for ${barcode}:`, error.message)
+			} else {
+				console.log(`✅ Edge function success for ${barcode}:`, data)
+			}
+		} catch (err) {
+			console.log(`❌ Failed to call edge function for ${barcode}:`, err)
+			// Don't throw - this is fire and forget
 		}
 	}
 }
