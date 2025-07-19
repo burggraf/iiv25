@@ -11,7 +11,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "net.isitvegan.baseapp",
+      "bundleIdentifier": "net.isitvegan.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
         "NSMicrophoneUsageDescription": "This app does not use the microphone.",
@@ -24,7 +24,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "net.isitvegan.baseapp",
+      "package": "net.isitvegan.app",
       "versionCode": 1,
       "permissions": [
         "CAMERA",
