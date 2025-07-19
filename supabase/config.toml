@@ -332,8 +332,8 @@ entrypoint = "./functions/parse-ingredients/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/parse-ingredients/*.html" ]
 
-[functions.update_product_image_from_off]
+[functions.update-product-image-from-off]
 enabled = true
 verify_jwt = true
-import_map = "./functions/update_product_image_from_off/deno.json"
-entrypoint = "./functions/update_product_image_from_off/index.ts"
+import_map = "./functions/update-product-image-from-off/deno.json"
+entrypoint = "./functions/update-product-image-from-off/index.ts"

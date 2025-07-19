@@ -50,9 +50,49 @@ Deno.serve(async (req: Request) => {
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Create client with anon key to verify user authentication
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: req.headers.get('Authorization') ?? '' },
+      },
+    });
+
+    // Verify user authentication
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    
+    if (authError || !user) {
+      console.log('❌ Authentication failed:', authError?.message || 'No user found');
+      return new Response(JSON.stringify({ 
+        error: 'Authentication required. Anonymous users cannot access this function.' 
+      }), {
+        status: 401,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+
+    if (user.is_anonymous) {
+      console.log('❌ Anonymous user attempted to access function');
+      return new Response(JSON.stringify({ 
+        error: 'Anonymous users are not allowed to access this function. Please sign in with a valid account.' 
+      }), {
+        status: 403,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+
+    console.log(`✅ Authenticated user: ${user.email || user.id}`);
+    
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body
     const requestBody: UpdateProductImageRequest = await req.json().catch(() => ({}));
