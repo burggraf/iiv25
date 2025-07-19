@@ -146,11 +146,28 @@ export class ProductLookupService {
 						console.log(`📝 Product: ${productData.name}`)
 						console.log(`🎯 Vegan Status: ${productData.veganStatus}`)
 
+						// Store the OpenFoodFacts classification for comparison
+						const originalClassification = productData.veganStatus
+						
 						finalProduct = productData
 						dataSource = 'openfoodfacts'
 						decisionLog.push(
 							`✅ OpenFoodFacts hit: ${productData.veganStatus} (${productData.classificationMethod})`
 						)
+
+						// Check if product has valid ingredients to add to database
+						if (productData.ingredients && productData.ingredients.length > 0) {
+							console.log('🔄 Product has ingredients - triggering database creation...')
+							decisionLog.push('🔄 Triggering database creation with ingredients')
+							
+							// Fire and forget - create product in database and get our classification
+							ProductLookupService.createProductInDatabaseAsync(barcode, originalClassification, finalProduct).catch((err) => {
+								console.log('⚠️ Async product creation failed (non-blocking):', err)
+							})
+						} else {
+							console.log('⚠️ Product has no ingredients - skipping database creation')
+							decisionLog.push('⚠️ Product has no ingredients - skipping database creation')
+						}
 					} else {
 						console.log('❌ Product not found in OpenFoodFacts')
 						decisionLog.push('❌ Product not found in OpenFoodFacts')
@@ -227,6 +244,73 @@ export class ProductLookupService {
 		} catch (err) {
 			console.log(`❌ Failed to call edge function for ${barcode}:`, err)
 			// Don't throw - this is fire and forget
+		}
+	}
+
+	/**
+	 * Asynchronously create a product in the database from OpenFoodFacts data
+	 * This will call the update-product-from-off edge function and potentially re-classify
+	 */
+	private static async createProductInDatabaseAsync(
+		barcode: string, 
+		originalClassification: VeganStatus,
+		currentProduct: Product
+	): Promise<void> {
+		try {
+			console.log(`🔄 Creating product in database for barcode: ${barcode}`)
+			console.log(`📊 Original OpenFoodFacts classification: ${originalClassification}`)
+			
+			const { data, error } = await supabase.functions.invoke('update-product-from-off', {
+				body: { upc: barcode }
+			})
+			
+			if (error) {
+				console.log(`⚠️ Product creation edge function error for ${barcode}:`, error.message)
+				return
+			} 
+
+			console.log(`✅ Product creation response for ${barcode}:`, data)
+
+			// Check if classification changed
+			if (data && data.success && data.classificationResult) {
+				const newClassification = ProductLookupService.mapDatabaseClassificationToVeganStatus(data.classificationResult)
+				console.log(`🔍 Database classification: ${data.classificationResult} → ${newClassification}`)
+				
+				if (newClassification !== originalClassification) {
+					console.log(`🔄 Classification changed from ${originalClassification} to ${newClassification}`)
+					console.log(`📢 NOTE: Updated classification available - would need UI refresh to show new result`)
+					
+					// The user could potentially trigger a re-fetch here by calling:
+					// ProductLookupService.lookupProductByBarcode(barcode) again
+					// But since this is async, we don't update the current UI state
+					
+					// Optionally, emit an event or call a callback to notify the UI
+					// For now, just log that the updated data is available in database
+					console.log(`📊 Next scan of ${barcode} will show: ${newClassification}`)
+				} else {
+					console.log(`✅ Classification unchanged: ${originalClassification}`)
+				}
+			}
+		} catch (err) {
+			console.log(`❌ Failed to create product in database for ${barcode}:`, err)
+			// Don't throw - this is fire and forget
+		}
+	}
+
+	/**
+	 * Map database classification strings to VeganStatus enum
+	 */
+	private static mapDatabaseClassificationToVeganStatus(classification: string): VeganStatus {
+		switch (classification?.toLowerCase()) {
+			case 'vegan':
+				return VeganStatus.VEGAN
+			case 'vegetarian':
+				return VeganStatus.VEGETARIAN
+			case 'non-vegetarian':
+				return VeganStatus.NOT_VEGAN
+			case 'undetermined':
+			default:
+				return VeganStatus.UNKNOWN
 		}
 	}
 }
