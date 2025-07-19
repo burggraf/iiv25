@@ -21,19 +21,19 @@
 -- - Limited results: Returns single product match or null
 -- - Graceful rate limits: Returns special response instead of throwing errors
 
-CREATE OR REPLACE FUNCTION search_product(barcode TEXT)
+CREATE OR REPLACE FUNCTION lookup_product(barcode TEXT)
 RETURNS TABLE (
-    id INTEGER,
-    upc VARCHAR(255),
     ean13 VARCHAR(255),
+    upc VARCHAR(255),
     product_name VARCHAR(255),
     brand VARCHAR(255),
     ingredients TEXT,
-    calculated_code VARCHAR(255),
-    override_code VARCHAR(255),
-    image_url VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE,
-    updated_at TIMESTAMP WITH TIME ZONE
+    calculated_code INTEGER,
+    override_code INTEGER,
+    classification TEXT,
+    imageurl TEXT,
+    created TIMESTAMP WITH TIME ZONE,
+    lastupdated TIMESTAMP WITH TIME ZONE
 ) 
 SECURITY DEFINER
 SET search_path = public
@@ -43,6 +43,7 @@ DECLARE
     current_user_id UUID;
     product_found BOOLEAN := FALSE;
     final_vegan_status TEXT;
+    product_classification TEXT;
     decision_reasoning TEXT;
     rate_info RECORD;
 BEGIN
@@ -66,17 +67,17 @@ BEGIN
         -- Return special rate limit response instead of throwing error
         RETURN QUERY
         SELECT 
-            -1::INTEGER as id,
-            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as upc,
-            rate_info.subscription_level::VARCHAR(255) as ean13,
+            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as ean13,
+            rate_info.subscription_level::VARCHAR(255) as upc,
             'Rate limit exceeded'::VARCHAR(255) as product_name,
             rate_info.rate_limit::VARCHAR(255) as brand,
             'You have exceeded your search limit'::TEXT as ingredients,
-            'RATE_LIMIT'::VARCHAR(255) as calculated_code,
-            NULL::VARCHAR(255) as override_code,
-            NULL::VARCHAR(255) as image_url,
-            NOW() as created_at,
-            NOW() as updated_at;
+            -1::INTEGER as calculated_code,
+            NULL::INTEGER as override_code,
+            'RATE_LIMIT'::TEXT as classification,
+            NULL::TEXT as imageurl,
+            NOW() as created,
+            NOW() as lastupdated;
         RETURN;
     END IF;
     
@@ -86,20 +87,20 @@ BEGIN
     -- Search for product by UPC or EAN13
     RETURN QUERY
     SELECT 
-        p.id,
-        p.upc,
         p.ean13,
+        p.upc,
         p.product_name,
         p.brand,
         p.ingredients,
         p.calculated_code,
         p.override_code,
-        p.image_url,
-        p.created_at,
-        p.updated_at
+        p.classification,
+        p.imageurl,
+        p.created,
+        p.lastupdated
     FROM public.products p
     WHERE p.upc = barcode OR p.ean13 = barcode
-    ORDER BY p.id
+    ORDER BY p.ean13
     LIMIT 1;
     
     -- Check if product was found
@@ -107,24 +108,37 @@ BEGIN
     
     -- Determine final vegan status and reasoning
     IF product_found THEN
-        -- Get the calculated_code from the returned product
-        SELECT p.calculated_code INTO final_vegan_status
+        -- Get both classification and calculated_code from the returned product
+        SELECT p.classification, p.calculated_code::TEXT INTO product_classification, final_vegan_status
         FROM public.products p
         WHERE p.upc = barcode OR p.ean13 = barcode
         LIMIT 1;
         
-        -- Map calculated_code to vegan status for reasoning
-        CASE final_vegan_status
-            WHEN '100' THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
-            WHEN '200' THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
-            WHEN '300' THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
-            WHEN '400' THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
-            WHEN '500' THEN decision_reasoning := 'Database hit: Not Sure (code 500) - will fall back to Open Food Facts';
-            WHEN '600' THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
-            WHEN '700' THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
-            WHEN '800' THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
-            ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', final_vegan_status);
-        END CASE;
+        -- Prioritize classification field, fall back to calculated_code
+        IF product_classification IS NOT NULL AND product_classification IN ('vegan', 'vegetarian', 'non-vegetarian') THEN
+            -- Use classification field
+            CASE product_classification
+                WHEN 'vegan' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+                WHEN 'vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+                WHEN 'non-vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+            END CASE;
+        ELSIF final_vegan_status IS NOT NULL AND final_vegan_status != '500' THEN
+            -- Fall back to calculated_code (but skip 500 which means "Not Sure")
+            CASE final_vegan_status
+                WHEN '100' THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
+                WHEN '200' THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
+                WHEN '300' THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
+                WHEN '400' THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
+                WHEN '600' THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
+                WHEN '700' THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
+                WHEN '800' THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
+                ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', final_vegan_status);
+            END CASE;
+        ELSE
+            -- No valid classification available, will fall back to Open Food Facts
+            decision_reasoning := format('Database hit: No valid classification (classification: "%s", code: %s) - will fall back to Open Food Facts', 
+                COALESCE(product_classification, 'null'), COALESCE(final_vegan_status, 'null'));
+        END IF;
     ELSE
         decision_reasoning := 'Database miss: Product not found in database - will fall back to Open Food Facts';
     END IF;
@@ -142,6 +156,7 @@ BEGIN
         json_build_object(
             'barcode', barcode,
             'database_hit', product_found,
+            'classification', product_classification,
             'calculated_code', final_vegan_status,
             'decision_reasoning', decision_reasoning,
             'subscription_level', rate_info.subscription_level,

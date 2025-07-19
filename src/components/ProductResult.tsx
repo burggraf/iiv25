@@ -194,7 +194,7 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
       {/* Disclaimer */}
       <View style={styles.disclaimer}>
         <Text style={styles.disclaimerText}>
-          ⚠️ This analysis is based on ingredient text from Open Food Facts. 
+          ⚠️ This analysis is based on our database and Open Food Facts ingredient data. 
           Always check the product label for the most accurate information.
         </Text>
       </View>

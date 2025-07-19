@@ -84,14 +84,19 @@ export default function ScannerScreen() {
         if (supabaseResult.product) {
           console.log('✅ Found product in Supabase database');
           console.log(`📝 Product: ${supabaseResult.product.product_name}`);
+          console.log(`🏷️ Classification: ${supabaseResult.product.classification}`);
           console.log(`🔢 Calculated Code: ${supabaseResult.product.calculated_code}`);
           
-          // Check if we have a valid calculated code
-          if (SupabaseService.isValidCalculatedCode(supabaseResult.product.calculated_code)) {
-            // Use database result as primary source
-            const veganStatus = SupabaseService.mapCalculatedCodeToVeganStatus(supabaseResult.product.calculated_code);
+          // Use the best available classification (prefers classification field, falls back to calculated_code)
+          const veganStatus = SupabaseService.getProductVeganStatus(supabaseResult.product);
+          
+          // Check if we have a valid classification
+          if (veganStatus !== VeganStatus.UNKNOWN) {
             console.log(`🎯 Using database result: ${veganStatus}`);
-            decisionLog.push(`✅ Database hit: Using calculated_code ${supabaseResult.product.calculated_code} → ${veganStatus}`);
+            const classificationSource = supabaseResult.product.classification && SupabaseService.isValidClassification(supabaseResult.product.classification) 
+              ? `classification field "${supabaseResult.product.classification}"` 
+              : `calculated_code ${supabaseResult.product.calculated_code}`;
+            decisionLog.push(`✅ Database hit: Using ${classificationSource} → ${veganStatus}`);
             
             // Create product from database data
             finalProduct = {
@@ -125,8 +130,10 @@ export default function ScannerScreen() {
               decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts');
             }
           } else {
-            console.log(`❓ Database result has uncertain calculated_code (${supabaseResult.product.calculated_code}) - falling back to OpenFoodFacts`);
-            decisionLog.push(`❓ Database result uncertain (code: ${supabaseResult.product.calculated_code}) - falling back to OpenFoodFacts`);
+            console.log(`❓ Database result has no valid classification - falling back to OpenFoodFacts`);
+            console.log(`   Classification: "${supabaseResult.product.classification || 'none'}"`);
+            console.log(`   Calculated Code: ${supabaseResult.product.calculated_code || 'none'}`);
+            decisionLog.push(`❓ Database result has no valid classification - falling back to OpenFoodFacts`);
           }
         } else {
           console.log('❌ Product not found in Supabase database');

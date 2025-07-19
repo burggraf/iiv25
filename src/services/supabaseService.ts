@@ -17,6 +17,7 @@ export interface SupabaseProduct {
   ingredients?: string;
   calculated_code?: number;
   override_code?: number;
+  classification?: string;
   imageurl?: string;
   created?: string;
   lastupdated?: string;
@@ -36,7 +37,30 @@ export class SupabaseService {
   ];
 
   /**
-   * Map calculated_code from database to VeganStatus enum
+   * Map classification field from database to VeganStatus enum
+   * @param classification - The classification from the database ("vegan", "vegetarian", "non-vegetarian", "undetermined")
+   * @returns VeganStatus enum value
+   */
+  static mapClassificationToVeganStatus(classification: string | null | undefined): VeganStatus {
+    if (!classification) {
+      return VeganStatus.UNKNOWN;
+    }
+
+    switch (classification.toLowerCase()) {
+      case 'vegan':
+        return VeganStatus.VEGAN;
+      case 'vegetarian':
+        return VeganStatus.VEGETARIAN;
+      case 'non-vegetarian':
+        return VeganStatus.NOT_VEGAN;
+      case 'undetermined':
+      default:
+        return VeganStatus.UNKNOWN;
+    }
+  }
+
+  /**
+   * Map calculated_code from database to VeganStatus enum (legacy method for backward compatibility)
    * Based on product-code-map.txt mapping
    * @param calculatedCode - The calculated_code from the database
    * @returns VeganStatus enum value
@@ -64,7 +88,47 @@ export class SupabaseService {
   }
 
   /**
-   * Check if calculated_code represents a valid/actionable result
+   * Check if classification field represents a valid/actionable result
+   * @param classification - The classification from the database
+   * @returns true if the classification is valid and not undetermined
+   */
+  static isValidClassification(classification: string | null | undefined): boolean {
+    if (!classification) {
+      return false;
+    }
+    
+    const normalizedClassification = classification.toLowerCase();
+    return ['vegan', 'vegetarian', 'non-vegetarian'].includes(normalizedClassification);
+  }
+
+  /**
+   * Get the best available classification for a product
+   * Prefers the new classification field, falls back to calculated_code
+   * @param product - The product from the database
+   * @returns VeganStatus enum value
+   */
+  static getProductVeganStatus(product: SupabaseProduct): VeganStatus {
+    // First, try the new classification field
+    if (product.classification && this.isValidClassification(product.classification)) {
+      const result = this.mapClassificationToVeganStatus(product.classification);
+      console.log(`🎯 Using classification field "${product.classification}" → ${result}`);
+      return result;
+    }
+    
+    // Fall back to calculated_code if classification is not available or invalid
+    if (product.calculated_code && this.isValidCalculatedCode(product.calculated_code)) {
+      const result = this.mapCalculatedCodeToVeganStatus(product.calculated_code);
+      console.log(`⚠️ Falling back to calculated_code ${product.calculated_code} → ${result}`);
+      return result;
+    }
+    
+    // If neither is available or valid, return unknown
+    console.log(`❌ No valid classification available, returning UNKNOWN`);
+    return VeganStatus.UNKNOWN;
+  }
+
+  /**
+   * Check if calculated_code represents a valid/actionable result (legacy method for backward compatibility)
    * We only trust codes other than 500 (Not Sure)
    * @param calculatedCode - The calculated_code from the database
    * @returns true if the code represents a confident classification
@@ -208,7 +272,7 @@ export class SupabaseService {
         };
       }
 
-      // Return the product data (or null if not found)
+      // Return the product data (or null if not found) - now includes classification field
       const product = data && data.length > 0 ? data[0] : null;
       return {
         product,
