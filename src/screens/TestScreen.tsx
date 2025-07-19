@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { OpenFoodFactsService } from '../services/openFoodFactsApi';
+import { ProductLookupService } from '../services/productLookupService';
 import { Product, VeganStatus } from '../types';
 
 export default function TestScreen() {
@@ -28,12 +28,17 @@ export default function TestScreen() {
     setProduct(null);
 
     try {
-      const productData = await OpenFoodFactsService.getProductByBarcode(upcCode);
-      
-      if (productData) {
-        setProduct(productData);
+      const result = await ProductLookupService.lookupProductByBarcode(upcCode, { context: 'Test' });
+
+      if (result.isRateLimited) {
+        setError(result.error!);
+        return;
+      }
+
+      if (result.product) {
+        setProduct(result.product);
       } else {
-        setError(`Product not found for UPC: ${upcCode}`);
+        setError(result.error!);
       }
     } catch (err) {
       setError('Failed to lookup product. Please try again.');
