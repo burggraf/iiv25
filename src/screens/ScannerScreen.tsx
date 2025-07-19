@@ -20,7 +20,6 @@ import ProductResult from '../components/ProductResult'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
 import { useApp } from '../context/AppContext'
 import { IngredientOCRService } from '../services/ingredientOCRService'
-import { OpenFoodFactsService } from '../services/openFoodFactsApi'
 import { ProductLookupService } from '../services/productLookupService'
 import { Product, VeganStatus } from '../types'
 
@@ -32,10 +31,13 @@ export default function ScannerScreen() {
 	const [showProductDetail, setShowProductDetail] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [overlayHeight] = useState(new Animated.Value(0))
-	const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null)
 	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
+	
+	// Simple cache for last 20 scanned UPCs and their results
+	const scannedUPCQueue = useRef<string[]>([])
+	const scannedResultsCache = useRef<Map<string, Product>>(new Map())
 
 	useEffect(() => {
 		const getCameraPermissions = async () => {
@@ -46,24 +48,28 @@ export default function ScannerScreen() {
 		getCameraPermissions()
 	}, [])
 
+
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
-		// Synchronous check using ref to prevent race conditions
-		if (processingBarcodeRef.current === data) {
-			console.log(`🚫 Ignoring duplicate/concurrent scan: ${data} (already processing)`)
+		// Prevent concurrent processing
+		if (processingBarcodeRef.current !== null) {
+			console.log(`🚫 Ignoring scan: ${data} (currently processing ${processingBarcodeRef.current})`)
 			return
 		}
 
-		// Additional check against last scanned barcode
-		if (data === lastScannedBarcode) {
-			console.log(`🚫 Ignoring duplicate scan: ${data} (recently scanned)`)
+		console.log(`📱 Barcode scanned: ${type} - ${data}`)
+
+		// Check if we have this UPC in our recent cache
+		const cachedProduct = scannedResultsCache.current.get(data)
+		if (cachedProduct) {
+			console.log(`💾 Using cached result for ${data}`)
+			setScannedProduct(cachedProduct)
+			addToHistory(cachedProduct)
+			showOverlay()
 			return
 		}
 
-		console.log(`Bar code with type ${type} and data ${data} has been scanned!`)
-
-		// Set processing flag immediately in ref (synchronous)
+		// Set processing flag
 		processingBarcodeRef.current = data
-		setLastScannedBarcode(data)
 		setIsLoading(true)
 		setError(null)
 
@@ -77,6 +83,9 @@ export default function ScannerScreen() {
 			}
 
 			if (result.product) {
+				// Add to cache and queue
+				addToCache(data, result.product)
+				
 				setScannedProduct(result.product)
 				addToHistory(result.product)
 				showOverlay()
@@ -91,11 +100,26 @@ export default function ScannerScreen() {
 		} finally {
 			setIsLoading(false)
 			processingBarcodeRef.current = null
-			// Reset the last scanned barcode after 3 seconds to allow rescanning
-			setTimeout(() => {
-				setLastScannedBarcode(null)
-			}, 3000)
 		}
+	}
+
+	const addToCache = (upc: string, product: Product) => {
+		// Add UPC to queue, maintaining max size of 20
+		const queue = scannedUPCQueue.current
+		if (!queue.includes(upc)) {
+			queue.push(upc)
+			if (queue.length > 20) {
+				const oldestUPC = queue.shift()
+				if (oldestUPC) {
+					scannedResultsCache.current.delete(oldestUPC)
+					console.log(`🗑️ Removed ${oldestUPC} from cache (queue full)`)
+				}
+			}
+		}
+		
+		// Add product to cache
+		scannedResultsCache.current.set(upc, product)
+		console.log(`💾 Cached result for ${upc} (cache size: ${scannedResultsCache.current.size})`)
 	}
 
 	const showOverlay = () => {
@@ -124,6 +148,9 @@ export default function ScannerScreen() {
 			duration: 300,
 			useNativeDriver: false,
 		}).start()
+		
+		setScannedProduct(null)
+		setError(null)
 	}
 
 	const handleScanIngredients = async () => {
@@ -289,7 +316,9 @@ export default function ScannerScreen() {
 			</View>
 
 			<View style={styles.instructionsContainer}>
-				<Text style={styles.instructionText}>📷 Point your camera at a product barcode</Text>
+				<Text style={styles.instructionText}>
+					{isLoading ? '🔍 Looking up product...' : '📷 Point your camera at a product barcode'}
+				</Text>
 			</View>
 
 			{/* Camera View */}
