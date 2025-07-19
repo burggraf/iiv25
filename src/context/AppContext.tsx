@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product } from '../types';
+import deviceIdService from '../services/deviceIdService';
 
 interface AppContextType {
   scanHistory: Product[];
   addToHistory: (product: Product) => void;
   clearHistory: () => void;
   isLoading: boolean;
+  deviceId: string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -20,11 +22,26 @@ interface AppProviderProps {
 export function AppProvider({ children }: AppProviderProps) {
   const [scanHistory, setScanHistory] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
 
-  // Load history from storage on app start
+  // Initialize device ID and load history on app start
   useEffect(() => {
-    loadHistory();
+    initializeApp();
   }, []);
+
+  const initializeApp = async () => {
+    try {
+      // Initialize device ID first
+      const id = await deviceIdService.getDeviceId();
+      setDeviceId(id);
+      
+      // Then load history
+      await loadHistory();
+    } catch (error) {
+      console.error('Error initializing app:', error);
+      setIsLoading(false);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -93,7 +110,8 @@ export function AppProvider({ children }: AppProviderProps) {
     scanHistory,
     addToHistory,
     clearHistory,
-    isLoading
+    isLoading,
+    deviceId
   };
 
   return (
