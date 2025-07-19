@@ -286,7 +286,7 @@ export type Database = {
         }[]
       }
       get_rate_limits: {
-        Args: { action_type: string }
+        Args: { action_type: string; device_id?: string }
         Returns: {
           subscription_level: string
           rate_limit: number

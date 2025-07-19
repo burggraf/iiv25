@@ -72,7 +72,7 @@ BEGIN
     END;
     
     -- Get rate limit information
-    SELECT * INTO rate_info FROM get_rate_limits('product_lookup');
+    SELECT * INTO rate_info FROM get_rate_limits('product_lookup', device_id);
     
     -- Check if user has exceeded rate limit
     IF rate_info.is_rate_limited THEN
