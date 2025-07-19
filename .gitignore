@@ -2,6 +2,8 @@
 
 .mcp.json
 
+/usage.sh
+
 # dependencies
 node_modules/
 
