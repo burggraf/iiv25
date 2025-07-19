@@ -71,6 +71,24 @@ export type Database = {
       }
       ingr: {
         Row: {
+          class: string | null
+          count: number | null
+          title: string | null
+        }
+        Insert: {
+          class?: string | null
+          count?: number | null
+          title?: string | null
+        }
+        Update: {
+          class?: string | null
+          count?: number | null
+          title?: string | null
+        }
+        Relationships: []
+      }
+      ingr1: {
+        Row: {
           class: string
           productcount: number | null
           title: string
@@ -87,11 +105,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ingr2025_07_16: {
+        Row: {
+          class: string | null
+          count: number | null
+          title: string
+        }
+        Insert: {
+          class?: string | null
+          count?: number | null
+          title: string
+        }
+        Update: {
+          class?: string | null
+          count?: number | null
+          title?: string
+        }
+        Relationships: []
+      }
       ingredients: {
         Row: {
           class: string | null
           created: string
           lastupdated: string
+          primary_class: string | null
           productcount: number
           title: string
         }
@@ -99,6 +136,7 @@ export type Database = {
           class?: string | null
           created?: string
           lastupdated?: string
+          primary_class?: string | null
           productcount?: number
           title: string
         }
@@ -106,6 +144,7 @@ export type Database = {
           class?: string | null
           created?: string
           lastupdated?: string
+          primary_class?: string | null
           productcount?: number
           title?: string
         }
@@ -118,6 +157,7 @@ export type Database = {
           calculated_code: number
           calculated_code_sugar_vegan: number
           calculated_code_sugar_vegetarian: number
+          classification: string | null
           created: string
           ean13: string
           gs1cat: string
@@ -138,6 +178,7 @@ export type Database = {
           calculated_code?: number
           calculated_code_sugar_vegan?: number
           calculated_code_sugar_vegetarian?: number
+          classification?: string | null
           created?: string
           ean13: string
           gs1cat?: string
@@ -158,6 +199,7 @@ export type Database = {
           calculated_code?: number
           calculated_code_sugar_vegan?: number
           calculated_code_sugar_vegetarian?: number
+          classification?: string | null
           created?: string
           ean13?: string
           gs1cat?: string
@@ -209,9 +251,65 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      classify_all_products: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          upc_code: string
+          old_classification: string
+          new_classification: string
+        }[]
+      }
+      classify_upc: {
+        Args: { input_upc: string }
+        Returns: string
+      }
+      get_classes_for_upc: {
+        Args: { input_upc: string }
+        Returns: {
+          class: string
+        }[]
+      }
+      get_ingredients_for_upc: {
+        Args: { input_upc: string }
+        Returns: {
+          title: string
+          class: string
+        }[]
+      }
+      get_primary_classes_for_upc: {
+        Args: { input_upc: string }
+        Returns: {
+          primary_class: string
+        }[]
+      }
+      get_rate_limits: {
+        Args: { action_type: string }
+        Returns: {
+          subscription_level: string
+          rate_limit: number
+          recent_searches: number
+          is_rate_limited: boolean
+          searches_remaining: number
+        }[]
+      }
       get_subscription_status: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      lookup_product: {
+        Args: { barcode: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          calculated_code: number
+          override_code: number
+          imageurl: string
+          created: string
+          lastupdated: string
+        }[]
       }
       search_ingredients: {
         Args: { search_term: string }
@@ -226,16 +324,17 @@ export type Database = {
       search_product: {
         Args: { barcode: string }
         Returns: {
-          ean13: string
+          id: number
           upc: string
+          ean13: string
           product_name: string
           brand: string
           ingredients: string
-          calculated_code: number
-          override_code: number
-          imageurl: string
-          created: string
-          lastupdated: string
+          calculated_code: string
+          override_code: string
+          image_url: string
+          created_at: string
+          updated_at: string
         }[]
       }
     }
