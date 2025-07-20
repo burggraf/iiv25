@@ -44,6 +44,17 @@ Deno.serve(async (req: Request) => {
     // Verify user authentication
     const { data: { user }, error: authError } = await authClient.auth.getUser();
     
+    console.log('🔍 Auth debug:', {
+      authError: authError?.message,
+      user: user ? {
+        id: user.id,
+        email: user.email,
+        is_anonymous: user.is_anonymous,
+        aud: user.aud
+      } : null,
+      authHeader: req.headers.get('Authorization') ? 'present' : 'missing'
+    });
+    
     if (authError || !user) {
       console.log('❌ Authentication failed:', authError?.message || 'No user found');
       return new Response(JSON.stringify({ 
@@ -68,7 +79,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    console.log(`✅ Authenticated user: ${user.email || user.id}`);
+    console.log(`✅ Authenticated user: ${user.email || user.id} (ID: ${user.id})`);
     
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -292,6 +303,15 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
 
           // Log the action to actionlog table
           try {
+            console.log('📝 About to log action:', {
+              type: 'ingredient_scan',
+              input: upc,
+              userid: user.id,
+              result: classificationResult,
+              userIdType: typeof user.id,
+              userIdValue: user.id
+            });
+            
             const { error: logError } = await supabase
               .from('actionlog')
               .insert({
