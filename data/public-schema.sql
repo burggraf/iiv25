@@ -35,14 +35,30 @@ CREATE OR REPLACE FUNCTION "public"."classify_all_products"() RETURNS TABLE("upc
         WHEN class_analysis.undetermined_count > 0 THEN 'undetermined'
         WHEN class_analysis.veg_count > 0 THEN 'vegetarian'
         ELSE 'vegan'
-      END as new_classification
+      END as new_classification,
+      CASE 
+        WHEN class_analysis.may_non_veg_count = 0 AND class_analysis.typically_vegan_count = 0 AND class_analysis.typically_veg_count = 0 AND class_analysis.null_class_count = 0 THEN ''
+        ELSE ARRAY_TO_STRING(
+          ARRAY_REMOVE(ARRAY[
+            CASE WHEN class_analysis.may_non_veg_count > 0 THEN 'may be non-vegetarian' END,
+            CASE WHEN class_analysis.typically_vegan_count > 0 THEN 'typically vegan' END,
+            CASE WHEN class_analysis.typically_veg_count > 0 THEN 'typically vegetarian' END,
+            CASE WHEN class_analysis.null_class_count > 0 THEN 'null' END
+          ], NULL),
+          ', '
+        )
+      END as issues_text
     FROM products p
     CROSS JOIN LATERAL (
       SELECT 
         COUNT(*) as total_classes,
         COUNT(*) FILTER (WHERE i.primary_class IN ('non-vegetarian', 'may be non-vegetarian', 'typically non-vegetarian', 'typically non-vegan')) as non_veg_count,
         COUNT(*) FILTER (WHERE i.primary_class = 'undetermined') as undetermined_count,
-        COUNT(*) FILTER (WHERE i.primary_class IN ('vegetarian', 'typically vegetarian')) as veg_count
+        COUNT(*) FILTER (WHERE i.primary_class IN ('vegetarian', 'typically vegetarian')) as veg_count,
+        COUNT(*) FILTER (WHERE i.class = 'may be non-vegetarian') as may_non_veg_count,
+        COUNT(*) FILTER (WHERE i.class = 'typically vegan') as typically_vegan_count,
+        COUNT(*) FILTER (WHERE i.class = 'typically vegetarian') as typically_veg_count,
+        COUNT(*) FILTER (WHERE i.class IS NULL) as null_class_count
       FROM ingredients i
       WHERE i.title = ANY(
         STRING_TO_ARRAY(
@@ -50,12 +66,13 @@ CREATE OR REPLACE FUNCTION "public"."classify_all_products"() RETURNS TABLE("upc
           '~'
         )
       )
-      AND i.primary_class IS NOT NULL
     ) as class_analysis
   ),
   updated AS (
     UPDATE products 
-    SET classification = pc.new_classification
+    SET 
+      classification = pc.new_classification,
+      issues = pc.issues_text
     FROM product_classifications pc
     WHERE products.upc = pc.upc
     RETURNING products.upc, pc.old_classification, products.classification as new_classification
@@ -71,26 +88,28 @@ ALTER FUNCTION "public"."classify_all_products"() OWNER TO "postgres";
 CREATE OR REPLACE FUNCTION "public"."classify_upc"("input_upc" "text") RETURNS "text"
     LANGUAGE "sql"
     AS $$
-  UPDATE products 
-  SET classification = (
-    WITH class_analysis AS (
-      SELECT 
-        COUNT(*) as total_classes,
-        COUNT(*) FILTER (WHERE i.primary_class IN ('non-vegetarian', 'may be non-vegetarian', 'typically non-vegetarian', 'typically non-vegan')) as non_veg_count,
-        COUNT(*) FILTER (WHERE i.primary_class = 'undetermined') as undetermined_count,
-        COUNT(*) FILTER (WHERE i.primary_class IN ('vegetarian', 'typically vegetarian')) as veg_count
-      FROM ingredients i
-      WHERE i.title = ANY(
-        STRING_TO_ARRAY(
-          RTRIM(
-            (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
-            '~'
-          ),
+  WITH analysis_data AS (
+    SELECT 
+      COUNT(*) as total_classes,
+      COUNT(*) FILTER (WHERE i.primary_class IN ('non-vegetarian', 'may be non-vegetarian', 'typically non-vegetarian', 'typically non-vegan')) as non_veg_count,
+      COUNT(*) FILTER (WHERE i.primary_class = 'undetermined') as undetermined_count,
+      COUNT(*) FILTER (WHERE i.primary_class IN ('vegetarian', 'typically vegetarian')) as veg_count,
+      COUNT(*) FILTER (WHERE i.class = 'may be non-vegetarian') as may_non_veg_count,
+      COUNT(*) FILTER (WHERE i.class = 'typically vegan') as typically_vegan_count,
+      COUNT(*) FILTER (WHERE i.class = 'typically vegetarian') as typically_veg_count,
+      COUNT(*) FILTER (WHERE i.class IS NULL) as null_class_count
+    FROM ingredients i
+    WHERE i.title = ANY(
+      STRING_TO_ARRAY(
+        RTRIM(
+          (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
           '~'
-        )
+        ),
+        '~'
       )
-      AND i.primary_class IS NOT NULL
     )
+  ),
+  classification_result AS (
     SELECT 
       CASE 
         WHEN total_classes = 0 THEN 'undetermined'
@@ -98,9 +117,26 @@ CREATE OR REPLACE FUNCTION "public"."classify_upc"("input_upc" "text") RETURNS "
         WHEN undetermined_count > 0 THEN 'undetermined'
         WHEN veg_count > 0 THEN 'vegetarian'
         ELSE 'vegan'
-      END
-    FROM class_analysis
+      END as new_classification,
+      CASE 
+        WHEN may_non_veg_count = 0 AND typically_vegan_count = 0 AND typically_veg_count = 0 AND null_class_count = 0 THEN ''
+        ELSE ARRAY_TO_STRING(
+          ARRAY_REMOVE(ARRAY[
+            CASE WHEN may_non_veg_count > 0 THEN 'may be non-vegetarian' END,
+            CASE WHEN typically_vegan_count > 0 THEN 'typically vegan' END,
+            CASE WHEN typically_veg_count > 0 THEN 'typically vegetarian' END,
+            CASE WHEN null_class_count > 0 THEN 'null' END
+          ], NULL),
+          ', '
+        )
+      END as issues_text
+    FROM analysis_data
   )
+  UPDATE products 
+  SET 
+    classification = cr.new_classification,
+    issues = cr.issues_text
+  FROM classification_result cr
   WHERE upc = input_upc
   RETURNING classification;
 $$;
@@ -404,18 +440,18 @@ $$;
 ALTER FUNCTION "public"."get_subscription_status"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "calculated_code" integer, "override_code" integer, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
     current_user_id UUID;
-    product_found BOOLEAN := FALSE;
+    device_uuid UUID;
+    product_found INTEGER := 0;
     final_vegan_status TEXT;
     product_classification TEXT;
     decision_reasoning TEXT;
     rate_info RECORD;
-    row_count INTEGER;
 BEGIN
     -- Check if user is authenticated
     current_user_id := auth.uid();
@@ -424,13 +460,24 @@ BEGIN
         RAISE EXCEPTION 'not logged in';
     END IF;
     
-    -- Validate input
+    -- Validate inputs
     IF barcode IS NULL OR trim(barcode) = '' THEN
         RAISE EXCEPTION 'barcode cannot be empty';
     END IF;
     
+    IF device_id IS NULL OR trim(device_id) = '' THEN
+        RAISE EXCEPTION 'device_id cannot be empty';
+    END IF;
+    
+    -- Validate and convert device_id to UUID
+    BEGIN
+        device_uuid := device_id::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
+    
     -- Get rate limit information
-    SELECT * INTO rate_info FROM get_rate_limits('product_lookup');
+    SELECT * INTO rate_info FROM get_rate_limits('product_lookup', device_id);
     
     -- Check if user has exceeded rate limit
     IF rate_info.is_rate_limited THEN
@@ -442,8 +489,6 @@ BEGIN
             'Rate limit exceeded'::VARCHAR(255) as product_name,
             rate_info.rate_limit::VARCHAR(255) as brand,
             'You have exceeded your search limit'::VARCHAR(4096) as ingredients,
-            -1::INTEGER as calculated_code,
-            NULL::INTEGER as override_code,
             'RATE_LIMIT'::TEXT as classification,
             NULL::TEXT as imageurl,
             NOW() as created,
@@ -462,8 +507,6 @@ BEGIN
         p.product_name,
         p.brand,
         p.ingredients,
-        p.calculated_code,
-        p.override_code,
         p.classification,
         p.imageurl,
         p.created,
@@ -474,127 +517,7 @@ BEGIN
     LIMIT 1;
     
     -- Check if product was found
-    GET DIAGNOSTICS row_count = ROW_COUNT;
-    product_found := row_count > 0;
-    
-    -- Determine final vegan status and reasoning
-    IF product_found THEN
-        -- Get both classification and calculated_code from the returned product
-        SELECT p.classification, p.calculated_code::TEXT INTO product_classification, final_vegan_status
-        FROM public.products p
-        WHERE p.upc = barcode OR p.ean13 = barcode
-        LIMIT 1;
-        
-        -- Prioritize classification field, fall back to calculated_code
-        IF product_classification IS NOT NULL AND product_classification IN ('vegan', 'vegetarian', 'non-vegetarian') THEN
-            -- Use classification field
-            CASE product_classification
-                WHEN 'vegan' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-                WHEN 'vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-                WHEN 'non-vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-            END CASE;
-        ELSIF final_vegan_status IS NOT NULL AND final_vegan_status != '500' THEN
-            -- Fall back to calculated_code (but skip 500 which means "Not Sure")
-            CASE final_vegan_status
-                WHEN '100' THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
-                WHEN '200' THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
-                WHEN '300' THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
-                WHEN '400' THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
-                WHEN '600' THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
-                WHEN '700' THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
-                WHEN '800' THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
-                ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', final_vegan_status);
-            END CASE;
-        ELSE
-            -- No valid classification available, will fall back to Open Food Facts
-            decision_reasoning := format('Database hit: No valid classification (classification: "%s", code: %s) - will fall back to Open Food Facts', 
-                COALESCE(product_classification, 'null'), COALESCE(final_vegan_status, 'null'));
-        END IF;
-    ELSE
-        decision_reasoning := 'Database miss: Product not found in database - will fall back to Open Food Facts';
-    END IF;
-    
-    -- Log the search operation
-    INSERT INTO public.actionlog (type, input, userid, result, metadata)
-    VALUES (
-        'product_lookup',
-        barcode,
-        current_user_id,
-        CASE 
-            WHEN product_found THEN 'Product found in database'
-            ELSE 'Product not found in database'
-        END,
-        json_build_object(
-            'barcode', barcode,
-            'database_hit', product_found,
-            'classification', product_classification,
-            'calculated_code', final_vegan_status,
-            'decision_reasoning', decision_reasoning,
-            'subscription_level', rate_info.subscription_level,
-            'rate_limit', rate_info.rate_limit,
-            'searches_used', rate_info.recent_searches + 1,
-            'search_timestamp', NOW()
-        )
-    );
-    
-    RETURN;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."lookup_product"("barcode" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text" DEFAULT ''::"text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-    current_user_id UUID;
-    device_uuid UUID;
-    product_found INTEGER := 0;
-    final_vegan_status TEXT;
-    product_classification TEXT;
-    decision_reasoning TEXT;
-    rate_info RECORD;
-BEGIN
-    -- Authentication check
-    current_user_id := auth.uid();
-    IF current_user_id IS NULL THEN
-        RAISE EXCEPTION 'not logged in';
-    END IF;
-
-    -- Convert device_id to UUID or generate one
-    BEGIN
-        device_uuid := device_id::UUID;
-    EXCEPTION WHEN invalid_text_representation THEN
-        device_uuid := gen_random_uuid();
-    END;
-
-    -- Check rate limits using the get_rate_limits function
-    SELECT subscription_level, rate_limit, recent_searches, is_rate_limited, searches_remaining
-    INTO rate_info
-    FROM get_rate_limits('product_lookup', device_id);
-
-    -- Handle rate limiting with special response format
-    IF rate_info.is_rate_limited THEN
-        RETURN QUERY SELECT
-            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as ean13,
-            rate_info.subscription_level::VARCHAR(255) as upc,
-            NULL::VARCHAR(255) as product_name,
-            rate_info.rate_limit::VARCHAR(255) as brand,
-            NULL::VARCHAR(4096) as ingredients,
-            NULL::TEXT as classification,
-            NULL::TEXT as imageurl,
-            NOW() as created,
-            NOW() as lastupdated;
-        RETURN;
-    END IF;
-
-    -- Product lookup
-    SELECT COUNT(*) INTO product_found
-    FROM public.products p
-    WHERE p.upc = barcode OR p.ean13 = barcode;
+    GET DIAGNOSTICS product_found = ROW_COUNT;
     
     -- Determine final vegan status and reasoning
     IF product_found > 0 THEN
@@ -604,14 +527,15 @@ BEGIN
         WHERE p.upc = barcode OR p.ean13 = barcode
         LIMIT 1;
         
-        -- Use the classification field
+        -- Use classification field
         IF product_classification IS NOT NULL AND product_classification IN ('vegan', 'vegetarian', 'non-vegetarian') THEN
-            -- Use classification field
-            final_vegan_status := product_classification;
-            decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+            CASE product_classification
+                WHEN 'vegan' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+                WHEN 'vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+                WHEN 'non-vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
+            END CASE;
         ELSE
             -- No valid classification available, will fall back to Open Food Facts
-            final_vegan_status := 'undetermined';
             decision_reasoning := format('Database hit: No valid classification (classification: "%s") - will fall back to Open Food Facts', 
                 COALESCE(product_classification, 'null'));
         END IF;
@@ -626,65 +550,24 @@ BEGIN
         barcode,
         current_user_id,
         device_uuid,
-        CASE WHEN product_found > 0 THEN 'found' ELSE 'not_found' END,
-        jsonb_build_object(
-            'product_found', product_found > 0,
-            'barcode_type', CASE WHEN LENGTH(barcode) = 12 THEN 'UPC' WHEN LENGTH(barcode) = 13 THEN 'EAN13' ELSE 'OTHER' END,
-            'classification', final_vegan_status,
+        CASE 
+            WHEN product_found > 0 THEN 'Product found in database'
+            ELSE 'Product not found in database'
+        END,
+        json_build_object(
+            'barcode', barcode,
+            'device_id', device_id,
+            'database_hit', product_found > 0,
+            'classification', product_classification,
             'decision_reasoning', decision_reasoning,
             'subscription_level', rate_info.subscription_level,
-            'searches_remaining', rate_info.searches_remaining
+            'rate_limit', rate_info.rate_limit,
+            'searches_used', rate_info.recent_searches + 1,
+            'search_timestamp', NOW()
         )
     );
-
-    -- Return the product data or empty result
-    IF product_found > 0 THEN
-        RETURN QUERY
-        SELECT 
-            p.ean13,
-            p.upc,
-            p.product_name,
-            p.brand,
-            p.ingredients,
-            p.classification,
-            p.imageurl,
-            p.created,
-            p.lastupdated
-        FROM public.products p
-        WHERE p.upc = barcode OR p.ean13 = barcode
-        LIMIT 1;
-    ELSE
-        -- Return a null result to indicate not found
-        RETURN QUERY SELECT
-            NULL::VARCHAR(255) as ean13,
-            NULL::VARCHAR(255) as upc,
-            NULL::VARCHAR(255) as product_name,
-            NULL::VARCHAR(255) as brand,
-            NULL::VARCHAR(4096) as ingredients,
-            NULL::TEXT as classification,
-            NULL::TEXT as imageurl,
-            NULL::TIMESTAMP WITH TIME ZONE as created,
-            NULL::TIMESTAMP WITH TIME ZONE as lastupdated
-        WHERE FALSE; -- This ensures no rows are returned for not found case
-    END IF;
-
-EXCEPTION
-    WHEN OTHERS THEN
-        -- Log the error
-        INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
-        VALUES (
-            'product_lookup',
-            barcode,
-            COALESCE(current_user_id, '00000000-0000-0000-0000-000000000000'::UUID),
-            COALESCE(device_uuid, '00000000-0000-0000-0000-000000000000'::UUID),
-            'error',
-            jsonb_build_object(
-                'error_message', SQLERRM,
-                'error_state', SQLSTATE,
-                'barcode', barcode
-            )
-        );
-        RAISE;
+    
+    RETURN;
 END;
 $$;
 
@@ -1018,132 +901,6 @@ $$;
 ALTER FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_product"("barcode" "text") RETURNS TABLE("id" integer, "upc" character varying, "ean13" character varying, "product_name" character varying, "brand" character varying, "ingredients" "text", "calculated_code" character varying, "override_code" character varying, "image_url" character varying, "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-    current_user_id UUID;
-    product_found BOOLEAN := FALSE;
-    final_vegan_status TEXT;
-    decision_reasoning TEXT;
-    rate_info RECORD;
-    found_count INTEGER;
-BEGIN
-    -- Check if user is authenticated
-    current_user_id := auth.uid();
-    
-    IF current_user_id IS NULL THEN
-        RAISE EXCEPTION 'not logged in';
-    END IF;
-    
-    -- Validate input
-    IF barcode IS NULL OR trim(barcode) = '' THEN
-        RAISE EXCEPTION 'barcode cannot be empty';
-    END IF;
-    
-    -- Get rate limit information
-    SELECT * INTO rate_info FROM get_rate_limits('product_lookup');
-    
-    -- Check if user has exceeded rate limit
-    IF rate_info.is_rate_limited THEN
-        -- Return special rate limit response instead of throwing error
-        RETURN QUERY
-        SELECT 
-            -1::INTEGER as id,
-            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as upc,
-            rate_info.subscription_level::VARCHAR(255) as ean13,
-            'Rate limit exceeded'::VARCHAR(255) as product_name,
-            rate_info.rate_limit::VARCHAR(255) as brand,
-            'You have exceeded your search limit'::TEXT as ingredients,
-            'RATE_LIMIT'::VARCHAR(255) as calculated_code,
-            NULL::VARCHAR(255) as override_code,
-            NULL::VARCHAR(255) as image_url,
-            NOW() as created_at,
-            NOW() as updated_at;
-        RETURN;
-    END IF;
-    
-    -- Clean barcode
-    barcode := trim(barcode);
-    
-    -- Search for product by UPC or EAN13
-    RETURN QUERY
-    SELECT 
-        p.id,
-        p.upc,
-        p.ean13,
-        p.product_name,
-        p.brand,
-        p.ingredients,
-        p.calculated_code,
-        p.override_code,
-        p.image_url,
-        p.created_at,
-        p.updated_at
-    FROM public.products p
-    WHERE p.upc = barcode OR p.ean13 = barcode
-    ORDER BY p.id
-    LIMIT 1;
-    
-    -- Check if product was found
-    GET DIAGNOSTICS found_count = ROW_COUNT;
-    product_found := found_count > 0;
-    
-    -- Determine final vegan status and reasoning
-    IF product_found THEN
-        -- Get the calculated_code from the returned product
-        SELECT p.calculated_code INTO final_vegan_status
-        FROM public.products p
-        WHERE p.upc = barcode OR p.ean13 = barcode
-        LIMIT 1;
-        
-        -- Map calculated_code to vegan status for reasoning
-        CASE final_vegan_status
-            WHEN '100' THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
-            WHEN '200' THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
-            WHEN '300' THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
-            WHEN '400' THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
-            WHEN '500' THEN decision_reasoning := 'Database hit: Not Sure (code 500) - will fall back to Open Food Facts';
-            WHEN '600' THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
-            WHEN '700' THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
-            WHEN '800' THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
-            ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', final_vegan_status);
-        END CASE;
-    ELSE
-        decision_reasoning := 'Database miss: Product not found in database - will fall back to Open Food Facts';
-    END IF;
-    
-    -- Log the search operation
-    INSERT INTO public.actionlog (type, input, userid, result, metadata)
-    VALUES (
-        'product_lookup',
-        barcode,
-        current_user_id,
-        CASE 
-            WHEN product_found THEN 'Product found in database'
-            ELSE 'Product not found in database'
-        END,
-        json_build_object(
-            'barcode', barcode,
-            'database_hit', product_found,
-            'calculated_code', final_vegan_status,
-            'decision_reasoning', decision_reasoning,
-            'subscription_level', rate_info.subscription_level,
-            'rate_limit', rate_info.rate_limit,
-            'searches_used', rate_info.recent_searches + 1,
-            'search_timestamp', NOW()
-        )
-    );
-    
-    RETURN;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."search_product"("barcode" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."update_user_subscription_updated_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -1435,12 +1192,6 @@ GRANT ALL ON FUNCTION "public"."get_subscription_status"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text") TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") TO "service_role";
@@ -1456,12 +1207,6 @@ GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text") TO "se
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."search_product"("barcode" "text") TO "service_role";
 
 
 

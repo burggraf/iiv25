@@ -281,7 +281,7 @@ export type Database = {
         Returns: string
       }
       lookup_product: {
-        Args: { barcode: string } | { barcode: string; device_id?: string }
+        Args: { barcode: string; device_id: string }
         Returns: {
           ean13: string
           upc: string
@@ -304,22 +304,6 @@ export type Database = {
           productcount: number
           lastupdated: string
           created: string
-        }[]
-      }
-      search_product: {
-        Args: { barcode: string }
-        Returns: {
-          id: number
-          upc: string
-          ean13: string
-          product_name: string
-          brand: string
-          ingredients: string
-          calculated_code: string
-          override_code: string
-          image_url: string
-          created_at: string
-          updated_at: string
         }[]
       }
     }
