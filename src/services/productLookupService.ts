@@ -60,7 +60,6 @@ export class ProductLookupService {
 					// Check if we have a valid classification
 					if (veganStatus !== VeganStatus.UNKNOWN) {
 						console.log(`🎯 Using database result: ${veganStatus}`)
-						console.log(`🔍 DEBUG: Supabase product data:`, JSON.stringify(supabaseResult.product, null, 2))
 						const classificationSource = `classification field "${supabaseResult.product.classification}"`
 						decisionLog.push(`✅ Database hit: Using ${classificationSource} → ${veganStatus}`)
 
@@ -80,7 +79,6 @@ export class ProductLookupService {
 							classificationMethod: 'structured',
 						}
 
-						console.log(`🔍 DEBUG: Final product issues field:`, finalProduct.issues)
 						dataSource = 'supabase'
 
 						// Check if we need to fetch image from OpenFoodFacts
