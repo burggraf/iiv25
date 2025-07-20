@@ -81,7 +81,7 @@ export default function BarcodeScanner({
       
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionText}>
-          {scanned ? '✅ Barcode Scanned Successfully!' : '📷 Point your camera at a food product barcode'}
+          {scanned ? '✅ Barcode Scanned Successfully!' : '📷 Point your camera\nat a food product barcode'}
         </Text>
       </View>
 
