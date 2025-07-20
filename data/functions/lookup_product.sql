@@ -30,6 +30,7 @@ RETURNS TABLE (
     ingredients VARCHAR(4096),
     classification TEXT,
     imageurl TEXT,
+    issues TEXT,
     created TIMESTAMP WITH TIME ZONE,
     lastupdated TIMESTAMP WITH TIME ZONE
 ) 
@@ -84,6 +85,7 @@ BEGIN
             'You have exceeded your search limit'::VARCHAR(4096) as ingredients,
             'RATE_LIMIT'::TEXT as classification,
             NULL::TEXT as imageurl,
+            NULL::TEXT as issues,
             NOW() as created,
             NOW() as lastupdated;
         RETURN;
@@ -102,6 +104,7 @@ BEGIN
         p.ingredients,
         p.classification,
         p.imageurl,
+        p.issues,
         p.created,
         p.lastupdated
     FROM public.products p
