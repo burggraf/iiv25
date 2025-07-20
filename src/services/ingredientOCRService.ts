@@ -16,11 +16,15 @@ import { supabase } from './supabaseClient';
 export class IngredientOCRService {
   static async parseIngredientsFromImage(imageBase64: string, upc: string, openFoodFactsData?: any): Promise<ParseIngredientsResponse> {
     try {
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data, error } = await supabase.functions.invoke('parse-ingredients', {
         body: {
           imageBase64,
           upc,
           openFoodFactsData,
+          userid: user?.id, // Pass the user ID explicitly
         },
       });
 

@@ -3,6 +3,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 interface UpdateProductFromOffRequest {
   upc: string;
+  userid?: string;
 }
 
 interface UpdateProductFromOffResponse {
@@ -104,7 +105,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const requestBody: UpdateProductFromOffRequest = await req.json();
-    const { upc } = requestBody;
+    const { upc, userid } = requestBody;
 
     if (!upc) {
       return new Response(JSON.stringify({ 
@@ -146,12 +147,13 @@ Deno.serve(async (req: Request) => {
       console.log(`⚠️ Product ${upc} already exists in database`);
       
       // Log the failed attempt
+      const logUserId = userid || user.id;
       const { error: logError } = await supabase
         .from('actionlog')
         .insert({
           type: 'update_product_from_off',
           input: upc,
-          userid: user.id,
+          userid: logUserId,
           result: 'product_already_exists',
           metadata: {
             operation: 'create_product',
@@ -201,12 +203,13 @@ Deno.serve(async (req: Request) => {
 
     if (offData.status === 0 || !offData.product) {
       // Log the failed attempt
+      const logUserId = userid || user.id;
       const { error: logError } = await supabase
         .from('actionlog')
         .insert({
           type: 'update_product_from_off',
           input: upc,
-          userid: user.id,
+          userid: logUserId,
           result: 'product_not_found_in_off',
           metadata: {
             operation: 'create_product',
@@ -375,12 +378,13 @@ Deno.serve(async (req: Request) => {
 
     // Log the action to actionlog table
     console.log(`📝 Logging action to actionlog`);
+    const logUserId = userid || user.id;
     const { error: logError } = await supabase
       .from('actionlog')
       .insert({
         type: 'update_product_from_off',
         input: upc,
-        userid: user.id,
+        userid: logUserId,
         result: finalClassification,
         metadata: {
           operation: 'create_product',

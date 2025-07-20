@@ -5,6 +5,7 @@ interface UpdateProductImageRequest {
   upc?: string;
   batchSize?: number;
   startOffset?: number;
+  userid?: string;
 }
 
 interface UpdateProductImageResponse {
@@ -96,7 +97,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const requestBody: UpdateProductImageRequest = await req.json().catch(() => ({}));
-    const { upc, batchSize = 50, startOffset = 0 } = requestBody;
+    const { upc, batchSize = 50, startOffset = 0, userid } = requestBody;
 
     console.log(`🔄 Starting product image update process...`);
     console.log(`📊 Parameters: UPC=${upc || 'batch'}, batchSize=${batchSize}, startOffset=${startOffset}`);
@@ -189,6 +190,8 @@ Deno.serve(async (req: Request) => {
 
     // Log the action to actionlog table
     console.log(`📝 Logging action to actionlog`);
+    const logUserId = userid || user.id;
+    
     if (upc) {
       // Single product mode
       const { error: logError } = await supabase
@@ -196,7 +199,7 @@ Deno.serve(async (req: Request) => {
         .insert({
           type: 'update_product_image_from_off',
           input: upc,
-          userid: user.id,
+          userid: logUserId,
           result: updatedCount > 0 ? 'success' : 'failed',
           metadata: {
             operation: 'update_image',
@@ -219,7 +222,7 @@ Deno.serve(async (req: Request) => {
         .insert({
           type: 'update_product_image_from_off',
           input: 'batch_update',
-          userid: user.id,
+          userid: logUserId,
           result: `${updatedCount}/${processedCount} updated`,
           metadata: {
             operation: 'batch_update',

@@ -242,8 +242,14 @@ export class ProductLookupService {
 		try {
 			console.log(`🔄 Calling update-product-image-from-off for barcode: ${barcode}`)
 			
+			// Get current user ID
+			const { data: { user } } = await supabase.auth.getUser();
+			
 			const { data, error } = await supabase.functions.invoke('update-product-image-from-off', {
-				body: { upc: barcode }
+				body: { 
+					upc: barcode,
+					userid: user?.id
+				}
 			})
 			
 			if (error) {
@@ -270,8 +276,14 @@ export class ProductLookupService {
 			console.log(`🔄 Creating product in database for barcode: ${barcode}`)
 			console.log(`📊 Original OpenFoodFacts classification: ${originalClassification}`)
 			
+			// Get current user ID
+			const { data: { user } } = await supabase.auth.getUser();
+			
 			const { data, error } = await supabase.functions.invoke('update-product-from-off', {
-				body: { upc: barcode }
+				body: { 
+					upc: barcode,
+					userid: user?.id
+				}
 			})
 			
 			if (error) {
@@ -315,8 +327,14 @@ export class ProductLookupService {
 		try {
 			console.log(`🔄 Creating basic product record from OpenFoodFacts for barcode: ${barcode}`)
 			
+			// Get current user ID
+			const { data: { user } } = await supabase.auth.getUser();
+			
 			const { data, error } = await supabase.functions.invoke('update-product-from-off', {
-				body: { upc: barcode }
+				body: { 
+					upc: barcode,
+					userid: user?.id
+				}
 			})
 			
 			if (error) {
