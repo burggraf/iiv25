@@ -34,6 +34,8 @@ export default function ScannerScreen() {
 	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
+	const lastScannedBarcodeRef = useRef<string | null>(null)
+	const lastScannedTimeRef = useRef<number>(0)
 	
 	// Simple cache for last 20 scanned UPCs and their results
 	const scannedUPCQueue = useRef<string[]>([])
@@ -50,13 +52,23 @@ export default function ScannerScreen() {
 
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
+		const currentTime = Date.now()
+		
 		// Prevent concurrent processing
 		if (processingBarcodeRef.current !== null) {
-			console.log(`🚫 Ignoring scan: ${data} (currently processing ${processingBarcodeRef.current})`)
+			return
+		}
+
+		// Debounce same barcode scans - ignore if same barcode scanned within last 3 seconds
+		if (lastScannedBarcodeRef.current === data && currentTime - lastScannedTimeRef.current < 3000) {
 			return
 		}
 
 		console.log(`📱 Barcode scanned: ${type} - ${data}`)
+
+		// Update last scanned info
+		lastScannedBarcodeRef.current = data
+		lastScannedTimeRef.current = currentTime
 
 		// Check if we have this UPC in our recent cache
 		const cachedProduct = scannedResultsCache.current.get(data)
