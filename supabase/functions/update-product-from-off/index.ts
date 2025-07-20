@@ -3,7 +3,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 interface UpdateProductFromOffRequest {
   upc: string;
-  userid?: string;
 }
 
 interface UpdateProductFromOffResponse {
@@ -69,8 +68,19 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Verify user authentication
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    // Get JWT token from Authorization header and fetch user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ 
+        error: 'Authorization header required' 
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
     
     if (authError || !user) {
       console.log('❌ Authentication failed:', authError?.message || 'No user found');
@@ -105,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const requestBody: UpdateProductFromOffRequest = await req.json();
-    const { upc, userid } = requestBody;
+    const { upc } = requestBody;
 
     if (!upc) {
       return new Response(JSON.stringify({ 
@@ -147,13 +157,12 @@ Deno.serve(async (req: Request) => {
       console.log(`⚠️ Product ${upc} already exists in database`);
       
       // Log the failed attempt
-      const logUserId = userid || user.id;
       const { error: logError } = await supabase
         .from('actionlog')
         .insert({
           type: 'update_product_from_off',
           input: upc,
-          userid: logUserId,
+          userid: user.id,
           result: 'product_already_exists',
           metadata: {
             operation: 'create_product',
@@ -203,13 +212,12 @@ Deno.serve(async (req: Request) => {
 
     if (offData.status === 0 || !offData.product) {
       // Log the failed attempt
-      const logUserId = userid || user.id;
       const { error: logError } = await supabase
         .from('actionlog')
         .insert({
           type: 'update_product_from_off',
           input: upc,
-          userid: logUserId,
+          userid: user.id,
           result: 'product_not_found_in_off',
           metadata: {
             operation: 'create_product',
@@ -378,13 +386,12 @@ Deno.serve(async (req: Request) => {
 
     // Log the action to actionlog table
     console.log(`📝 Logging action to actionlog`);
-    const logUserId = userid || user.id;
     const { error: logError } = await supabase
       .from('actionlog')
       .insert({
         type: 'update_product_from_off',
         input: upc,
-        userid: logUserId,
+        userid: user.id,
         result: finalClassification,
         metadata: {
           operation: 'create_product',

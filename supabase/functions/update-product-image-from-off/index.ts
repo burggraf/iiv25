@@ -5,7 +5,6 @@ interface UpdateProductImageRequest {
   upc?: string;
   batchSize?: number;
   startOffset?: number;
-  userid?: string;
 }
 
 interface UpdateProductImageResponse {
@@ -61,8 +60,19 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Verify user authentication
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    // Get JWT token from Authorization header and fetch user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ 
+        error: 'Authorization header required' 
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
     
     if (authError || !user) {
       console.log('❌ Authentication failed:', authError?.message || 'No user found');
@@ -97,7 +107,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const requestBody: UpdateProductImageRequest = await req.json().catch(() => ({}));
-    const { upc, batchSize = 50, startOffset = 0, userid } = requestBody;
+    const { upc, batchSize = 50, startOffset = 0 } = requestBody;
 
     console.log(`🔄 Starting product image update process...`);
     console.log(`📊 Parameters: UPC=${upc || 'batch'}, batchSize=${batchSize}, startOffset=${startOffset}`);
@@ -190,7 +200,6 @@ Deno.serve(async (req: Request) => {
 
     // Log the action to actionlog table
     console.log(`📝 Logging action to actionlog`);
-    const logUserId = userid || user.id;
     
     if (upc) {
       // Single product mode
@@ -199,7 +208,7 @@ Deno.serve(async (req: Request) => {
         .insert({
           type: 'update_product_image_from_off',
           input: upc,
-          userid: logUserId,
+          userid: user.id,
           result: updatedCount > 0 ? 'success' : 'failed',
           metadata: {
             operation: 'update_image',
@@ -222,7 +231,7 @@ Deno.serve(async (req: Request) => {
         .insert({
           type: 'update_product_image_from_off',
           input: 'batch_update',
-          userid: logUserId,
+          userid: user.id,
           result: `${updatedCount}/${processedCount} updated`,
           metadata: {
             operation: 'batch_update',

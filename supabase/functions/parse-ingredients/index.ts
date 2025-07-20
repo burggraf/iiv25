@@ -5,7 +5,6 @@ interface ParseIngredientsRequest {
   imageBase64: string;
   upc: string;
   openFoodFactsData?: any;
-  userid?: string;
 }
 
 interface ParseIngredientsResponse {
@@ -42,8 +41,19 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Verify user authentication
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    // Get JWT token from Authorization header and fetch user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ 
+        error: 'Authorization header required' 
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
     
     console.log('🔍 Auth debug:', {
       authError: authError?.message,
@@ -85,7 +95,7 @@ Deno.serve(async (req: Request) => {
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { imageBase64, upc, openFoodFactsData, userid }: ParseIngredientsRequest = await req.json();
+    const { imageBase64, upc, openFoodFactsData }: ParseIngredientsRequest = await req.json();
     
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: 'Image data required' }), {
@@ -304,26 +314,12 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
 
           // Log the action to actionlog table
           try {
-            // Use provided userid or fall back to authenticated user
-            const logUserId = userid || user.id;
-            
-            console.log('📝 About to log action:', {
-              type: 'ingredient_scan',
-              input: upc,
-              userid: logUserId,
-              result: classificationResult,
-              providedUserId: userid,
-              authUserId: user.id,
-              userIdType: typeof logUserId,
-              userIdValue: logUserId
-            });
-            
             const { error: logError } = await supabase
               .from('actionlog')
               .insert({
                 type: 'ingredient_scan',
                 input: upc,
-                userid: logUserId,
+                userid: user.id,
                 result: classificationResult,
                 metadata: {
                   ingredients: parsedResult.ingredients,
