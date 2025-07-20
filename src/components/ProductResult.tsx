@@ -122,13 +122,6 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
           <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
         </View>
 
-        {/* Warning for vegan products with issues */}
-        {product.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && (
-          <View style={styles.warningRow}>
-            <Text style={styles.warningIcon}>⚠️</Text>
-            <Text style={styles.warningText}>see product detail</Text>
-          </View>
-        )}
 
       {/* Product Info */}
       <View style={styles.productInfo}>
@@ -275,24 +268,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'center',
-  },
-  warningRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#fff3cd',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ffeaa7',
-  },
-  warningIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#856404',
-    fontWeight: '600',
   },
   productInfo: {
     padding: 20,
