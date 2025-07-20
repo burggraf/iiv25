@@ -1,14 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { Product, VeganStatus } from '../types';
 import Logo from './Logo';
 import LogoWhite from './LogoWhite';
 
 interface ProductResultProps {
   product: Product;
-  onBack?: () => void;
+  onBack: () => void;
 }
 
 export default function ProductResult({ product, onBack }: ProductResultProps) {
@@ -106,7 +105,7 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* App Header */}
       <View style={styles.appHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack || (() => router.back())}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.centerHeader}>

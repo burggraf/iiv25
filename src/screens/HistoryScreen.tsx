@@ -41,7 +41,7 @@ export default function HistoryScreen() {
   if (selectedProduct) {
     return (
       <View style={styles.container}>
-        <ProductResult product={selectedProduct} />
+        <ProductResult product={selectedProduct} onBack={handleBackToHistory} />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleBackToHistory}>
             <Text style={styles.backToHistoryButton}>

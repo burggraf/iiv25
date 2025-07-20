@@ -277,10 +277,6 @@ export default function ScannerScreen() {
 		}
 	}
 
-	// Show product detail screen
-	if (showProductDetail && scannedProduct) {
-		return <ProductResult product={scannedProduct} onBack={handleBackFromDetail} />
-	}
 
 	if (hasPermission === null) {
 		return (
@@ -449,6 +445,13 @@ export default function ScannerScreen() {
 			<View style={styles.bottomInstructions}>
 				<Text style={styles.tipText}>💡 Scan continuously - tap product card to view details</Text>
 			</View>
+
+			{/* Product Detail Overlay */}
+			{showProductDetail && scannedProduct && (
+				<View style={styles.productDetailOverlay}>
+					<ProductResult product={scannedProduct} onBack={handleBackFromDetail} />
+				</View>
+			)}
 		</SafeAreaView>
 	)
 }
@@ -732,5 +735,14 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#666',
 		fontStyle: 'italic',
+	},
+	productDetailOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'white',
+		zIndex: 1000,
 	},
 })

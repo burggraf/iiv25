@@ -112,7 +112,7 @@ export default function ManualEntryScreen() {
   if (product) {
     return (
       <View style={styles.container}>
-        <ProductResult product={product} />
+        <ProductResult product={product} onBack={handleNewSearch} />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleNewSearch}>
             <Text style={styles.newSearchButton}>
