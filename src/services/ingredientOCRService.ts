@@ -2,6 +2,7 @@ export interface ParseIngredientsResponse {
   ingredients: string[];
   confidence: number;
   isValidIngredientsList: boolean;
+  classification?: string;
   error?: string;
   apiCost?: {
     inputTokens: number;
@@ -10,41 +11,38 @@ export interface ParseIngredientsResponse {
   };
 }
 
-export class IngredientOCRService {
-  private static readonly EDGE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/parse-ingredients`;
-  private static readonly ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+import { supabase } from './supabaseClient';
 
-  static async parseIngredientsFromImage(imageBase64: string, openFoodFactsData?: any): Promise<ParseIngredientsResponse> {
+export class IngredientOCRService {
+  static async parseIngredientsFromImage(imageBase64: string, upc: string, openFoodFactsData?: any): Promise<ParseIngredientsResponse> {
     try {
-      const response = await fetch(this.EDGE_FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.ANON_KEY}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('parse-ingredients', {
+        body: {
           imageBase64,
+          upc,
           openFoodFactsData,
-        }),
+        },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (error) {
+        throw new Error(`Edge function error: ${error.message}`);
       }
-
-      const data: ParseIngredientsResponse = await response.json();
       
       // Log API cost information
-      if (data.apiCost) {
+      if (data?.apiCost) {
         console.log('💰 Gemini API Cost:', {
           inputTokens: data.apiCost.inputTokens,
           outputTokens: data.apiCost.outputTokens,
           totalCost: data.apiCost.totalCost
         });
       }
+
+      // Log classification result if available
+      if (data?.classification) {
+        console.log(`🔍 Product classification updated: ${data.classification}`);
+      }
       
-      
-      return data;
+      return data as ParseIngredientsResponse;
     } catch (error) {
       console.error('Error calling ingredient OCR service:', error);
       return {

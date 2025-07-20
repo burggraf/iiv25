@@ -1,13 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 interface ParseIngredientsRequest {
   imageBase64: string;
+  upc: string;
+  openFoodFactsData?: any;
 }
 
 interface ParseIngredientsResponse {
   ingredients: string[];
   confidence: number;
   isValidIngredientsList: boolean;
+  classification?: string;
   error?: string;
   apiCost?: {
     inputTokens: number;
@@ -25,7 +29,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { imageBase64 }: ParseIngredientsRequest = await req.json();
+    const { imageBase64, upc, openFoodFactsData }: ParseIngredientsRequest = await req.json();
     
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: 'Image data required' }), {
@@ -33,6 +37,18 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    if (!upc) {
+      return new Response(JSON.stringify({ error: 'UPC code required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
@@ -138,6 +154,128 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
       // Add cost info to successful response
       if (apiCostInfo) {
         parsedResult.apiCost = apiCostInfo;
+      }
+
+      // If ingredients were successfully parsed, update the database
+      if (parsedResult.isValidIngredientsList && parsedResult.ingredients.length > 0) {
+        console.log(`🔍 Processing ingredients for UPC: ${upc}`);
+        
+        try {
+          // Normalize barcode format - convert UPC-E to UPC-A if needed
+          const normalizedUPC = upc.length === 11 ? '0' + upc : upc;
+          const normalizedEAN13 = normalizedUPC; // Use normalized UPC as EAN13 for consistency
+          
+          console.log(`📋 Normalized barcode: ${upc} → ${normalizedUPC}`);
+          
+          // Prepare ingredients data
+          const ingredientsCommaDelimited = parsedResult.ingredients.join(', ');
+          const analysisTildeDelimited = parsedResult.ingredients
+            .map(ingredient => ingredient.toLowerCase().replace(/[^\w\s]/g, '').trim())
+            .join('~');
+
+          // Check if product exists (check both original and normalized UPC)
+          const { data: existingProduct, error: lookupError } = await supabase
+            .from('products')
+            .select('*')
+            .or(`upc.eq.${upc},upc.eq.${normalizedUPC},ean13.eq.${upc},ean13.eq.${normalizedUPC}`)
+            .single();
+
+          if (lookupError && lookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
+            throw lookupError;
+          }
+
+          let productOperation;
+          if (existingProduct) {
+            // Update existing product (use the existing product's UPC for the update)
+            console.log(`📝 Updating existing product: ${existingProduct.upc}`);
+            
+            // Also normalize the existing product's barcode format if needed
+            const updateData: any = {
+              ingredients: ingredientsCommaDelimited,
+              analysis: analysisTildeDelimited,
+              lastupdated: new Date().toISOString()
+            };
+            
+            // If the existing product has 11-digit UPC but we have 12-digit normalized, update it
+            if (existingProduct.upc.length === 11 && normalizedUPC.length === 12 && normalizedUPC !== existingProduct.upc) {
+              console.log(`🔄 Normalizing existing product barcode: ${existingProduct.upc} → ${normalizedUPC}`);
+              updateData.upc = normalizedUPC;
+              updateData.ean13 = normalizedEAN13;
+            }
+            
+            productOperation = await supabase
+              .from('products')
+              .update(updateData)
+              .eq('upc', existingProduct.upc);
+          } else {
+            // Create new product with normalized barcode formats
+            console.log(`➕ Creating new product: ${normalizedUPC}`);
+            productOperation = await supabase
+              .from('products')
+              .insert({
+                upc: normalizedUPC,
+                ean13: normalizedEAN13,
+                product_name: 'unknown product',
+                brand: '',
+                ingredients: ingredientsCommaDelimited,
+                analysis: analysisTildeDelimited,
+                created: new Date().toISOString(),
+                lastupdated: new Date().toISOString()
+              });
+          }
+
+          if (productOperation.error) {
+            console.error('Database operation error:', productOperation.error);
+            throw productOperation.error;
+          }
+
+          // Call classify_upc function to get classification (use the UPC that's actually in the database)
+          const classifyUPC = existingProduct ? existingProduct.upc : normalizedUPC;
+          console.log(`🏷️ Classifying UPC: ${classifyUPC}`);
+          const { data: classificationResult, error: classificationError } = await supabase
+            .rpc('classify_upc', { input_upc: classifyUPC });
+
+          if (classificationError) {
+            console.error('Classification error:', classificationError);
+            throw classificationError;
+          }
+
+          // Add classification to response
+          parsedResult.classification = classificationResult;
+          console.log(`✅ Product classified as: ${classificationResult}`);
+
+          // Log the action to actionlog table
+          try {
+            const { error: logError } = await supabase
+              .from('actionlog')
+              .insert({
+                type: 'ingredient_scan',
+                input: upc,
+                result: classificationResult,
+                metadata: {
+                  ingredients: parsedResult.ingredients,
+                  confidence: parsedResult.confidence,
+                  operation: existingProduct ? 'update' : 'create'
+                },
+                created_at: new Date().toISOString()
+              });
+
+            if (logError) {
+              console.error('Action log error:', logError);
+              // Don't throw - logging is not critical to the main operation
+            } else {
+              console.log(`📋 Logged ingredient scan action for UPC: ${upc}`);
+            }
+          } catch (logError) {
+            console.error('Failed to log action:', logError);
+            // Continue without throwing
+          }
+
+        } catch (dbError) {
+          console.error('Database operation failed:', dbError);
+          // Don't fail the entire request for database errors
+          // The OCR results are still valid
+        }
       }
     } catch (parseError) {
       // Fallback: try to extract ingredients manually if JSON parsing fails

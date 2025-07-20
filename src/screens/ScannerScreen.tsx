@@ -33,6 +33,7 @@ export default function ScannerScreen() {
 	const [overlayHeight] = useState(new Animated.Value(0))
 	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
+	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -69,6 +70,7 @@ export default function ScannerScreen() {
 		// Update last scanned info
 		lastScannedBarcodeRef.current = data
 		lastScannedTimeRef.current = currentTime
+		setCurrentBarcode(data)
 
 		// Check if we have this UPC in our recent cache
 		const cachedProduct = scannedResultsCache.current.get(data)
@@ -163,6 +165,8 @@ export default function ScannerScreen() {
 		
 		setScannedProduct(null)
 		setError(null)
+		setParsedIngredients(null)
+		setCurrentBarcode(null)
 	}
 
 	const handleScanIngredients = async () => {
@@ -195,9 +199,15 @@ export default function ScannerScreen() {
 				return
 			}
 
-			// Call ingredient OCR service with Open Food Facts data if available
+			// Call ingredient OCR service with UPC and Open Food Facts data if available
+			if (!currentBarcode) {
+				setError('No barcode available for ingredient processing')
+				return
+			}
+
 			const data = await IngredientOCRService.parseIngredientsFromImage(
 				result.assets[0].base64,
+				currentBarcode,
 				scannedProduct || undefined
 			)
 
@@ -215,6 +225,23 @@ export default function ScannerScreen() {
 
 			setParsedIngredients(data.ingredients)
 			setError(null)
+
+			// If we got a classification result, refresh the product data to show updated classification
+			if (data.classification) {
+				console.log(`🔄 Refreshing product data after classification: ${data.classification}`)
+				try {
+					const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'IngredientOCR' })
+					if (refreshResult.product) {
+						setScannedProduct(refreshResult.product)
+						addToHistory(refreshResult.product)
+						// Update cache with new product data
+						addToCache(currentBarcode, refreshResult.product)
+					}
+				} catch (refreshError) {
+					console.error('Error refreshing product after OCR:', refreshError)
+					// Don't show error to user, just continue with parsed ingredients
+				}
+			}
 
 			// Update overlay to show parsed ingredients
 			Animated.timing(overlayHeight, {
