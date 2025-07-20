@@ -71,8 +71,9 @@ Instructions:
 1. Look for an "INGREDIENTS:" or "Ingredients:" section
 2. Extract each individual ingredient from the list
 3. Clean up the text (remove parentheses, allergen warnings, etc.)
-4. Return ONLY the actual food ingredients
-5. Determine if this appears to be a valid food ingredients list
+4. TRANSLATE all ingredients to English if they are in another language
+5. Return ONLY the actual food ingredients in English
+6. Determine if this appears to be a valid food ingredients list
 
 Return a JSON object with this exact structure:
 {
@@ -80,6 +81,12 @@ Return a JSON object with this exact structure:
   "confidence": 0.95,
   "isValidIngredientsList": true
 }
+
+IMPORTANT: All ingredients must be translated to English. For example:
+- "eau" should become "water"
+- "sucre" should become "sugar" 
+- "lait" should become "milk"
+- "farine de blé" should become "wheat flour"
 
 If you cannot find or read ingredients clearly, set confidence below 0.7 and isValidIngredientsList to false.`
               },
