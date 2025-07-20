@@ -187,6 +187,58 @@ Deno.serve(async (req: Request) => {
 
     console.log(`🎉 Batch complete: ${updatedCount}/${processedCount} updated, ${errorCount} errors`);
 
+    // Log the action to actionlog table
+    console.log(`📝 Logging action to actionlog`);
+    if (upc) {
+      // Single product mode
+      const { error: logError } = await supabase
+        .from('actionlog')
+        .insert({
+          type: 'update_product_image_from_off',
+          input: upc,
+          userid: user.id,
+          result: updatedCount > 0 ? 'success' : 'failed',
+          metadata: {
+            operation: 'update_image',
+            processed_count: processedCount,
+            updated_count: updatedCount,
+            error_count: errorCount,
+            errors: errors.slice(0, 3)
+          }
+        });
+
+      if (logError) {
+        console.error('⚠️ Failed to log action (continuing anyway):', logError);
+      } else {
+        console.log('✅ Action logged successfully');
+      }
+    } else {
+      // Batch mode
+      const { error: logError } = await supabase
+        .from('actionlog')
+        .insert({
+          type: 'update_product_image_from_off',
+          input: 'batch_update',
+          userid: user.id,
+          result: `${updatedCount}/${processedCount} updated`,
+          metadata: {
+            operation: 'batch_update',
+            batch_size: batchSize,
+            start_offset: startOffset,
+            processed_count: processedCount,
+            updated_count: updatedCount,
+            error_count: errorCount,
+            errors: errors.slice(0, 5)
+          }
+        });
+
+      if (logError) {
+        console.error('⚠️ Failed to log action (continuing anyway):', logError);
+      } else {
+        console.log('✅ Action logged successfully');
+      }
+    }
+
     return new Response(JSON.stringify(response), {
       status: 200,
       headers: { 

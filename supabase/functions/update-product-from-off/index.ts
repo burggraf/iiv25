@@ -144,6 +144,26 @@ Deno.serve(async (req: Request) => {
 
     if (existingProduct) {
       console.log(`⚠️ Product ${upc} already exists in database`);
+      
+      // Log the failed attempt
+      const { error: logError } = await supabase
+        .from('actionlog')
+        .insert({
+          type: 'update_product_from_off',
+          input: upc,
+          userid: user.id,
+          result: 'product_already_exists',
+          metadata: {
+            operation: 'create_product',
+            error: 'Product already exists in database',
+            existing_classification: existingProduct.classification
+          }
+        });
+
+      if (logError) {
+        console.error('⚠️ Failed to log action:', logError);
+      }
+      
       return new Response(JSON.stringify({
         success: false,
         message: 'Product already exists in database',
@@ -180,6 +200,25 @@ Deno.serve(async (req: Request) => {
     const offData: OpenFoodFactsProduct = await offResponse.json();
 
     if (offData.status === 0 || !offData.product) {
+      // Log the failed attempt
+      const { error: logError } = await supabase
+        .from('actionlog')
+        .insert({
+          type: 'update_product_from_off',
+          input: upc,
+          userid: user.id,
+          result: 'product_not_found_in_off',
+          metadata: {
+            operation: 'create_product',
+            error: 'Product not found in OpenFoodFacts',
+            openfoodfacts_status: offData.status
+          }
+        });
+
+      if (logError) {
+        console.error('⚠️ Failed to log action:', logError);
+      }
+      
       return new Response(JSON.stringify({
         success: false,
         error: 'Product not found in OpenFoodFacts',
@@ -333,6 +372,32 @@ Deno.serve(async (req: Request) => {
       classificationResult: finalClassification,
       classificationChanged: finalClassification !== 'undetermined'
     };
+
+    // Log the action to actionlog table
+    console.log(`📝 Logging action to actionlog`);
+    const { error: logError } = await supabase
+      .from('actionlog')
+      .insert({
+        type: 'update_product_from_off',
+        input: upc,
+        userid: user.id,
+        result: finalClassification,
+        metadata: {
+          operation: 'create_product',
+          product_name: product.product_name || '',
+          brand: product.brands || '',
+          ingredients_count: ingredients.length,
+          analysis_ingredients_count: analysisIngredients.length,
+          classification: finalClassification,
+          openfoodfacts_status: offData.status
+        }
+      });
+
+    if (logError) {
+      console.error('⚠️ Failed to log action (continuing anyway):', logError);
+    } else {
+      console.log('✅ Action logged successfully');
+    }
 
     console.log(`🎉 Process complete for UPC: ${upc}`);
 

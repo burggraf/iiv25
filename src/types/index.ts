@@ -133,7 +133,10 @@ export enum ActionType {
   INGREDIENT_SEARCH = 'ingredient_search',
   MANUAL_ENTRY = 'manual_entry',
   HISTORY_VIEW = 'history_view',
-  SETTINGS_UPDATE = 'settings_update'
+  SETTINGS_UPDATE = 'settings_update',
+  INGREDIENTS_SCAN = 'ingredients_scan',
+  UPDATE_PRODUCT_FROM_OFF = 'update_product_from_off',
+  UPDATE_PRODUCT_IMAGE_FROM_OFF = 'update_product_image_from_off'
 }
 
 // Subscription types
