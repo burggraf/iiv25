@@ -275,6 +275,22 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
 					</View>
 				)}
 
+				{/* Vegetarian Ingredients */}
+				{ingredientClassifications.filter((ing) => ing.class === 'vegetarian').length > 0 && (
+					<View style={styles.vegetarianSection}>
+						<Text style={styles.vegetarianTitle}>🥛 Vegetarian Ingredients:</Text>
+						<View style={styles.vegetarianList}>
+							{ingredientClassifications
+								.filter((ing) => ing.class === 'vegetarian')
+								.map((ingredient, index) => (
+									<Text key={index} style={styles.vegetarianIngredient}>
+										• {ingredient.title}
+									</Text>
+								))}
+						</View>
+					</View>
+				)}
+
 				{/* Typically Vegetarian Ingredients */}
 				{ingredientClassifications.filter((ing) => ing.class === 'typically vegetarian').length >
 					0 && (
@@ -604,6 +620,29 @@ const styles = StyleSheet.create({
 	mayBeNonVegIngredient: {
 		fontSize: 14,
 		color: '#e17055',
+		marginBottom: 4,
+		fontWeight: '500',
+	},
+	vegetarianSection: {
+		padding: 20,
+		backgroundColor: '#fff9c4',
+		borderTopWidth: 1,
+		borderTopColor: '#eee',
+		borderLeftWidth: 4,
+		borderLeftColor: '#FFC107',
+	},
+	vegetarianTitle: {
+		fontSize: 18,
+		fontWeight: 'bold',
+		color: '#F57C00',
+		marginBottom: 12,
+	},
+	vegetarianList: {
+		paddingLeft: 8,
+	},
+	vegetarianIngredient: {
+		fontSize: 14,
+		color: '#F57C00',
 		marginBottom: 4,
 		fontWeight: '500',
 	},
