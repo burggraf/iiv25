@@ -29,6 +29,50 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Initialize Supabase clients
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // Create client with anon key to verify user authentication
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: req.headers.get('Authorization') ?? '' },
+      },
+    });
+
+    // Verify user authentication
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    
+    if (authError || !user) {
+      console.log('❌ Authentication failed:', authError?.message || 'No user found');
+      return new Response(JSON.stringify({ 
+        error: 'Authentication required. Anonymous users cannot access this function.' 
+      }), {
+        status: 401,
+        headers: { 
+          'Content-Type': 'application/json',
+        }
+      });
+    }
+
+    if (user.is_anonymous) {
+      console.log('❌ Anonymous user attempted to access function');
+      return new Response(JSON.stringify({ 
+        error: 'Anonymous users are not allowed to access this function. Please sign in with a valid account.' 
+      }), {
+        status: 403,
+        headers: { 
+          'Content-Type': 'application/json',
+        }
+      });
+    }
+
+    console.log(`✅ Authenticated user: ${user.email || user.id}`);
+    
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const { imageBase64, upc, openFoodFactsData }: ParseIngredientsRequest = await req.json();
     
     if (!imageBase64) {
@@ -44,11 +88,6 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
@@ -258,13 +297,13 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
               .insert({
                 type: 'ingredient_scan',
                 input: upc,
+                userid: user.id,
                 result: classificationResult,
                 metadata: {
                   ingredients: parsedResult.ingredients,
                   confidence: parsedResult.confidence,
                   operation: existingProduct ? 'update' : 'create'
-                },
-                created_at: new Date().toISOString()
+                }
               });
 
             if (logError) {
