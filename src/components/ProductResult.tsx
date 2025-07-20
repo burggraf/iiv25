@@ -234,6 +234,25 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         </View>
       )}
 
+      {/* May Be Non-Vegetarian Ingredients */}
+      {ingredientClassifications.filter(ing => ing.class === 'may be non-vegetarian').length > 0 && (
+        <View style={styles.mayBeNonVegSection}>
+          <Text style={styles.mayBeNonVegTitle}>⚠️ May Be Non-Vegetarian:</Text>
+          <Text style={styles.mayBeNonVegSubtitle}>
+            The following ingredients may be derived from either animal sources or plant-based sources. Please verify the source of each of these ingredients individually.
+          </Text>
+          <View style={styles.mayBeNonVegList}>
+            {ingredientClassifications
+              .filter(ing => ing.class === 'may be non-vegetarian')
+              .map((ingredient, index) => (
+                <Text key={index} style={styles.mayBeNonVegIngredient}>
+                  • {ingredient.title}
+                </Text>
+              ))}
+          </View>
+        </View>
+      )}
+
       {/* Ingredients */}
       {product.ingredients.length > 0 && (
         <View style={styles.ingredientsSection}>
@@ -467,6 +486,35 @@ const styles = StyleSheet.create({
   unknownIngredient: {
     fontSize: 14,
     color: '#FF9800',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  mayBeNonVegSection: {
+    padding: 20,
+    backgroundColor: '#ffeaa7',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#fdcb6e',
+  },
+  mayBeNonVegTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#e17055',
+    marginBottom: 8,
+  },
+  mayBeNonVegSubtitle: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  mayBeNonVegList: {
+    paddingLeft: 8,
+  },
+  mayBeNonVegIngredient: {
+    fontSize: 14,
+    color: '#e17055',
     marginBottom: 4,
     fontWeight: '500',
   },
