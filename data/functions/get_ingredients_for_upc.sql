@@ -1,5 +1,8 @@
 CREATE OR REPLACE FUNCTION get_ingredients_for_upc(input_upc TEXT)
-RETURNS TABLE(title TEXT, class TEXT) AS $$
+RETURNS TABLE(title TEXT, class TEXT) 
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
   SELECT i.title, i.class
   FROM ingredients i
   WHERE i.title = ANY(
@@ -11,4 +14,4 @@ RETURNS TABLE(title TEXT, class TEXT) AS $$
       '~'
     )
   );
-$$ LANGUAGE sql;
+$$;

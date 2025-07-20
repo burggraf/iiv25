@@ -1,16 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Product, VeganStatus } from '../types';
 import Logo from './Logo';
 import LogoWhite from './LogoWhite';
+import { supabase } from '../services/supabaseClient';
 
 interface ProductResultProps {
   product: Product;
   onBack: () => void;
 }
 
+interface IngredientClassification {
+  title: string;
+  class: string;
+}
+
 export default function ProductResult({ product, onBack }: ProductResultProps) {
+  const [ingredientClassifications, setIngredientClassifications] = useState<IngredientClassification[]>([]);
+  const [loadingIngredients, setLoadingIngredients] = useState(false);
+
+  // Fetch ingredient classifications from database
+  useEffect(() => {
+    const fetchIngredientClassifications = async () => {
+      if (!product.barcode) return;
+      
+      setLoadingIngredients(true);
+      try {
+        const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
+          input_upc: product.barcode
+        });
+
+        if (error) {
+          console.error('Error fetching ingredient classifications:', error);
+        } else {
+          setIngredientClassifications(data || []);
+        }
+      } catch (err) {
+        console.error('Exception fetching ingredient classifications:', err);
+      } finally {
+        setLoadingIngredients(false);
+      }
+    };
+
+    fetchIngredientClassifications();
+  }, [product.barcode]);
+
+  // Keep minimal logging for ingredient classifications
+  console.log('Ingredient classifications loaded:', ingredientClassifications.length);
+
   const getVerdictColor = (verdict: string): string => {
     switch (verdict) {
       case 'vegan':
