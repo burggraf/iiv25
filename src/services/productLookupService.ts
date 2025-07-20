@@ -57,68 +57,76 @@ export class ProductLookupService {
 					// Use the classification field
 					const veganStatus = SupabaseService.getProductVeganStatus(supabaseResult.product)
 
-					// Check if we have a valid classification
-					if (veganStatus !== VeganStatus.UNKNOWN) {
-						console.log(`🎯 Using database result: ${veganStatus}`)
-						const classificationSource = `classification field "${supabaseResult.product.classification}"`
-						decisionLog.push(`✅ Database hit: Using ${classificationSource} → ${veganStatus}`)
+					// Always use database product if found, regardless of classification status
+					console.log(`🎯 Using database result: ${veganStatus}`)
+					const classificationSource = `classification field "${supabaseResult.product.classification}"`
+					decisionLog.push(`✅ Database hit: Using ${classificationSource} → ${veganStatus}`)
 
-						// Create product from database data
-						finalProduct = {
-							id: supabaseResult.product.ean13 || barcode,
-							barcode: barcode,
-							name: supabaseResult.product.product_name || 'Unknown Product',
-							brand: supabaseResult.product.brand || undefined,
-							ingredients: supabaseResult.product.ingredients
-								? supabaseResult.product.ingredients.split(',').map((i) => i.trim())
-								: [],
-							veganStatus: veganStatus,
-							imageUrl: supabaseResult.product.imageurl || undefined,
-							issues: supabaseResult.product.issues || undefined,
-							lastScanned: new Date(),
-							classificationMethod: 'structured',
-						}
+					// Create product from database data
+					finalProduct = {
+						id: supabaseResult.product.ean13 || barcode,
+						barcode: barcode,
+						name: supabaseResult.product.product_name || 'Unknown Product',
+						brand: supabaseResult.product.brand || undefined,
+						ingredients: supabaseResult.product.ingredients
+							? supabaseResult.product.ingredients.split(',').map((i) => i.trim())
+							: [],
+						veganStatus: veganStatus,
+						imageUrl: supabaseResult.product.imageurl || undefined,
+						issues: supabaseResult.product.issues || undefined,
+						lastScanned: new Date(),
+						classificationMethod: 'structured',
+					}
 
-						dataSource = 'supabase'
+					dataSource = 'supabase'
 
-						// Check if we need to fetch image from OpenFoodFacts
-						if (supabaseResult.product.imageurl) {
-							console.log('✅ Using image from database')
-							decisionLog.push('🖼️ Using existing image from database')
+					// Special handling for "undetermined" classification - check if we already have ingredients
+					if (supabaseResult.product.classification === 'undetermined' && veganStatus === VeganStatus.UNKNOWN) {
+						console.log('🔍 Product has "undetermined" classification - checking if ingredients exist...')
+						
+						// If we already have ingredients from the database result, don't offer ingredient scanning
+						if (supabaseResult.product.ingredients && supabaseResult.product.ingredients.trim() !== '') {
+							console.log('✅ Product already has ingredients on file - keeping as UNKNOWN without scan option')
+							console.log(`   Ingredients: ${supabaseResult.product.ingredients}`)
+							decisionLog.push('📝 Product has undetermined classification but ingredients exist - no scan needed')
+							
+							// Keep as UNKNOWN but the UI will know not to show scan button since ingredients exist
+							// The ingredients array will be populated, indicating no scan is needed
 						} else {
-							console.log('🖼️ No image in database - fetching from OpenFoodFacts...')
-							try {
-								const offProduct = await OpenFoodFactsService.getProductByBarcode(barcode)
-								console.log('🌐 OpenFoodFacts image fetch result:', offProduct)
-								if (offProduct?.imageUrl) {
-									finalProduct.imageUrl = offProduct.imageUrl
-									console.log('✅ Got product image from OpenFoodFacts')
-									decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
-									
-									// Trigger async update to save image to database
-									console.log('🔄 Database missing image - triggering async update...')
-									// Fire and forget - don't await this
-									ProductLookupService.updateProductImageAsync(barcode).catch((err) => {
-										console.log('⚠️ Async image update failed (non-blocking):', err)
-									})
-									decisionLog.push('🔄 Triggered async database image update')
-								} else {
-									console.log('❌ No image available from OpenFoodFacts')
-									decisionLog.push('❌ No image available from OpenFoodFacts')
-								}
-							} catch (imgErr) {
-								console.log('⚠️ Failed to fetch image from OpenFoodFacts:', imgErr)
-								decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts')
-							}
+							console.log('❌ No ingredients found - scan option will be available')
+							decisionLog.push('❌ Product has undetermined classification and no ingredients - scan option available')
 						}
+					}
+
+					// Check if we need to fetch image from OpenFoodFacts
+					if (supabaseResult.product.imageurl) {
+						console.log('✅ Using image from database')
+						decisionLog.push('🖼️ Using existing image from database')
 					} else {
-						console.log(
-							`❓ Database result has no valid classification - falling back to OpenFoodFacts`
-						)
-						console.log(`   Classification: "${supabaseResult.product.classification || 'none'}"`)
-						decisionLog.push(
-							`❓ Database result has no valid classification - falling back to OpenFoodFacts`
-						)
+						console.log('🖼️ No image in database - fetching from OpenFoodFacts...')
+						try {
+							const offProduct = await OpenFoodFactsService.getProductByBarcode(barcode)
+							console.log('🌐 OpenFoodFacts image fetch result:', offProduct)
+							if (offProduct?.imageUrl) {
+								finalProduct.imageUrl = offProduct.imageUrl
+								console.log('✅ Got product image from OpenFoodFacts')
+								decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
+								
+								// Trigger async update to save image to database
+								console.log('🔄 Database missing image - triggering async update...')
+								// Fire and forget - don't await this
+								ProductLookupService.updateProductImageAsync(barcode).catch((err) => {
+									console.log('⚠️ Async image update failed (non-blocking):', err)
+								})
+								decisionLog.push('🔄 Triggered async database image update')
+							} else {
+								console.log('❌ No image available from OpenFoodFacts')
+								decisionLog.push('❌ No image available from OpenFoodFacts')
+							}
+						} catch (imgErr) {
+							console.log('⚠️ Failed to fetch image from OpenFoodFacts:', imgErr)
+							decisionLog.push('⚠️ Failed to fetch image from OpenFoodFacts')
+						}
 					}
 				} else {
 					console.log('❌ Product not found in Supabase database')

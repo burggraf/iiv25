@@ -137,8 +137,10 @@ export default function ScannerScreen() {
 	}
 
 	const showOverlay = () => {
-		// Use larger height if product is UNKNOWN (to accommodate scan button)
-		const height = scannedProduct?.veganStatus === VeganStatus.UNKNOWN ? 160 : 120
+		// Use larger height only if product is UNKNOWN AND has no ingredients (to accommodate scan button)
+		const needsScanButton = scannedProduct?.veganStatus === VeganStatus.UNKNOWN && 
+								(!scannedProduct.ingredients || scannedProduct.ingredients.length === 0)
+		const height = needsScanButton ? 160 : 120
 		Animated.timing(overlayHeight, {
 			toValue: height,
 			duration: 300,
@@ -455,7 +457,8 @@ export default function ScannerScreen() {
 									)}
 								</View>
 							</TouchableOpacity>
-							{scannedProduct.veganStatus === VeganStatus.UNKNOWN && (
+							{scannedProduct.veganStatus === VeganStatus.UNKNOWN && 
+							 (!scannedProduct.ingredients || scannedProduct.ingredients.length === 0) && (
 								<TouchableOpacity
 									style={styles.scanIngredientsButtonSmall}
 									onPress={handleScanIngredients}
