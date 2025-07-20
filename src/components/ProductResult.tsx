@@ -215,6 +215,22 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         </View>
       )}
 
+      {/* Non-vegetarian Ingredients */}
+      {ingredientClassifications.filter(ing => ing.class === 'non-vegetarian').length > 0 && (
+        <View style={styles.nonVegetarianSection}>
+          <Text style={styles.nonVegetarianTitle}>❌ Non-vegetarian Ingredients:</Text>
+          <View style={styles.nonVegetarianList}>
+            {ingredientClassifications
+              .filter(ing => ing.class === 'non-vegetarian')
+              .map((ingredient, index) => (
+                <Text key={index} style={styles.nonVegetarianIngredient}>
+                  • {ingredient.title}
+                </Text>
+              ))}
+          </View>
+        </View>
+      )}
+
       {/* Unknown Ingredients */}
       {ingredientClassifications.filter(ing => ing.class === null || ing.class === 'null').length > 0 && (
         <View style={styles.unknownIngredientsSection}>
@@ -246,6 +262,44 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
               .filter(ing => ing.class === 'may be non-vegetarian')
               .map((ingredient, index) => (
                 <Text key={index} style={styles.mayBeNonVegIngredient}>
+                  • {ingredient.title}
+                </Text>
+              ))}
+          </View>
+        </View>
+      )}
+
+      {/* Typically Vegetarian Ingredients */}
+      {ingredientClassifications.filter(ing => ing.class === 'typically vegetarian').length > 0 && (
+        <View style={styles.typicallyVegetarianSection}>
+          <Text style={styles.typicallyVegetarianTitle}>🟡 Typically Vegetarian Ingredients:</Text>
+          <Text style={styles.typicallyVegetarianSubtitle}>
+            The following ingredients are typically vegetarian, but there are rare exceptions. Please double-check these ingredients.
+          </Text>
+          <View style={styles.typicallyVegetarianList}>
+            {ingredientClassifications
+              .filter(ing => ing.class === 'typically vegetarian')
+              .map((ingredient, index) => (
+                <Text key={index} style={styles.typicallyVegetarianIngredient}>
+                  • {ingredient.title}
+                </Text>
+              ))}
+          </View>
+        </View>
+      )}
+
+      {/* Typically Vegan Ingredients */}
+      {ingredientClassifications.filter(ing => ing.class === 'typically vegan').length > 0 && (
+        <View style={styles.typicallyVeganSection}>
+          <Text style={styles.typicallyVeganTitle}>🟢 Typically Vegan Ingredients:</Text>
+          <Text style={styles.typicallyVeganSubtitle}>
+            The following ingredients are typically vegan, but in very rare instances these ingredients be sourced from animal products. Please double-check this ingredients for this product.
+          </Text>
+          <View style={styles.typicallyVeganList}>
+            {ingredientClassifications
+              .filter(ing => ing.class === 'typically vegan')
+              .map((ingredient, index) => (
+                <Text key={index} style={styles.typicallyVeganIngredient}>
                   • {ingredient.title}
                 </Text>
               ))}
@@ -460,6 +514,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  nonVegetarianSection: {
+    padding: 20,
+    backgroundColor: '#ffebee',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  nonVegetarianTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F44336',
+    marginBottom: 12,
+  },
+  nonVegetarianList: {
+    paddingLeft: 8,
+  },
+  nonVegetarianIngredient: {
+    fontSize: 14,
+    color: '#F44336',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
   unknownIngredientsSection: {
     padding: 20,
     backgroundColor: '#fff8e1',
@@ -515,6 +592,64 @@ const styles = StyleSheet.create({
   mayBeNonVegIngredient: {
     fontSize: 14,
     color: '#e17055',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  typicallyVegetarianSection: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6c757d',
+  },
+  typicallyVegetarianTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6c757d',
+    marginBottom: 8,
+  },
+  typicallyVegetarianSubtitle: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  typicallyVegetarianList: {
+    paddingLeft: 8,
+  },
+  typicallyVegetarianIngredient: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  typicallyVeganSection: {
+    padding: 20,
+    backgroundColor: '#f0f8f0',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  typicallyVeganTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 8,
+  },
+  typicallyVeganSubtitle: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  typicallyVeganList: {
+    paddingLeft: 8,
+  },
+  typicallyVeganIngredient: {
+    fontSize: 14,
+    color: '#4CAF50',
     marginBottom: 4,
     fontWeight: '500',
   },
