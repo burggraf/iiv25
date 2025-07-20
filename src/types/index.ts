@@ -100,6 +100,7 @@ export interface SupabaseProduct {
   ingredients?: string;
   classification?: string;
   image_url?: string;
+  issues?: string;
   created_at?: string;
   updated_at?: string;
 }
