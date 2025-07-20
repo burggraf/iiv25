@@ -215,6 +215,25 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         </View>
       )}
 
+      {/* Unknown Ingredients */}
+      {ingredientClassifications.filter(ing => ing.class === null || ing.class === 'null').length > 0 && (
+        <View style={styles.unknownIngredientsSection}>
+          <Text style={styles.unknownSectionTitle}>⚠️ Unknown Ingredients:</Text>
+          <Text style={styles.unknownSubtitle}>
+            The following ingredients are unknown and may alter the outcome of this diagnosis - please double-check these ingredients individually.
+          </Text>
+          <View style={styles.unknownIngredientsList}>
+            {ingredientClassifications
+              .filter(ing => ing.class === null || ing.class === 'null')
+              .map((ingredient, index) => (
+                <Text key={index} style={styles.unknownIngredient}>
+                  • {ingredient.title}
+                </Text>
+              ))}
+          </View>
+        </View>
+      )}
+
       {/* Ingredients */}
       {product.ingredients.length > 0 && (
         <View style={styles.ingredientsSection}>
@@ -421,6 +440,35 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  unknownIngredientsSection: {
+    padding: 20,
+    backgroundColor: '#fff8e1',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  unknownSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginBottom: 8,
+  },
+  unknownSubtitle: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  unknownIngredientsList: {
+    paddingLeft: 8,
+  },
+  unknownIngredient: {
+    fontSize: 14,
+    color: '#FF9800',
+    marginBottom: 4,
+    fontWeight: '500',
   },
   disclaimer: {
     padding: 20,
