@@ -158,9 +158,11 @@ export class ProductLookupService {
 							`✅ OpenFoodFacts hit: ${productData.veganStatus} (${productData.classificationMethod})`
 						)
 
-						// Check if product has valid ingredients to add to database
+						// Always create product in database when found in OpenFoodFacts
+						console.log('🔄 Product found in OpenFoodFacts - triggering database creation...')
+						
 						if (productData.ingredients && productData.ingredients.length > 0) {
-							console.log('🔄 Product has ingredients - triggering database creation...')
+							console.log('✅ Product has ingredients - creating with classification')
 							decisionLog.push('🔄 Triggering database creation with ingredients')
 							
 							// Fire and forget - create product in database and get our classification
@@ -168,8 +170,13 @@ export class ProductLookupService {
 								console.log('⚠️ Async product creation failed (non-blocking):', err)
 							})
 						} else {
-							console.log('⚠️ Product has no ingredients - skipping database creation')
-							decisionLog.push('⚠️ Product has no ingredients - skipping database creation')
+							console.log('❌ Product has no ingredients - creating basic record for future ingredient scanning')
+							decisionLog.push('🔄 Creating database record without ingredients - ready for user ingredient scan')
+							
+							// Fire and forget - create basic product record using update-product-from-off edge function
+							ProductLookupService.createProductFromOFFAsync(barcode).catch((err) => {
+								console.log('⚠️ Async OpenFoodFacts product creation failed (non-blocking):', err)
+							})
 						}
 					} else {
 						console.log('❌ Product not found in OpenFoodFacts')
@@ -296,6 +303,35 @@ export class ProductLookupService {
 			}
 		} catch (err) {
 			console.log(`❌ Failed to create product in database for ${barcode}:`, err)
+			// Don't throw - this is fire and forget
+		}
+	}
+
+	/**
+	 * Asynchronously create a basic product record from OpenFoodFacts data
+	 * Used when product exists in OpenFoodFacts but has no ingredients
+	 */
+	private static async createProductFromOFFAsync(barcode: string): Promise<void> {
+		try {
+			console.log(`🔄 Creating basic product record from OpenFoodFacts for barcode: ${barcode}`)
+			
+			const { data, error } = await supabase.functions.invoke('update-product-from-off', {
+				body: { upc: barcode }
+			})
+			
+			if (error) {
+				console.log(`⚠️ Product creation from OFF edge function error for ${barcode}:`, error.message)
+				return
+			} 
+			
+			console.log(`✅ Basic product record created from OpenFoodFacts for ${barcode}:`, data)
+			
+			if (data && data.success) {
+				console.log(`📋 Product record created - ready for ingredient scanning`)
+				console.log(`📊 Next scan of ${barcode} will load from database`)
+			}
+		} catch (err) {
+			console.log(`❌ Failed to create basic product record from OpenFoodFacts for ${barcode}:`, err)
 			// Don't throw - this is fire and forget
 		}
 	}

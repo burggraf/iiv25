@@ -232,41 +232,37 @@ Deno.serve(async (req: Request) => {
         .filter(id => id.length > 0);
     }
 
-    // Check if we have either ingredients text or analysis ingredients
+    // Log ingredients status but continue even if no ingredients found
     if (!ingredientsText && analysisIngredients.length === 0) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'No ingredients found in OpenFoodFacts data',
-        productCreated: false,
-        classificationChanged: false
-      }), {
-        status: 400,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        }
-      });
+      console.log('⚠️ No ingredients found in OpenFoodFacts data - creating product without ingredients');
+    } else {
+      console.log(`🥗 Found ingredients: ${ingredientsText ? 'text' : 'none'}, analysis: ${analysisIngredients.length} items`);
     }
 
-    // Parse ingredients text for display purposes
-    const ingredients = ingredientsText
-      .split(/[,;]/)
-      .map(ing => ing.trim())
-      .filter(ing => ing.length > 0);
+    // Parse ingredients text for display purposes (handle empty case)
+    const ingredients = ingredientsText 
+      ? ingredientsText
+          .split(/[,;]/)
+          .map(ing => ing.trim())
+          .filter(ing => ing.length > 0)
+      : [];
 
     // Format ingredients for database storage
-    const ingredientsField = ingredients.join(', ');
+    const ingredientsField = ingredients.length > 0 ? ingredients.join(', ') : '';
     
     // Use analysis ingredients if available, otherwise fall back to parsed text
     let analysisField: string;
     if (analysisIngredients.length > 0) {
       analysisField = analysisIngredients.join('~');
-    } else {
+    } else if (ingredients.length > 0) {
       // Fallback to cleaned parsed ingredients
       const cleanedIngredients = ingredients.map(ing => 
         ing.replace(/[.,!?;:()\[\]{}'"]/g, '').trim().toLowerCase()
       ).filter(ing => ing.length > 0);
       analysisField = cleanedIngredients.join('~');
+    } else {
+      // No ingredients at all - empty analysis field
+      analysisField = '';
     }
 
     console.log(`🥗 Processed ${ingredients.length} display ingredients`);
