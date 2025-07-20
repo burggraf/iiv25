@@ -16,8 +16,6 @@ export interface SupabaseProduct {
   product_name?: string;
   brand?: string;
   ingredients?: string;
-  calculated_code?: number;
-  override_code?: number;
   classification?: string;
   imageurl?: string;
   created?: string;
@@ -60,33 +58,6 @@ export class SupabaseService {
     }
   }
 
-  /**
-   * Map calculated_code from database to VeganStatus enum (legacy method for backward compatibility)
-   * Based on product-code-map.txt mapping
-   * @param calculatedCode - The calculated_code from the database
-   * @returns VeganStatus enum value
-   */
-  static mapCalculatedCodeToVeganStatus(calculatedCode: number | null | undefined): VeganStatus {
-    if (!calculatedCode) {
-      return VeganStatus.UNKNOWN;
-    }
-
-    switch (calculatedCode) {
-      case 100: // Definitely Vegan
-        return VeganStatus.VEGAN;
-      case 200: // Definitely Vegetarian
-      case 400: // Probably Vegetarian
-        return VeganStatus.VEGETARIAN;
-      case 300: // Probably Not Vegan
-      case 600: // May Not Be Vegetarian
-      case 700: // Probably Not Vegetarian
-      case 800: // Definitely Not Vegetarian
-        return VeganStatus.NOT_VEGAN;
-      case 500: // Not Sure
-      default:
-        return VeganStatus.UNKNOWN;
-    }
-  }
 
   /**
    * Check if classification field represents a valid/actionable result
@@ -103,45 +74,23 @@ export class SupabaseService {
   }
 
   /**
-   * Get the best available classification for a product
-   * Prefers the new classification field, falls back to calculated_code
+   * Get the vegan status for a product using the classification field
    * @param product - The product from the database
    * @returns VeganStatus enum value
    */
   static getProductVeganStatus(product: SupabaseProduct): VeganStatus {
-    // First, try the new classification field
+    // Use the classification field
     if (product.classification && this.isValidClassification(product.classification)) {
       const result = this.mapClassificationToVeganStatus(product.classification);
       console.log(`🎯 Using classification field "${product.classification}" → ${result}`);
       return result;
     }
     
-    // Fall back to calculated_code if classification is not available or invalid
-    if (product.calculated_code && this.isValidCalculatedCode(product.calculated_code)) {
-      const result = this.mapCalculatedCodeToVeganStatus(product.calculated_code);
-      console.log(`⚠️ Falling back to calculated_code ${product.calculated_code} → ${result}`);
-      return result;
-    }
-    
-    // If neither is available or valid, return unknown
+    // If classification is not available or invalid, return unknown
     console.log(`❌ No valid classification available, returning UNKNOWN`);
     return VeganStatus.UNKNOWN;
   }
 
-  /**
-   * Check if calculated_code represents a valid/actionable result (legacy method for backward compatibility)
-   * We only trust codes other than 500 (Not Sure)
-   * @param calculatedCode - The calculated_code from the database
-   * @returns true if the code represents a confident classification
-   */
-  static isValidCalculatedCode(calculatedCode: number | null | undefined): boolean {
-    if (!calculatedCode) {
-      return false;
-    }
-    
-    // We trust all codes except 500 (Not Sure)
-    return [100, 200, 300, 400, 600, 700, 800].includes(calculatedCode);
-  }
 
   /**
    * Search for ingredients by title using PostgreSQL function with auth check and logging

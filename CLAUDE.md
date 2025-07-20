@@ -29,7 +29,7 @@ A cross-platform mobile app that allows users to scan food product barcodes and 
 2. **Supabase Database Integration**
    - Set up Supabase client configuration
    - Create SupabaseService for product/ingredient queries
-   - Implement VeganClassificationService using existing calculated_code/override_code
+   - Implement VeganClassificationService using existing classification field
    - Query products table by UPC/EAN13 for instant results
 
 3. **Product Data Flow**
@@ -82,7 +82,7 @@ A cross-platform mobile app that allows users to scan food product barcodes and 
 
 2. **VeganClassificationService** (`src/services/veganClassificationService.ts`)
    - Extract and enhance existing classification logic
-   - Map calculated_code/override_code to VeganStatus enum
+   - Map classification field to VeganStatus enum
    - Ingredient-level classification using ingredients table
    - Consistent classification across data sources
 
@@ -134,7 +134,7 @@ eas submit --platform all
 ### Primary Data Source: Supabase Database
 - **Products Table**: 411,000+ products with UPC/EAN13, ingredients, calculated vegan status
 - **Ingredients Table**: 227,000+ ingredients with vegan/vegetarian classifications
-- **Classification System**: Uses calculated_code and override_code for vegan status determination
+- **Classification System**: Uses classification field for vegan status determination
 - **Performance**: Instant local database queries for existing products
 
 ### Secondary Data Source: Open Food Facts API
@@ -146,7 +146,7 @@ eas submit --platform all
 ### Data Flow Strategy
 1. **Barcode Scan** → Query Supabase products table by UPC/EAN13
 2. **If Found in Supabase**: 
-   - Use existing calculated_code/override_code + ingredients classification
+   - Use existing classification field + ingredients classification
    - Query OpenFoodFacts API for product image and additional metadata
 3. **If Not Found in Supabase**: Query Open Food Facts API for complete product data
 4. **If Found in OpenFoodFacts**: Process with VeganClassificationService and add to Supabase
@@ -175,7 +175,7 @@ eas submit --platform all
 
 2. **VeganClassificationService Development**
    - Extract classification logic from OpenFoodFactsService
-   - Implement calculated_code/override_code mapping to VeganStatus
+   - Implement classification field mapping to VeganStatus
    - Create ingredient-level classification using ingredients table
 
 3. **ProductService Implementation**

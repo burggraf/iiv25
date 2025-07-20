@@ -53,19 +53,14 @@ export class ProductLookupService {
 					console.log('✅ Found product in Supabase database')
 					console.log(`📝 Product: ${supabaseResult.product.product_name}`)
 					console.log(`🏷️ Classification: ${supabaseResult.product.classification}`)
-					console.log(`🔢 Calculated Code: ${supabaseResult.product.calculated_code}`)
 
-					// Use the best available classification (prefers classification field, falls back to calculated_code)
+					// Use the classification field
 					const veganStatus = SupabaseService.getProductVeganStatus(supabaseResult.product)
 
 					// Check if we have a valid classification
 					if (veganStatus !== VeganStatus.UNKNOWN) {
 						console.log(`🎯 Using database result: ${veganStatus}`)
-						const classificationSource =
-							supabaseResult.product.classification &&
-							SupabaseService.isValidClassification(supabaseResult.product.classification)
-								? `classification field "${supabaseResult.product.classification}"`
-								: `calculated_code ${supabaseResult.product.calculated_code}`
+						const classificationSource = `classification field "${supabaseResult.product.classification}"`
 						decisionLog.push(`✅ Database hit: Using ${classificationSource} → ${veganStatus}`)
 
 						// Create product from database data
@@ -120,7 +115,6 @@ export class ProductLookupService {
 							`❓ Database result has no valid classification - falling back to OpenFoodFacts`
 						)
 						console.log(`   Classification: "${supabaseResult.product.classification || 'none'}"`)
-						console.log(`   Calculated Code: ${supabaseResult.product.calculated_code || 'none'}`)
 						decisionLog.push(
 							`❓ Database result has no valid classification - falling back to OpenFoodFacts`
 						)

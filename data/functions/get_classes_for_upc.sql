@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION get_classes_for_upc(input_upc TEXT)
 RETURNS TABLE(class TEXT) AS $$
-  SELECT DISTINCT i.class
+  SELECT DISTINCT COALESCE(i.class, 'null') as class
   FROM ingredients i
   WHERE i.title = ANY(
     STRING_TO_ARRAY(
@@ -11,6 +11,5 @@ RETURNS TABLE(class TEXT) AS $$
       '~'
     )
   )
-  AND i.class IS NOT NULL
-  AND i.class != 'ignore';
+  AND COALESCE(i.class, 'null') != 'ignore';
 $$ LANGUAGE sql;

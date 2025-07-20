@@ -287,13 +287,6 @@ Deno.serve(async (req: Request) => {
       imageurl: product.image_url || '',
       lastupdated: now,
       created: now,
-      override_code: 0,
-      override_notes: '',
-      calculated_code: 0,
-      calculated_code_sugar_vegan: 0,
-      calculated_code_sugar_vegetarian: 0,
-      gs1cat: '',
-      rerun: null,
       classification: 'undetermined' // Will be updated by classify_upc
     };
     

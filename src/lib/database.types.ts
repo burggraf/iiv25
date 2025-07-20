@@ -157,64 +157,40 @@ export type Database = {
         Row: {
           analysis: string | null
           brand: string | null
-          calculated_code: number
-          calculated_code_sugar_vegan: number
-          calculated_code_sugar_vegetarian: number
           classification: string | null
           created: string
           ean13: string
-          gs1cat: string
           imageurl: string | null
           ingredients: string | null
-          ingredientsaddedtomasterlist: number | null
           lastupdated: string
           mfg: string | null
-          override_code: number
-          override_notes: string
           product_name: string | null
-          rerun: string | null
           upc: string | null
         }
         Insert: {
           analysis?: string | null
           brand?: string | null
-          calculated_code?: number
-          calculated_code_sugar_vegan?: number
-          calculated_code_sugar_vegetarian?: number
           classification?: string | null
           created?: string
           ean13: string
-          gs1cat?: string
           imageurl?: string | null
           ingredients?: string | null
-          ingredientsaddedtomasterlist?: number | null
           lastupdated?: string
           mfg?: string | null
-          override_code?: number
-          override_notes: string
           product_name?: string | null
-          rerun?: string | null
           upc?: string | null
         }
         Update: {
           analysis?: string | null
           brand?: string | null
-          calculated_code?: number
-          calculated_code_sugar_vegan?: number
-          calculated_code_sugar_vegetarian?: number
           classification?: string | null
           created?: string
           ean13?: string
-          gs1cat?: string
           imageurl?: string | null
           ingredients?: string | null
-          ingredientsaddedtomasterlist?: number | null
           lastupdated?: string
           mfg?: string | null
-          override_code?: number
-          override_notes?: string
           product_name?: string | null
-          rerun?: string | null
           upc?: string | null
         }
         Relationships: []
@@ -286,7 +262,9 @@ export type Database = {
         }[]
       }
       get_rate_limits: {
-        Args: { action_type: string; device_id?: string }
+        Args:
+          | { action_type: string }
+          | { action_type: string; device_id?: string }
         Returns: {
           subscription_level: string
           rate_limit: number
@@ -300,23 +278,25 @@ export type Database = {
         Returns: string
       }
       lookup_product: {
-        Args: { barcode: string; device_id: string }
+        Args: { barcode: string } | { barcode: string; device_id: string }
         Returns: {
           ean13: string
           upc: string
           product_name: string
           brand: string
-          ingredients: string | null
+          ingredients: string
           calculated_code: number
           override_code: number
-          classification: string | null
-          imageurl: string | null
+          classification: string
+          imageurl: string
           created: string
           lastupdated: string
         }[]
       }
       search_ingredients: {
-        Args: { search_term: string; device_id: string }
+        Args:
+          | { search_term: string }
+          | { search_term: string; device_id: string }
         Returns: {
           title: string
           class: string

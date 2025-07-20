@@ -97,8 +97,7 @@ export interface SupabaseProduct {
   product_name?: string;
   brand?: string;
   ingredients?: string;
-  calculated_code?: string;
-  override_code?: string;
+  classification?: string;
   image_url?: string;
   created_at?: string;
   updated_at?: string;
