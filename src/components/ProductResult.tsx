@@ -120,6 +120,12 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         <View style={[styles.statusHeader, { backgroundColor: getStatusColor(product.veganStatus) }]}>
           <View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
           <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
+          {product.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && (
+            <View style={styles.warningContainer}>
+              <Text style={styles.warningIcon}>⚠️</Text>
+              <Text style={styles.warningText}>see product detail</Text>
+            </View>
+          )}
         </View>
 
       {/* Product Info */}
@@ -267,6 +273,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'center',
+  },
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  warningIcon: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  warningText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
   },
   productInfo: {
     padding: 20,

@@ -419,6 +419,12 @@ export default function ScannerScreen() {
 										<Text style={styles.overlayStatusText}>
 											{getStatusText(scannedProduct.veganStatus)}
 										</Text>
+										{scannedProduct.veganStatus === VeganStatus.VEGAN && scannedProduct.issues && scannedProduct.issues.trim() !== '' && (
+											<View style={styles.overlayWarningContainer}>
+												<Text style={styles.overlayWarningIcon}>⚠️</Text>
+												<Text style={styles.overlayWarningText}>see product detail</Text>
+											</View>
+										)}
 									</View>
 								</View>
 							</TouchableOpacity>
@@ -455,7 +461,7 @@ export default function ScannerScreen() {
 
 			{/* Bottom Instructions */}
 			<View style={styles.bottomInstructions}>
-				<Text style={styles.tipText}>💡 Scan continuously - tap product card to view details</Text>
+				<Text style={styles.tipText}>💡 Scan continuously{'\n'}Tap product card to view details</Text>
 			</View>
 
 			{/* Product Detail Overlay */}
@@ -666,6 +672,21 @@ const styles = StyleSheet.create({
 		color: 'white',
 		fontSize: 12,
 		fontWeight: 'bold',
+	},
+	overlayWarningContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginTop: 4,
+	},
+	overlayWarningIcon: {
+		fontSize: 10,
+		marginRight: 2,
+	},
+	overlayWarningText: {
+		fontSize: 8,
+		color: 'white',
+		fontWeight: '500',
 	},
 	overlayErrorContent: {
 		flex: 1,
