@@ -290,6 +290,7 @@ export type Database = {
           ingredients: string
           classification: string
           imageurl: string
+          issues: string
           created: string
           lastupdated: string
         }[]

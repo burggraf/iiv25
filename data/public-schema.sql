@@ -167,7 +167,7 @@ ALTER FUNCTION "public"."get_classes_for_upc"("input_upc" "text") OWNER TO "post
 
 
 CREATE OR REPLACE FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") RETURNS TABLE("title" "text", "class" "text")
-    LANGUAGE "sql"
+    LANGUAGE "sql" SECURITY DEFINER
     AS $$
   SELECT i.title, i.class
   FROM ingredients i
@@ -440,7 +440,7 @@ $$;
 ALTER FUNCTION "public"."get_subscription_status"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -491,6 +491,7 @@ BEGIN
             'You have exceeded your search limit'::VARCHAR(4096) as ingredients,
             'RATE_LIMIT'::TEXT as classification,
             NULL::TEXT as imageurl,
+            NULL::TEXT as issues,
             NOW() as created,
             NOW() as lastupdated;
         RETURN;
@@ -509,6 +510,7 @@ BEGIN
         p.ingredients,
         p.classification,
         p.imageurl,
+        p.issues,
         p.created,
         p.lastupdated
     FROM public.products p
@@ -1169,6 +1171,7 @@ GRANT ALL ON FUNCTION "public"."get_classes_for_upc"("input_upc" "text") TO "ser
 
 
 GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "authenticated";
 
 
 
