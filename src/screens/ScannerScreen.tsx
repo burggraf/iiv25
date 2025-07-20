@@ -325,7 +325,7 @@ export default function ScannerScreen() {
 
 			<View style={styles.instructionsContainer}>
 				<Text style={styles.instructionText}>
-					{isLoading ? '🔍 Looking up product...' : '📷 Point your camera at a product barcode'}
+					{isLoading ? '🔍 Looking up product...' : '📷 Point your camera at a food product barcode'}
 				</Text>
 			</View>
 
