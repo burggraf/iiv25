@@ -419,13 +419,13 @@ export default function ScannerScreen() {
 										<Text style={styles.overlayStatusText}>
 											{getStatusText(scannedProduct.veganStatus)}
 										</Text>
-										{scannedProduct.veganStatus === VeganStatus.VEGAN && scannedProduct.issues && scannedProduct.issues.trim() !== '' && (
-											<View style={styles.overlayWarningContainer}>
-												<Text style={styles.overlayWarningIcon}>⚠️</Text>
-												<Text style={styles.overlayWarningText}>see product detail</Text>
-											</View>
-										)}
 									</View>
+									{scannedProduct.veganStatus === VeganStatus.VEGAN && scannedProduct.issues && scannedProduct.issues.trim() !== '' && (
+										<View style={styles.overlayWarningRow}>
+											<Text style={styles.overlayWarningIcon}>⚠️</Text>
+											<Text style={styles.overlayWarningText}>see product detail</Text>
+										</View>
+									)}
 								</View>
 							</TouchableOpacity>
 							{scannedProduct.veganStatus === VeganStatus.UNKNOWN && (
@@ -673,20 +673,24 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		fontWeight: 'bold',
 	},
-	overlayWarningContainer: {
+	overlayWarningRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		marginTop: 4,
+		marginTop: 6,
+		backgroundColor: '#fff3cd',
+		paddingVertical: 4,
+		paddingHorizontal: 8,
+		borderRadius: 8,
 	},
 	overlayWarningIcon: {
 		fontSize: 10,
-		marginRight: 2,
+		marginRight: 3,
 	},
 	overlayWarningText: {
-		fontSize: 8,
-		color: 'white',
-		fontWeight: '500',
+		fontSize: 9,
+		color: '#856404',
+		fontWeight: '600',
 	},
 	overlayErrorContent: {
 		flex: 1,

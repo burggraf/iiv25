@@ -120,13 +120,15 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
         <View style={[styles.statusHeader, { backgroundColor: getStatusColor(product.veganStatus) }]}>
           <View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
           <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
-          {product.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && (
-            <View style={styles.warningContainer}>
-              <Text style={styles.warningIcon}>⚠️</Text>
-              <Text style={styles.warningText}>see product detail</Text>
-            </View>
-          )}
         </View>
+
+        {/* Warning for vegan products with issues */}
+        {product.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && (
+          <View style={styles.warningRow}>
+            <Text style={styles.warningIcon}>⚠️</Text>
+            <Text style={styles.warningText}>see product detail</Text>
+          </View>
+        )}
 
       {/* Product Info */}
       <View style={styles.productInfo}>
@@ -274,20 +276,23 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
   },
-  warningContainer: {
+  warningRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    paddingVertical: 12,
+    backgroundColor: '#fff3cd',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffeaa7',
   },
   warningIcon: {
     fontSize: 16,
-    marginRight: 4,
+    marginRight: 6,
   },
   warningText: {
     fontSize: 14,
-    color: 'white',
-    fontWeight: '500',
+    color: '#856404',
+    fontWeight: '600',
   },
   productInfo: {
     padding: 20,
