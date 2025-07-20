@@ -18,6 +18,7 @@ export interface SupabaseProduct {
   ingredients?: string;
   classification?: string;
   imageurl?: string;
+  issues?: string;
   created?: string;
   lastupdated?: string;
 }

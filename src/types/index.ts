@@ -14,6 +14,7 @@ export interface Product {
   ingredients: string[];
   veganStatus: VeganStatus;
   imageUrl?: string;
+  issues?: string;
   lastScanned?: Date;
   structuredIngredients?: StructuredIngredient[];
   nonVeganIngredients?: ClassificationDetail[];

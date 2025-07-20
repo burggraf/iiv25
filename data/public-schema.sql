@@ -545,7 +545,7 @@ $$;
 ALTER FUNCTION "public"."lookup_product"("barcode" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "calculated_code" integer, "override_code" integer, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text" DEFAULT ''::"text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -558,108 +558,62 @@ DECLARE
     decision_reasoning TEXT;
     rate_info RECORD;
 BEGIN
-    -- Check if user is authenticated
+    -- Authentication check
     current_user_id := auth.uid();
-    
     IF current_user_id IS NULL THEN
         RAISE EXCEPTION 'not logged in';
     END IF;
-    
-    -- Validate inputs
-    IF barcode IS NULL OR trim(barcode) = '' THEN
-        RAISE EXCEPTION 'barcode cannot be empty';
-    END IF;
-    
-    IF device_id IS NULL OR trim(device_id) = '' THEN
-        RAISE EXCEPTION 'device_id cannot be empty';
-    END IF;
-    
-    -- Validate and convert device_id to UUID
+
+    -- Convert device_id to UUID or generate one
     BEGIN
         device_uuid := device_id::UUID;
     EXCEPTION WHEN invalid_text_representation THEN
-        RAISE EXCEPTION 'device_id must be a valid UUID';
+        device_uuid := gen_random_uuid();
     END;
-    
-    -- Get rate limit information with device tracking
-    SELECT * INTO rate_info FROM get_rate_limits('product_lookup', device_id);
-    
-    -- Check if user has exceeded rate limit
+
+    -- Check rate limits using the get_rate_limits function
+    SELECT subscription_level, rate_limit, recent_searches, is_rate_limited, searches_remaining
+    INTO rate_info
+    FROM get_rate_limits('product_lookup', device_id);
+
+    -- Handle rate limiting with special response format
     IF rate_info.is_rate_limited THEN
-        -- Return special rate limit response instead of throwing error
-        RETURN QUERY
-        SELECT 
+        RETURN QUERY SELECT
             '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as ean13,
             rate_info.subscription_level::VARCHAR(255) as upc,
-            'Rate limit exceeded'::VARCHAR(255) as product_name,
+            NULL::VARCHAR(255) as product_name,
             rate_info.rate_limit::VARCHAR(255) as brand,
-            'You have exceeded your search limit'::VARCHAR(4096) as ingredients,
-            -1::INTEGER as calculated_code,
-            NULL::INTEGER as override_code,
-            'RATE_LIMIT'::TEXT as classification,
+            NULL::VARCHAR(4096) as ingredients,
+            NULL::TEXT as classification,
             NULL::TEXT as imageurl,
             NOW() as created,
             NOW() as lastupdated;
         RETURN;
     END IF;
-    
-    -- Clean barcode
-    barcode := trim(barcode);
-    
-    -- Search for product by UPC or EAN13
-    RETURN QUERY
-    SELECT 
-        p.ean13,
-        p.upc,
-        p.product_name,
-        p.brand,
-        p.ingredients,
-        p.calculated_code,
-        p.override_code,
-        p.classification,
-        p.imageurl,
-        p.created,
-        p.lastupdated
+
+    -- Product lookup
+    SELECT COUNT(*) INTO product_found
     FROM public.products p
-    WHERE p.upc = barcode OR p.ean13 = barcode
-    ORDER BY p.ean13
-    LIMIT 1;
-    
-    -- Check if product was found
-    GET DIAGNOSTICS product_found = ROW_COUNT;
+    WHERE p.upc = barcode OR p.ean13 = barcode;
     
     -- Determine final vegan status and reasoning
     IF product_found > 0 THEN
-        -- Get both classification and calculated_code from the returned product
-        SELECT p.classification, p.calculated_code::TEXT INTO product_classification, final_vegan_status
+        -- Get classification from the returned product
+        SELECT p.classification INTO product_classification
         FROM public.products p
         WHERE p.upc = barcode OR p.ean13 = barcode
         LIMIT 1;
         
-        -- Prioritize classification field, fall back to calculated_code
+        -- Use the classification field
         IF product_classification IS NOT NULL AND product_classification IN ('vegan', 'vegetarian', 'non-vegetarian') THEN
             -- Use classification field
-            CASE product_classification
-                WHEN 'vegan' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-                WHEN 'vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-                WHEN 'non-vegetarian' THEN decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
-            END CASE;
-        ELSIF final_vegan_status IS NOT NULL AND final_vegan_status != '500' THEN
-            -- Fall back to calculated_code (but skip 500 which means "Not Sure")
-            CASE final_vegan_status
-                WHEN '100' THEN decision_reasoning := 'Database hit: Definitely Vegan (code 100) - using database result';
-                WHEN '200' THEN decision_reasoning := 'Database hit: Definitely Vegetarian (code 200) - using database result';
-                WHEN '300' THEN decision_reasoning := 'Database hit: Probably Not Vegan (code 300) - using database result';
-                WHEN '400' THEN decision_reasoning := 'Database hit: Probably Vegetarian (code 400) - using database result';
-                WHEN '600' THEN decision_reasoning := 'Database hit: May Not Be Vegetarian (code 600) - using database result';
-                WHEN '700' THEN decision_reasoning := 'Database hit: Probably Not Vegetarian (code 700) - using database result';
-                WHEN '800' THEN decision_reasoning := 'Database hit: Definitely Not Vegetarian (code 800) - using database result';
-                ELSE decision_reasoning := format('Database hit: Unknown calculated_code (%s) - will fall back to Open Food Facts', final_vegan_status);
-            END CASE;
+            final_vegan_status := product_classification;
+            decision_reasoning := format('Database hit: Using classification field "%s"', product_classification);
         ELSE
             -- No valid classification available, will fall back to Open Food Facts
-            decision_reasoning := format('Database hit: No valid classification (classification: "%s", code: %s) - will fall back to Open Food Facts', 
-                COALESCE(product_classification, 'null'), COALESCE(final_vegan_status, 'null'));
+            final_vegan_status := 'undetermined';
+            decision_reasoning := format('Database hit: No valid classification (classification: "%s") - will fall back to Open Food Facts', 
+                COALESCE(product_classification, 'null'));
         END IF;
     ELSE
         decision_reasoning := 'Database miss: Product not found in database - will fall back to Open Food Facts';
@@ -672,25 +626,65 @@ BEGIN
         barcode,
         current_user_id,
         device_uuid,
-        CASE 
-            WHEN product_found > 0 THEN 'Product found in database'
-            ELSE 'Product not found in database'
-        END,
-        json_build_object(
-            'barcode', barcode,
-            'device_id', device_id,
-            'database_hit', product_found > 0,
-            'classification', product_classification,
-            'calculated_code', final_vegan_status,
+        CASE WHEN product_found > 0 THEN 'found' ELSE 'not_found' END,
+        jsonb_build_object(
+            'product_found', product_found > 0,
+            'barcode_type', CASE WHEN LENGTH(barcode) = 12 THEN 'UPC' WHEN LENGTH(barcode) = 13 THEN 'EAN13' ELSE 'OTHER' END,
+            'classification', final_vegan_status,
             'decision_reasoning', decision_reasoning,
             'subscription_level', rate_info.subscription_level,
-            'rate_limit', rate_info.rate_limit,
-            'searches_used', rate_info.recent_searches + 1,
-            'search_timestamp', NOW()
+            'searches_remaining', rate_info.searches_remaining
         )
     );
-    
-    RETURN;
+
+    -- Return the product data or empty result
+    IF product_found > 0 THEN
+        RETURN QUERY
+        SELECT 
+            p.ean13,
+            p.upc,
+            p.product_name,
+            p.brand,
+            p.ingredients,
+            p.classification,
+            p.imageurl,
+            p.created,
+            p.lastupdated
+        FROM public.products p
+        WHERE p.upc = barcode OR p.ean13 = barcode
+        LIMIT 1;
+    ELSE
+        -- Return a null result to indicate not found
+        RETURN QUERY SELECT
+            NULL::VARCHAR(255) as ean13,
+            NULL::VARCHAR(255) as upc,
+            NULL::VARCHAR(255) as product_name,
+            NULL::VARCHAR(255) as brand,
+            NULL::VARCHAR(4096) as ingredients,
+            NULL::TEXT as classification,
+            NULL::TEXT as imageurl,
+            NULL::TIMESTAMP WITH TIME ZONE as created,
+            NULL::TIMESTAMP WITH TIME ZONE as lastupdated
+        WHERE FALSE; -- This ensures no rows are returned for not found case
+    END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Log the error
+        INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
+        VALUES (
+            'product_lookup',
+            barcode,
+            COALESCE(current_user_id, '00000000-0000-0000-0000-000000000000'::UUID),
+            COALESCE(device_uuid, '00000000-0000-0000-0000-000000000000'::UUID),
+            'error',
+            jsonb_build_object(
+                'error_message', SQLERRM,
+                'error_state', SQLSTATE,
+                'barcode', barcode
+            )
+        );
+        RAISE;
 END;
 $$;
 
@@ -1240,7 +1234,8 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "created" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "mfg" character varying(255),
     "imageurl" "text",
-    "classification" "text"
+    "classification" "text",
+    "issues" "text"
 );
 
 

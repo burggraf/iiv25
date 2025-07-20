@@ -74,6 +74,7 @@ export class ProductLookupService {
 								: [],
 							veganStatus: veganStatus,
 							imageUrl: supabaseResult.product.imageurl || undefined,
+							issues: supabaseResult.product.issues || undefined,
 							lastScanned: new Date(),
 							classificationMethod: 'structured',
 						}

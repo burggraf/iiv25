@@ -162,6 +162,7 @@ export type Database = {
           ean13: string
           imageurl: string | null
           ingredients: string | null
+          issues: string | null
           lastupdated: string
           mfg: string | null
           product_name: string | null
@@ -175,6 +176,7 @@ export type Database = {
           ean13: string
           imageurl?: string | null
           ingredients?: string | null
+          issues?: string | null
           lastupdated?: string
           mfg?: string | null
           product_name?: string | null
@@ -188,6 +190,7 @@ export type Database = {
           ean13?: string
           imageurl?: string | null
           ingredients?: string | null
+          issues?: string | null
           lastupdated?: string
           mfg?: string | null
           product_name?: string | null
@@ -278,15 +281,13 @@ export type Database = {
         Returns: string
       }
       lookup_product: {
-        Args: { barcode: string } | { barcode: string; device_id: string }
+        Args: { barcode: string } | { barcode: string; device_id?: string }
         Returns: {
           ean13: string
           upc: string
           product_name: string
           brand: string
           ingredients: string
-          calculated_code: number
-          override_code: number
           classification: string
           imageurl: string
           created: string
