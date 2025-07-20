@@ -228,29 +228,43 @@ export default function ScannerScreen() {
 			setParsedIngredients(data.ingredients)
 			setError(null)
 
-			// If we got a classification result, refresh the product data to show updated classification
-			if (data.classification) {
-				console.log(`🔄 Refreshing product data after classification: ${data.classification}`)
-				try {
-					const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'IngredientOCR' })
-					if (refreshResult.product) {
-						setScannedProduct(refreshResult.product)
-						addToHistory(refreshResult.product)
-						// Update cache with new product data
-						addToCache(currentBarcode, refreshResult.product)
-					}
-				} catch (refreshError) {
-					console.error('Error refreshing product after OCR:', refreshError)
-					// Don't show error to user, just continue with parsed ingredients
+			// Always refresh the product data after successful ingredient processing
+			console.log(`🔄 Refreshing product data after ingredient processing`)
+			try {
+				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'IngredientOCR' })
+				if (refreshResult.product) {
+					console.log(`✅ Product refreshed with updated classification: ${refreshResult.product.veganStatus}`)
+					setScannedProduct(refreshResult.product)
+					addToHistory(refreshResult.product)
+					// Update cache with new product data
+					addToCache(currentBarcode, refreshResult.product)
+					
+					// Clear parsed ingredients since we're now showing the full product
+					setParsedIngredients(null)
+					
+					// Show normal product overlay instead of ingredients list
+					showOverlay()
+				} else {
+					// Fallback: show parsed ingredients if refresh failed
+					console.log('⚠️ Product refresh failed, showing parsed ingredients')
+					// Update overlay to show parsed ingredients
+					Animated.timing(overlayHeight, {
+						toValue: 200, // Larger height for ingredients list
+						duration: 300,
+						useNativeDriver: false,
+					}).start()
 				}
+			} catch (refreshError) {
+				console.error('Error refreshing product after OCR:', refreshError)
+				// Fallback: show parsed ingredients if refresh failed
+				console.log('⚠️ Product refresh error, showing parsed ingredients')
+				// Update overlay to show parsed ingredients
+				Animated.timing(overlayHeight, {
+					toValue: 200, // Larger height for ingredients list
+					duration: 300,
+					useNativeDriver: false,
+				}).start()
 			}
-
-			// Update overlay to show parsed ingredients
-			Animated.timing(overlayHeight, {
-				toValue: 200, // Larger height for ingredients list
-				duration: 300,
-				useNativeDriver: false,
-			}).start()
 		} catch (err) {
 			console.error('Error parsing ingredients:', err)
 			setError('Failed to parse ingredients. Please try again.')
