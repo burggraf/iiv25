@@ -118,12 +118,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 	const signOut = async (): Promise<void> => {
 		try {
+			console.log('SignOut: Starting sign out process...')
 			const { error } = await supabase.auth.signOut()
 			if (error) {
-				handleAuthError(error)
+				console.error('SignOut: Supabase signOut error:', error)
+				// Don't throw error - just log it and continue with local cleanup
+				console.log('SignOut: Error occurred but continuing with local cleanup')
+			} else {
+				console.log('SignOut: Successfully signed out from Supabase')
 			}
+			
+			// Force local state update to ensure user is cleared
+			console.log('SignOut: Forcing local auth state update')
+			setAuthState({
+				user: null,
+				session: null,
+				isLoading: false,
+				isInitialized: true,
+			})
 		} catch (error) {
-			handleAuthError(error as Error)
+			console.error('SignOut: Unexpected error during sign out:', error)
+			// Force local state update even if there was an error
+			setAuthState({
+				user: null,
+				session: null,
+				isLoading: false,
+				isInitialized: true,
+			})
 		}
 	}
 
