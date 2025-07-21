@@ -21,10 +21,20 @@ interface ParseIngredientsResponse {
 }
 
 Deno.serve(async (req: Request) => {
+  // CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 
@@ -34,26 +44,22 @@ Deno.serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    // Create client with anon key to verify user authentication
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: { Authorization: req.headers.get('Authorization') ?? '' },
-      },
-    });
-
-    // Get JWT token from Authorization header and fetch user
+    // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ 
         error: 'Authorization header required' 
       }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
     
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     console.log('🔍 Auth debug:', {
       authError: authError?.message,
@@ -61,36 +67,25 @@ Deno.serve(async (req: Request) => {
         id: user.id,
         email: user.email,
         is_anonymous: user.is_anonymous,
-        aud: user.aud
+        aud: user.aud,
+        role: user.role,
+        app_metadata: user.app_metadata
       } : null,
-      authHeader: req.headers.get('Authorization') ? 'present' : 'missing'
+      authHeader: authHeader ? 'present' : 'missing'
     });
     
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message || 'No user found');
+      console.log('Authentication failed:', authError);
       return new Response(JSON.stringify({ 
-        error: 'Authentication required. Anonymous users cannot access this function.' 
+        error: 'Authentication failed' 
       }), {
         status: 401,
-        headers: { 
-          'Content-Type': 'application/json',
-        }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    if (user.is_anonymous) {
-      console.log('❌ Anonymous user attempted to access function');
-      return new Response(JSON.stringify({ 
-        error: 'Anonymous users are not allowed to access this function. Please sign in with a valid account.' 
-      }), {
-        status: 403,
-        headers: { 
-          'Content-Type': 'application/json',
-        }
-      });
-    }
-
-    console.log(`✅ Authenticated user: ${user.email || user.id} (ID: ${user.id})`);
+    // Allow both authenticated and anonymous users
+    console.log('Authenticated user:', user.id, user.is_anonymous ? '(anonymous)' : '(registered)');
     
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -100,14 +95,14 @@ Deno.serve(async (req: Request) => {
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: 'Image data required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     if (!upc) {
       return new Response(JSON.stringify({ error: 'UPC code required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
@@ -356,13 +351,13 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
         apiCost: apiCostInfo
       }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     return new Response(JSON.stringify(parsedResult), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
@@ -374,7 +369,7 @@ If you cannot find or read ingredients clearly, set confidence below 0.7 and isV
       error: error instanceof Error ? error.message : 'Unknown error occurred'
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
