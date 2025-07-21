@@ -5,6 +5,7 @@ import { router } from 'expo-router'
 import React, { useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
+	Alert,
 	Animated,
 	Image,
 	Platform,
@@ -276,48 +277,79 @@ export default function ScannerScreen() {
 	}
 
 	const handleCreateProduct = async () => {
+		// Show instructions before launching camera
+		Alert.alert(
+			"📦 Create Product",
+			"Try to capture the title of the product and the product's brand name in the photo if possible.",
+			[
+				{
+					text: "Cancel",
+					style: "cancel"
+				},
+				{
+					text: "Take Photo",
+					onPress: async () => {
+						try {
+							setIsCreatingProduct(true)
+							setError(null)
+
+							// Request camera permission for image picker
+							const { status } = await ImagePicker.requestCameraPermissionsAsync()
+							if (status !== 'granted') {
+								setError('Camera permission is required to create product')
+								setIsCreatingProduct(false)
+								return
+							}
+
+							// Launch camera to take photo
+							const result = await ImagePicker.launchCameraAsync({
+								mediaTypes: 'images',
+								allowsEditing: true,
+								aspect: [4, 3],
+								quality: 0.8,
+								base64: true,
+							})
+
+							if (result.canceled) {
+								setIsCreatingProduct(false)
+								return
+							}
+
+							if (!result.assets[0].base64) {
+								setError('Failed to capture image data')
+								setIsCreatingProduct(false)
+								return
+							}
+
+							await processProductCreation(result.assets[0].base64)
+						} catch (err) {
+							console.error('Error in camera flow:', err)
+							setError('Failed to capture photo. Please try again.')
+							setIsCreatingProduct(false)
+						}
+					}
+				}
+			]
+		)
+	}
+
+	const processProductCreation = async (imageBase64: string) => {
 		try {
-			setIsCreatingProduct(true)
-			setError(null)
-
-			// Request camera permission for image picker
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			if (status !== 'granted') {
-				setError('Camera permission is required to create product')
-				return
-			}
-
-			// Launch camera to take photo
-			const result = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: true,
-			})
-
-			if (result.canceled) {
-				return
-			}
-
-			if (!result.assets[0].base64) {
-				setError('Failed to capture image data')
-				return
-			}
-
 			// Call product creation service with UPC
 			if (!currentBarcode) {
 				setError('No barcode available for product creation')
+				setIsCreatingProduct(false)
 				return
 			}
 
 			const data = await ProductCreationService.createProductFromPhoto(
-				result.assets[0].base64,
+				imageBase64,
 				currentBarcode
 			)
 
 			if (data.error) {
 				setError(data.error)
+				setIsCreatingProduct(false)
 				return
 			}
 
@@ -569,6 +601,12 @@ export default function ScannerScreen() {
 									)}
 								</TouchableOpacity>
 							)}
+						</View>
+					) : isCreatingProduct && !error && !scannedProduct ? (
+						<View style={styles.overlayErrorContent}>
+							<ActivityIndicator size='large' color='#FF6B35' />
+							<Text style={styles.processingText}>Creating product...</Text>
+							<Text style={styles.processingSubText}>Analyzing product photo</Text>
 						</View>
 					) : error && !parsedIngredients ? (
 						<View style={styles.overlayErrorContent}>
@@ -859,6 +897,19 @@ const styles = StyleSheet.create({
 		color: '#F44336',
 		textAlign: 'center',
 		marginBottom: 12,
+	},
+	processingText: {
+		fontSize: 18,
+		color: '#FF6B35',
+		fontWeight: '600',
+		textAlign: 'center',
+		marginTop: 12,
+		marginBottom: 4,
+	},
+	processingSubText: {
+		fontSize: 14,
+		color: '#666',
+		textAlign: 'center',
 	},
 	createProductButton: {
 		backgroundColor: '#FF6B35',
