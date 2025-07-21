@@ -20,6 +20,7 @@ import ProductResult from '../components/ProductResult'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
 import { useApp } from '../context/AppContext'
 import { IngredientOCRService } from '../services/ingredientOCRService'
+import { ProductCreationService } from '../services/productCreationService'
 import { ProductLookupService } from '../services/productLookupService'
 import { Product, VeganStatus } from '../types'
 
@@ -32,6 +33,7 @@ export default function ScannerScreen() {
 	const [error, setError] = useState<string | null>(null)
 	const [overlayHeight] = useState(new Animated.Value(0))
 	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
+	const [isCreatingProduct, setIsCreatingProduct] = useState(false)
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
 	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
@@ -273,6 +275,89 @@ export default function ScannerScreen() {
 		}
 	}
 
+	const handleCreateProduct = async () => {
+		try {
+			setIsCreatingProduct(true)
+			setError(null)
+
+			// Request camera permission for image picker
+			const { status } = await ImagePicker.requestCameraPermissionsAsync()
+			if (status !== 'granted') {
+				setError('Camera permission is required to create product')
+				return
+			}
+
+			// Launch camera to take photo
+			const result = await ImagePicker.launchCameraAsync({
+				mediaTypes: 'images',
+				allowsEditing: true,
+				aspect: [4, 3],
+				quality: 0.8,
+				base64: true,
+			})
+
+			if (result.canceled) {
+				return
+			}
+
+			if (!result.assets[0].base64) {
+				setError('Failed to capture image data')
+				return
+			}
+
+			// Call product creation service with UPC
+			if (!currentBarcode) {
+				setError('No barcode available for product creation')
+				return
+			}
+
+			const data = await ProductCreationService.createProductFromPhoto(
+				result.assets[0].base64,
+				currentBarcode
+			)
+
+			if (data.error) {
+				setError(data.error)
+				return
+			}
+
+			// Always refresh the product data after successful product creation
+			console.log(`🔄 Refreshing product data after product creation`)
+			try {
+				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreation' })
+				if (refreshResult.product) {
+					console.log(`✅ Product created and refreshed: ${refreshResult.product.productName}`)
+					setScannedProduct(refreshResult.product)
+					addToHistory(refreshResult.product)
+					// Update cache with new product data
+					addToCache(currentBarcode, refreshResult.product)
+					
+					// Clear error since we're now showing the full product
+					setError(null)
+					
+					// Animate overlay to show the product
+					Animated.timing(overlayHeight, {
+						toValue: 120, // Standard overlay height
+						duration: 300,
+						useNativeDriver: false,
+					}).start()
+				} else {
+					// Fallback: show error if refresh failed
+					console.log('⚠️ Product refresh failed after creation')
+					setError('Product created but could not load details. Please scan again.')
+				}
+			} catch (refreshError) {
+				console.error('Error refreshing product after creation:', refreshError)
+				setError('Product created but could not load details. Please scan again.')
+			}
+		} catch (err) {
+			console.error('Error creating product:', err)
+			setError('Failed to create product. Please try again.')
+		} finally {
+			setIsCreatingProduct(false)
+		}
+	}
+
 	const handleOverlayPress = () => {
 		if (scannedProduct) {
 			setShowProductDetail(true)
@@ -489,9 +574,19 @@ export default function ScannerScreen() {
 						<View style={styles.overlayErrorContent}>
 							<Text style={styles.overlayErrorText}>❌ {error}</Text>
 							<TouchableOpacity
+								style={styles.createProductButton}
+								onPress={handleCreateProduct}
+								disabled={isCreatingProduct || isParsingIngredients}>
+								{isCreatingProduct ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={styles.createProductButtonText}>📦 Create Product</Text>
+								)}
+							</TouchableOpacity>
+							<TouchableOpacity
 								style={styles.scanIngredientsButton}
 								onPress={handleScanIngredients}
-								disabled={isParsingIngredients}>
+								disabled={isParsingIngredients || isCreatingProduct}>
 								{isParsingIngredients ? (
 									<ActivityIndicator size='small' color='white' />
 								) : (
@@ -747,6 +842,20 @@ const styles = StyleSheet.create({
 		color: '#F44336',
 		textAlign: 'center',
 		marginBottom: 12,
+	},
+	createProductButton: {
+		backgroundColor: '#FF6B35',
+		paddingHorizontal: 20,
+		paddingVertical: 10,
+		borderRadius: 20,
+		minWidth: 140,
+		alignItems: 'center',
+		marginBottom: 8,
+	},
+	createProductButtonText: {
+		color: 'white',
+		fontSize: 14,
+		fontWeight: '600',
 	},
 	scanIngredientsButton: {
 		backgroundColor: '#007AFF',
