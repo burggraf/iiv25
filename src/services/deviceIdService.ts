@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../utils/uuid';
 
 const DEVICE_ID_KEY = 'device_id';
 
@@ -32,7 +32,7 @@ class DeviceIdService {
       let storedDeviceId = await this.getValue(DEVICE_ID_KEY);
       
       if (!storedDeviceId) {
-        storedDeviceId = uuidv4();
+        storedDeviceId = generateUUID();
         await this.storeValue(DEVICE_ID_KEY, storedDeviceId);
       }
       
@@ -40,14 +40,14 @@ class DeviceIdService {
       return storedDeviceId;
     } catch (error) {
       console.error('Error getting device ID:', error);
-      const fallbackId = uuidv4();
+      const fallbackId = generateUUID();
       this.deviceId = fallbackId;
       return fallbackId;
     }
   }
 
   async resetDeviceId(): Promise<string> {
-    const newDeviceId = uuidv4();
+    const newDeviceId = generateUUID();
     try {
       await this.storeValue(DEVICE_ID_KEY, newDeviceId);
       this.deviceId = newDeviceId;

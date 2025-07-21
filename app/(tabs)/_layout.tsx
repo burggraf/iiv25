@@ -7,7 +7,6 @@ import ManualIcon from '../../src/components/icons/ManualIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import AuthGuard from '../../src/components/AuthGuard';
 
 export default function TabLayout() {
   const GREEN_COLOR = '#14A44A';
@@ -15,42 +14,41 @@ export default function TabLayout() {
   const GRAY_COLOR = '#8E8E93';
 
   return (
-    <AuthGuard>
-      <Tabs
-        screenOptions={{
-          tabBarActiveTintColor: WHITE_COLOR,
-          tabBarInactiveTintColor: GRAY_COLOR,
-          tabBarActiveBackgroundColor: GREEN_COLOR,
-          headerShown: false,
-          tabBarStyle: Platform.select({
-            ios: {
-              backgroundColor: 'white',
-              borderTopWidth: 1,
-              borderTopColor: '#E5E5EA',
-              paddingBottom: 4,
-              paddingTop: 4,
-            },
-            default: {
-              backgroundColor: 'white',
-              borderTopWidth: 1,
-              borderTopColor: '#E5E5EA',
-              paddingBottom: 4,
-              paddingTop: 4,
-            },
-          }),
-          tabBarItemStyle: {
-            borderRadius: 8,
-            marginHorizontal: 2,
-            marginVertical: 2,
-            paddingVertical: 4,
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: WHITE_COLOR,
+        tabBarInactiveTintColor: GRAY_COLOR,
+        tabBarActiveBackgroundColor: GREEN_COLOR,
+        headerShown: false,
+        tabBarStyle: Platform.select({
+          ios: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E5EA',
+            paddingBottom: 4,
+            paddingTop: 4,
           },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
-            marginTop: 2,
+          default: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E5EA',
+            paddingBottom: 4,
+            paddingTop: 4,
           },
-          animation: 'none',
-        }}>
+        }),
+        tabBarItemStyle: {
+          borderRadius: 8,
+          marginHorizontal: 2,
+          marginVertical: 2,
+          paddingVertical: 4,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+          marginTop: 2,
+        },
+        animation: 'none',
+      }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -107,6 +105,5 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
-    </AuthGuard>
   );
 }

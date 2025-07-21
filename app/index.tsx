@@ -38,4 +38,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
   },
+  text: {
+    fontSize: 18,
+    color: '#333333',
+  },
 });

@@ -19,7 +19,7 @@ export default function HomeScreen() {
   const [loadingSubscription, setLoadingSubscription] = useState(false);
   
   const navigateToTab = (tabName: string) => {
-    router.push(`/(tabs)/${tabName}`);
+    router.push(`/(tabs)/${tabName}` as any);
   };
 
   const handleLogout = () => {

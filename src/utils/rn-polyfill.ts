@@ -1,16 +1,15 @@
 // React Native polyfills for Supabase compatibility
 
-// Crypto polyfill for UUID generation (must be imported first)
-import 'react-native-get-random-values';
-
-// Test that crypto.getRandomValues is available
-console.log('Testing crypto polyfill...');
-try {
-  const testArray = new Uint8Array(16);
-  crypto.getRandomValues(testArray);
-  console.log('✅ crypto.getRandomValues is available');
-} catch (error) {
-  console.error('❌ crypto.getRandomValues failed:', error);
+// Simple polyfill for crypto.getRandomValues if needed by Supabase
+if (typeof global.crypto === 'undefined') {
+  global.crypto = {
+    getRandomValues: (arr: any) => {
+      for (let i = 0; i < arr.length; i++) {
+        arr[i] = Math.floor(Math.random() * 256);
+      }
+      return arr;
+    }
+  } as any;
 }
 
 // Simple polyfill for structuredClone
