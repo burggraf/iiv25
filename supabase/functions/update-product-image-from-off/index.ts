@@ -53,31 +53,30 @@ Deno.serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    // Create client with anon key to verify user authentication
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: { Authorization: req.headers.get('Authorization') ?? '' },
-      },
-    });
-
-    // Get JWT token from Authorization header and fetch user
+    // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ 
         error: 'Authorization header required' 
       }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
       });
     }
     
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message || 'No user found');
+      console.log('Authentication failed:', authError);
       return new Response(JSON.stringify({ 
-        error: 'Authentication required. Anonymous users cannot access this function.' 
+        error: 'Authentication failed' 
       }), {
         status: 401,
         headers: { 
@@ -87,20 +86,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (user.is_anonymous) {
-      console.log('❌ Anonymous user attempted to access function');
-      return new Response(JSON.stringify({ 
-        error: 'Anonymous users are not allowed to access this function. Please sign in with a valid account.' 
-      }), {
-        status: 403,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        }
-      });
-    }
-
-    console.log(`✅ Authenticated user: ${user.email || user.id}`);
+    // Allow both authenticated and anonymous users
+    console.log('Authenticated user:', user.id, user.is_anonymous ? '(anonymous)' : '(registered)');
     
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
