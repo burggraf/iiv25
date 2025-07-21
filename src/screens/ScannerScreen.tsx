@@ -573,26 +573,43 @@ export default function ScannerScreen() {
 					) : error && !parsedIngredients ? (
 						<View style={styles.overlayErrorContent}>
 							<Text style={styles.overlayErrorText}>❌ {error}</Text>
-							<TouchableOpacity
-								style={styles.createProductButton}
-								onPress={handleCreateProduct}
-								disabled={isCreatingProduct || isParsingIngredients}>
-								{isCreatingProduct ? (
-									<ActivityIndicator size='small' color='white' />
-								) : (
-									<Text style={styles.createProductButtonText}>📦 Create Product</Text>
-								)}
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={styles.scanIngredientsButton}
-								onPress={handleScanIngredients}
-								disabled={isParsingIngredients || isCreatingProduct}>
-								{isParsingIngredients ? (
-									<ActivityIndicator size='small' color='white' />
-								) : (
-									<Text style={styles.scanIngredientsButtonText}>📷 Scan Ingredients</Text>
-								)}
-							</TouchableOpacity>
+							{error.includes('Product not found for barcode:') ? (
+								// Only show Create Product button for unknown products
+								<TouchableOpacity
+									style={styles.createProductButton}
+									onPress={handleCreateProduct}
+									disabled={isCreatingProduct || isParsingIngredients}>
+									{isCreatingProduct ? (
+										<ActivityIndicator size='small' color='white' />
+									) : (
+										<Text style={styles.createProductButtonText}>📦 Create Product</Text>
+									)}
+								</TouchableOpacity>
+							) : (
+								// Show both buttons for other error types (like ingredient parsing errors)
+								<>
+									<TouchableOpacity
+										style={styles.createProductButton}
+										onPress={handleCreateProduct}
+										disabled={isCreatingProduct || isParsingIngredients}>
+										{isCreatingProduct ? (
+											<ActivityIndicator size='small' color='white' />
+										) : (
+											<Text style={styles.createProductButtonText}>📦 Create Product</Text>
+										)}
+									</TouchableOpacity>
+									<TouchableOpacity
+										style={styles.scanIngredientsButton}
+										onPress={handleScanIngredients}
+										disabled={isParsingIngredients || isCreatingProduct}>
+										{isParsingIngredients ? (
+											<ActivityIndicator size='small' color='white' />
+										) : (
+											<Text style={styles.scanIngredientsButtonText}>📷 Scan Ingredients</Text>
+										)}
+									</TouchableOpacity>
+								</>
+							)}
 						</View>
 					) : null}
 				</Animated.View>
