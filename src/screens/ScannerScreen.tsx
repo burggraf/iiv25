@@ -29,6 +29,7 @@ import { ProductLookupService } from '../services/productLookupService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 
+
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
 	const { addToHistory } = useApp()
@@ -44,6 +45,8 @@ export default function ScannerScreen() {
 	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
 	const [isSoundEnabled, setIsSoundEnabled] = useState(true)
 	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
+	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
+	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -82,7 +85,7 @@ export default function ScannerScreen() {
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
 		// Only process barcodes when screen is focused and no modal is shown
-		if (!isFocused || showCreateProductModal) {
+		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal) {
 			return
 		}
 
@@ -217,15 +220,18 @@ export default function ScannerScreen() {
 		setCurrentBarcode(null)
 	}
 
+
 	const handleScanIngredients = async () => {
 		try {
 			setIsParsingIngredients(true)
 			setParsedIngredients(null)
+			setShowIngredientScanModal(true)
 
 			// Request camera permission for image picker
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
 			if (status !== 'granted') {
 				setError('Camera permission is required to scan ingredients')
+				setShowIngredientScanModal(false)
 				return
 			}
 
@@ -239,17 +245,20 @@ export default function ScannerScreen() {
 			})
 
 			if (result.canceled) {
+				setShowIngredientScanModal(false)
 				return
 			}
 
 			if (!result.assets[0].base64) {
 				setError('Failed to capture image data')
+				setShowIngredientScanModal(false)
 				return
 			}
 
 			// Call ingredient OCR service with UPC and Open Food Facts data if available
 			if (!currentBarcode) {
 				setError('No barcode available for ingredient processing')
+				setShowIngredientScanModal(false)
 				return
 			}
 
@@ -261,6 +270,7 @@ export default function ScannerScreen() {
 
 			if (data.error) {
 				setError(data.error)
+				setShowIngredientScanModal(false)
 				return
 			}
 
@@ -268,6 +278,7 @@ export default function ScannerScreen() {
 				setError(
 					'Could not clearly read ingredients from the image. Please try again with better lighting.'
 				)
+				setShowIngredientScanModal(false)
 				return
 			}
 
@@ -316,6 +327,7 @@ export default function ScannerScreen() {
 			setError('Failed to parse ingredients. Please try again.')
 		} finally {
 			setIsParsingIngredients(false)
+			setShowIngredientScanModal(false)
 		}
 	}
 
@@ -368,10 +380,13 @@ export default function ScannerScreen() {
 
 	const processProductCreation = async (imageBase64: string) => {
 		try {
+			setShowProductCreationModal(true)
+			
 			// Call product creation service with UPC
 			if (!currentBarcode) {
 				setError('No barcode available for product creation')
 				setIsCreatingProduct(false)
+				setShowProductCreationModal(false)
 				return
 			}
 
@@ -383,6 +398,7 @@ export default function ScannerScreen() {
 			if (data.error) {
 				setError(data.error)
 				setIsCreatingProduct(false)
+				setShowProductCreationModal(false)
 				return
 			}
 
@@ -420,6 +436,7 @@ export default function ScannerScreen() {
 			setError('Failed to create product. Please try again.')
 		} finally {
 			setIsCreatingProduct(false)
+			setShowProductCreationModal(false)
 		}
 	}
 
@@ -644,12 +661,6 @@ export default function ScannerScreen() {
 								</TouchableOpacity>
 							)}
 						</View>
-					) : isCreatingProduct && !error && !scannedProduct ? (
-						<View style={styles.overlayErrorContent}>
-							<ActivityIndicator size='large' color='#FF6B35' />
-							<Text style={styles.processingText}>Creating product...</Text>
-							<Text style={styles.processingSubText}>Analyzing product photo</Text>
-						</View>
 					) : error && !parsedIngredients ? (
 						<View style={styles.overlayErrorContent}>
 							<Text style={styles.overlayErrorText}>❌ {error}</Text>
@@ -705,6 +716,28 @@ export default function ScannerScreen() {
 			<View style={styles.bottomInstructions}>
 				<Text style={styles.tipText}>💡 Scan continuously{'\n'}Tap product card to view details</Text>
 			</View>
+
+			{/* Ingredient Scan Modal */}
+			{showIngredientScanModal && (
+				<View style={styles.loadingModal}>
+					<View style={styles.loadingModalContent}>
+						<LogoWhite size={48} />
+						<Text style={styles.loadingModalTitle}>Analyzing ingredients...</Text>
+						<ActivityIndicator size="large" color="#007AFF" style={styles.loadingSpinner} />
+					</View>
+				</View>
+			)}
+
+			{/* Product Creation Modal */}
+			{showProductCreationModal && (
+				<View style={styles.loadingModal}>
+					<View style={styles.loadingModalContent}>
+						<BarcodeIcon size={48} color="#FF6B35" />
+						<Text style={styles.loadingModalTitle}>Adding new product...</Text>
+						<ActivityIndicator size="large" color="#FF6B35" style={styles.loadingSpinner} />
+					</View>
+				</View>
+			)}
 
 			{/* Create Product Modal */}
 			{showCreateProductModal && (
@@ -1178,5 +1211,36 @@ const styles = StyleSheet.create({
 		color: 'white',
 		fontSize: 16,
 		fontWeight: '600',
+	},
+	loadingModal: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0, 0, 0, 0.95)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 3000,
+	},
+	loadingModalContent: {
+		backgroundColor: 'white',
+		borderRadius: 20,
+		padding: 40,
+		margin: 20,
+		alignItems: 'center',
+		maxWidth: 320,
+		width: '85%',
+	},
+	loadingModalTitle: {
+		fontSize: 20,
+		fontWeight: 'bold',
+		color: '#333',
+		marginTop: 20,
+		marginBottom: 30,
+		textAlign: 'center',
+	},
+	loadingSpinner: {
+		marginTop: 10,
 	},
 })
