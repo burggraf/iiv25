@@ -6,7 +6,6 @@ import { useIsFocused } from '@react-navigation/native'
 import React, { useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
-	Alert,
 	Animated,
 	Image,
 	Platform,
@@ -17,6 +16,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import BarcodeIcon from '../components/icons/BarcodeIcon'
 import BellIcon from '../components/icons/BellIcon'
 import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
@@ -43,6 +43,7 @@ export default function ScannerScreen() {
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
 	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
 	const [isSoundEnabled, setIsSoundEnabled] = useState(true)
+	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -80,8 +81,8 @@ export default function ScannerScreen() {
 
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
-		// Only process barcodes when screen is focused
-		if (!isFocused) {
+		// Only process barcodes when screen is focused and no modal is shown
+		if (!isFocused || showCreateProductModal) {
 			return
 		}
 
@@ -319,60 +320,50 @@ export default function ScannerScreen() {
 	}
 
 	const handleCreateProduct = async () => {
-		// Show instructions before launching camera
-		Alert.alert(
-			"📦 Create Product",
-			"Try to capture the title of the product and the product's brand name in the photo if possible.",
-			[
-				{
-					text: "Cancel",
-					style: "cancel"
-				},
-				{
-					text: "Take Photo",
-					onPress: async () => {
-						try {
-							setIsCreatingProduct(true)
-							setError(null)
+		// Show full screen modal instead of alert
+		setShowCreateProductModal(true)
+	}
 
-							// Request camera permission for image picker
-							const { status } = await ImagePicker.requestCameraPermissionsAsync()
-							if (status !== 'granted') {
-								setError('Camera permission is required to create product')
-								setIsCreatingProduct(false)
-								return
-							}
+	const handleCreateProductConfirm = async () => {
+		try {
+			setShowCreateProductModal(false)
+			setIsCreatingProduct(true)
+			setError(null)
 
-							// Launch camera to take photo
-							const result = await ImagePicker.launchCameraAsync({
-								mediaTypes: 'images',
-								allowsEditing: true,
-								aspect: [4, 3],
-								quality: 0.8,
-								base64: true,
-							})
+			// Request camera permission for image picker
+			const { status } = await ImagePicker.requestCameraPermissionsAsync()
+			if (status !== 'granted') {
+				setError('Camera permission is required to create product')
+				setIsCreatingProduct(false)
+				return
+			}
 
-							if (result.canceled) {
-								setIsCreatingProduct(false)
-								return
-							}
+			// Launch camera to take photo
+			const result = await ImagePicker.launchCameraAsync({
+				mediaTypes: 'images',
+				allowsEditing: true,
+				aspect: [4, 3],
+				quality: 0.8,
+				base64: true,
+			})
 
-							if (!result.assets[0].base64) {
-								setError('Failed to capture image data')
-								setIsCreatingProduct(false)
-								return
-							}
+			if (result.canceled) {
+				setIsCreatingProduct(false)
+				return
+			}
 
-							await processProductCreation(result.assets[0].base64)
-						} catch (err) {
-							console.error('Error in camera flow:', err)
-							setError('Failed to capture photo. Please try again.')
-							setIsCreatingProduct(false)
-						}
-					}
-				}
-			]
-		)
+			if (!result.assets[0].base64) {
+				setError('Failed to capture image data')
+				setIsCreatingProduct(false)
+				return
+			}
+
+			await processProductCreation(result.assets[0].base64)
+		} catch (err) {
+			console.error('Error in camera flow:', err)
+			setError('Failed to capture photo. Please try again.')
+			setIsCreatingProduct(false)
+		}
 	}
 
 	const processProductCreation = async (imageBase64: string) => {
@@ -400,7 +391,7 @@ export default function ScannerScreen() {
 			try {
 				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreation' })
 				if (refreshResult.product) {
-					console.log(`✅ Product created and refreshed: ${refreshResult.product.productName}`)
+					console.log(`✅ Product created and refreshed: ${refreshResult.product.name}`)
 					setScannedProduct(refreshResult.product)
 					addToHistory(refreshResult.product)
 					// Update cache with new product data
@@ -671,7 +662,10 @@ export default function ScannerScreen() {
 									{isCreatingProduct ? (
 										<ActivityIndicator size='small' color='white' />
 									) : (
-										<Text style={styles.createProductButtonText}>📦 Create Product</Text>
+										<View style={styles.createProductButtonContent}>
+											<BarcodeIcon size={16} color="white" />
+											<Text style={styles.createProductButtonText}>Add New Product</Text>
+										</View>
 									)}
 								</TouchableOpacity>
 							) : (
@@ -684,7 +678,10 @@ export default function ScannerScreen() {
 										{isCreatingProduct ? (
 											<ActivityIndicator size='small' color='white' />
 										) : (
-											<Text style={styles.createProductButtonText}>📦 Create Product</Text>
+											<View style={styles.createProductButtonContent}>
+												<BarcodeIcon size={16} color="white" />
+												<Text style={styles.createProductButtonText}>Add New Product</Text>
+											</View>
 										)}
 									</TouchableOpacity>
 									<TouchableOpacity
@@ -708,6 +705,33 @@ export default function ScannerScreen() {
 			<View style={styles.bottomInstructions}>
 				<Text style={styles.tipText}>💡 Scan continuously{'\n'}Tap product card to view details</Text>
 			</View>
+
+			{/* Create Product Modal */}
+			{showCreateProductModal && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<BarcodeIcon size={48} color="#FF6B35" />
+							<Text style={styles.createProductModalTitle}>Add New Product</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								Take a photo of the entire front of the product package.
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={() => setShowCreateProductModal(false)}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleCreateProductConfirm}>
+								<Text style={styles.createProductModalConfirmText}>Take Photo</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			)}
 
 			{/* Product Detail Overlay */}
 			{showProductDetail && scannedProduct && (
@@ -988,6 +1012,12 @@ const styles = StyleSheet.create({
 		color: 'white',
 		fontSize: 14,
 		fontWeight: '600',
+		marginLeft: 6,
+	},
+	createProductButtonContent: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	scanIngredientsButton: {
 		backgroundColor: '#007AFF',
@@ -1081,5 +1111,72 @@ const styles = StyleSheet.create({
 		backgroundColor: '#f0f0f0',
 		borderRadius: 8,
 		fontWeight: 'bold',
+	},
+	createProductModal: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0, 0, 0, 0.9)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 2000,
+	},
+	createProductModalContent: {
+		backgroundColor: 'white',
+		borderRadius: 20,
+		padding: 32,
+		margin: 20,
+		alignItems: 'center',
+		maxWidth: 350,
+		width: '90%',
+	},
+	createProductModalHeader: {
+		alignItems: 'center',
+		marginBottom: 32,
+	},
+	createProductModalTitle: {
+		fontSize: 24,
+		fontWeight: 'bold',
+		color: '#333',
+		marginTop: 16,
+		marginBottom: 12,
+		textAlign: 'center',
+	},
+	createProductModalSubtitle: {
+		fontSize: 16,
+		color: '#666',
+		textAlign: 'center',
+		lineHeight: 22,
+	},
+	createProductModalButtons: {
+		flexDirection: 'row',
+		gap: 16,
+		width: '100%',
+	},
+	createProductModalCancelButton: {
+		flex: 1,
+		backgroundColor: '#f0f0f0',
+		paddingVertical: 16,
+		borderRadius: 12,
+		alignItems: 'center',
+	},
+	createProductModalCancelText: {
+		color: '#666',
+		fontSize: 16,
+		fontWeight: '600',
+	},
+	createProductModalConfirmButton: {
+		flex: 1,
+		backgroundColor: '#FF6B35',
+		paddingVertical: 16,
+		borderRadius: 12,
+		alignItems: 'center',
+	},
+	createProductModalConfirmText: {
+		color: 'white',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 })
