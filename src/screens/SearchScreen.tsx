@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
   },
   appTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
     color: '#333',

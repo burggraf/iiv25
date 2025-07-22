@@ -41,7 +41,7 @@ export default function HistoryScreen() {
   if (selectedProduct) {
     return (
       <View style={styles.container}>
-        <ProductResult product={selectedProduct} onBack={handleBackToHistory} />
+        <ProductResult product={selectedProduct} onBack={handleBackToHistory} hideHeaderBackButton={true} />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleBackToHistory}>
             <Text style={styles.backToHistoryButton}>
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
   },
   appTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
     color: '#333',
