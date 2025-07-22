@@ -17,6 +17,12 @@
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
         "NSMicrophoneUsageDescription": "This app does not use the microphone.",
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#4CAF50",
+        "tabletImage": "./assets/splash-tablet.png"
       }
     },
     "android": {
@@ -33,25 +39,39 @@
         "ACCESS_NETWORK_STATE",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#4CAF50",
+        "mdpi": "./assets/android/splash-mdpi.png",
+        "hdpi": "./assets/android/splash-hdpi.png",
+        "xhdpi": "./assets/android/splash-xhdpi.png",
+        "xxhdpi": "./assets/android/splash-xxhdpi.png",
+        "xxxhdpi": "./assets/android/splash-xxxhdpi.png"
+      }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/logo.png"
     },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4CAF50"
+    },
     "plugins": [
       "expo-router",
+      "expo-asset",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#4CAF50",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
         }
       ],
-      "expo-asset",
       [
         "expo-camera",
         {
