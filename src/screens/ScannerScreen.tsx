@@ -526,6 +526,9 @@ export default function ScannerScreen() {
 				</Text>
 				<TouchableOpacity style={styles.bellIconContainer} onPress={handleSoundToggle}>
 					<BellIcon size={24} color="#666" filled={isSoundEnabled} />
+					<Text style={styles.bellIconText}>
+						{isSoundEnabled ? 'ON' : 'OFF'}
+					</Text>
 				</TouchableOpacity>
 			</View>
 
@@ -780,10 +783,19 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	bellIconContainer: {
+		flexDirection: 'column',
+		alignItems: 'center',
 		padding: 8,
 		marginLeft: 16,
 		backgroundColor: 'transparent',
 		borderRadius: 20,
+	},
+	bellIconText: {
+		fontSize: 12,
+		fontWeight: '500',
+		color: '#666',
+		marginTop: 2,
+		textAlign: 'center',
 	},
 	cameraContainer: {
 		flex: 1,
