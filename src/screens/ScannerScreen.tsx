@@ -14,7 +14,9 @@ import {
 	TouchableOpacity,
 	View,
 } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import BellIcon from '../components/icons/BellIcon'
 import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
 import ProductResult from '../components/ProductResult'
@@ -37,6 +39,7 @@ export default function ScannerScreen() {
 	const [isCreatingProduct, setIsCreatingProduct] = useState(false)
 	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
 	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
+	const [isSoundEnabled, setIsSoundEnabled] = useState(true)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -51,7 +54,19 @@ export default function ScannerScreen() {
 			setHasPermission(status === 'granted')
 		}
 
+		const loadSoundPreference = async () => {
+			try {
+				const savedPreference = await AsyncStorage.getItem('soundEnabled')
+				if (savedPreference !== null) {
+					setIsSoundEnabled(JSON.parse(savedPreference))
+				}
+			} catch (error) {
+				console.log('Error loading sound preference:', error)
+			}
+		}
+
 		getCameraPermissions()
+		loadSoundPreference()
 	}, [])
 
 
@@ -404,6 +419,16 @@ export default function ScannerScreen() {
 		router.back()
 	}
 
+	const handleSoundToggle = async () => {
+		try {
+			const newSoundState = !isSoundEnabled
+			setIsSoundEnabled(newSoundState)
+			await AsyncStorage.setItem('soundEnabled', JSON.stringify(newSoundState))
+		} catch (error) {
+			console.log('Error saving sound preference:', error)
+		}
+	}
+
 	const getStatusColor = (status: VeganStatus): string => {
 		switch (status) {
 			case VeganStatus.VEGAN:
@@ -487,6 +512,9 @@ export default function ScannerScreen() {
 				<Text style={styles.instructionText}>
 					{isLoading ? '🔍 Looking up product...' : '📷 Point your camera\nat a food product barcode'}
 				</Text>
+				<TouchableOpacity style={styles.bellIconContainer} onPress={handleSoundToggle}>
+					<BellIcon size={24} color="#666" filled={isSoundEnabled} />
+				</TouchableOpacity>
 			</View>
 
 			{/* Camera View */}
@@ -725,6 +753,9 @@ const styles = StyleSheet.create({
 		width: 60,
 	},
 	instructionsContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
 		paddingVertical: 16,
 		paddingHorizontal: 20,
 		backgroundColor: 'white',
@@ -734,6 +765,13 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#333',
 		fontWeight: '500',
+		flex: 1,
+	},
+	bellIconContainer: {
+		padding: 8,
+		marginLeft: 16,
+		backgroundColor: 'transparent',
+		borderRadius: 20,
 	},
 	cameraContainer: {
 		flex: 1,
