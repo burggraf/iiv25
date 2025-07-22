@@ -552,7 +552,7 @@ export default function ScannerScreen() {
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={handleBarcodeScanned} />
-				) : (
+				) : isFocused ? (
 					<>
 						<CameraView
 							style={styles.camera}
@@ -574,6 +574,10 @@ export default function ScannerScreen() {
 							<View style={styles.unfocusedContainer}></View>
 						</View>
 					</>
+				) : (
+					<View style={styles.inactiveCamera}>
+						<Text style={styles.inactiveCameraText}>Scanner inactive</Text>
+					</View>
 				)}
 
 				{/* Loading Indicator */}
@@ -1242,5 +1246,16 @@ const styles = StyleSheet.create({
 	},
 	loadingSpinner: {
 		marginTop: 10,
+	},
+	inactiveCamera: {
+		flex: 1,
+		backgroundColor: '#000',
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	inactiveCameraText: {
+		color: '#666',
+		fontSize: 16,
+		fontStyle: 'italic',
 	},
 })
