@@ -352,13 +352,6 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 					</View>
 				)}
 
-				{/* Disclaimer */}
-				<View style={styles.disclaimer}>
-					<Text style={styles.disclaimerText}>
-						⚠️ This analysis is based on our database and Open Food Facts ingredient data. Always
-						check the product label for the most accurate information.
-					</Text>
-				</View>
 			</ScrollView>
 		</SafeAreaView>
 	)
@@ -713,16 +706,5 @@ const styles = StyleSheet.create({
 		color: '#4CAF50',
 		marginBottom: 4,
 		fontWeight: '500',
-	},
-	disclaimer: {
-		padding: 20,
-		backgroundColor: '#f9f9f9',
-		marginTop: 20,
-	},
-	disclaimerText: {
-		fontSize: 12,
-		color: '#666',
-		textAlign: 'center',
-		lineHeight: 18,
 	},
 })
