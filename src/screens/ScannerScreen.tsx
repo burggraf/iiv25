@@ -26,6 +26,7 @@ import { IngredientOCRService } from '../services/ingredientOCRService'
 import { ProductCreationService } from '../services/productCreationService'
 import { ProductLookupService } from '../services/productLookupService'
 import { Product, VeganStatus } from '../types'
+import { SoundUtils } from '../utils/soundUtils'
 
 export default function ScannerScreen() {
 	const { addToHistory } = useApp()
@@ -67,6 +68,12 @@ export default function ScannerScreen() {
 
 		getCameraPermissions()
 		loadSoundPreference()
+		SoundUtils.initializeBeepSound()
+
+		// Cleanup on unmount
+		return () => {
+			SoundUtils.cleanup()
+		}
 	}, [])
 
 
@@ -84,6 +91,11 @@ export default function ScannerScreen() {
 		}
 
 		console.log(`📱 Barcode scanned: ${type} - ${data}`)
+
+		// Play beep sound if enabled (only for new barcodes)
+		if (isSoundEnabled) {
+			SoundUtils.playBeep()
+		}
 
 		// Update last scanned info
 		lastScannedBarcodeRef.current = data
