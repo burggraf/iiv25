@@ -116,6 +116,12 @@ export default function ScannerScreen() {
 			SoundUtils.playBeep()
 		}
 
+		// Clear any existing error state when scanning a new barcode
+		if (error && lastScannedBarcodeRef.current !== data) {
+			setError(null)
+			hideOverlay()
+		}
+
 		// Update last scanned info
 		lastScannedBarcodeRef.current = data
 		lastScannedTimeRef.current = currentTime
@@ -246,6 +252,8 @@ export default function ScannerScreen() {
 
 			if (result.canceled) {
 				setShowIngredientScanModal(false)
+				// Clear error state and hide overlay to allow new scans
+				hideOverlay()
 				return
 			}
 
@@ -336,6 +344,12 @@ export default function ScannerScreen() {
 		setShowCreateProductModal(true)
 	}
 
+	const handleCreateProductCancel = () => {
+		setShowCreateProductModal(false)
+		// Clear error state and hide overlay to allow new scans
+		hideOverlay()
+	}
+
 	const handleCreateProductConfirm = async () => {
 		try {
 			setShowCreateProductModal(false)
@@ -361,6 +375,8 @@ export default function ScannerScreen() {
 
 			if (result.canceled) {
 				setIsCreatingProduct(false)
+				// Clear error state and hide overlay to allow new scans
+				hideOverlay()
 				return
 			}
 
@@ -757,7 +773,7 @@ export default function ScannerScreen() {
 						<View style={styles.createProductModalButtons}>
 							<TouchableOpacity
 								style={styles.createProductModalCancelButton}
-								onPress={() => setShowCreateProductModal(false)}>
+								onPress={handleCreateProductCancel}>
 								<Text style={styles.createProductModalCancelText}>Cancel</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
