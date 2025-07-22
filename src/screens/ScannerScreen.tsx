@@ -2,6 +2,7 @@ import { BarcodeScanningResult, Camera, CameraView } from 'expo-camera'
 import { isDevice } from 'expo-device'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
+import { useIsFocused } from '@react-navigation/native'
 import React, { useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
@@ -29,6 +30,7 @@ import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 
 export default function ScannerScreen() {
+	const isFocused = useIsFocused()
 	const { addToHistory } = useApp()
 	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
@@ -78,10 +80,23 @@ export default function ScannerScreen() {
 
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
+		// Only process barcodes when screen is focused
+		if (!isFocused) {
+			return
+		}
+
 		const currentTime = Date.now()
 		
 		// Prevent concurrent processing
 		if (processingBarcodeRef.current !== null) {
+			return
+		}
+
+		// Check if this barcode is for the currently displayed product - if so, don't beep or process
+		if (scannedProduct && scannedProduct.barcode === data) {
+			// Update last scanned info to reset debounce timer
+			lastScannedBarcodeRef.current = data
+			lastScannedTimeRef.current = currentTime
 			return
 		}
 
@@ -92,7 +107,7 @@ export default function ScannerScreen() {
 
 		console.log(`📱 Barcode scanned: ${type} - ${data}`)
 
-		// Play beep sound if enabled (only for new barcodes)
+		// Play beep sound if enabled (only for different products)
 		if (isSoundEnabled) {
 			SoundUtils.playBeep()
 		}
