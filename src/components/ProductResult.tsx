@@ -10,6 +10,7 @@ import LogoWhite from './LogoWhite'
 interface ProductResultProps {
 	product: Product
 	onBack: () => void
+	hideHeaderBackButton?: boolean
 }
 
 interface IngredientClassification {
@@ -17,7 +18,7 @@ interface IngredientClassification {
 	class: string
 }
 
-export default function ProductResult({ product, onBack }: ProductResultProps) {
+export default function ProductResult({ product, onBack, hideHeaderBackButton = false }: ProductResultProps) {
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
@@ -145,15 +146,17 @@ export default function ProductResult({ product, onBack }: ProductResultProps) {
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
 			{/* App Header */}
-			<View style={styles.appHeader}>
-				<TouchableOpacity style={styles.backButton} onPress={onBack}>
-					<Text style={styles.backButtonText}>← Back</Text>
-				</TouchableOpacity>
-				<View style={styles.centerHeader}>
+			<View style={[styles.appHeader, hideHeaderBackButton && styles.appHeaderCentered]}>
+				{!hideHeaderBackButton && (
+					<TouchableOpacity style={styles.backButton} onPress={onBack}>
+						<Text style={styles.backButtonText}>← Back</Text>
+					</TouchableOpacity>
+				)}
+				<View style={[styles.centerHeader, hideHeaderBackButton && styles.centerHeaderFullWidth]}>
 					<Logo size={32} />
 					<Text style={styles.appTitle}>Is It Vegan?</Text>
 				</View>
-				<View style={styles.rightSpacer} />
+				{!hideHeaderBackButton && <View style={styles.rightSpacer} />}
 			</View>
 
 			<ScrollView style={styles.scrollView}>
@@ -379,6 +382,9 @@ const styles = StyleSheet.create({
 		borderBottomWidth: 1,
 		borderBottomColor: '#eee',
 	},
+	appHeaderCentered: {
+		justifyContent: 'center',
+	},
 	backButton: {
 		paddingVertical: 8,
 		paddingHorizontal: 12,
@@ -393,6 +399,10 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		flex: 1,
+	},
+	centerHeaderFullWidth: {
+		flex: 1,
+		justifyContent: 'center',
 	},
 	appTitle: {
 		fontSize: 18,

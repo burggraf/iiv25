@@ -442,9 +442,6 @@ export default function ScannerScreen() {
 		setShowProductDetail(false)
 	}
 
-	const handleCloseScanner = () => {
-		router.back()
-	}
 
 	const handleSoundToggle = async () => {
 		try {
@@ -525,14 +522,10 @@ export default function ScannerScreen() {
 		<SafeAreaView style={styles.container} edges={['top']}>
 			{/* Header */}
 			<View style={styles.header}>
-				<TouchableOpacity style={styles.backButton} onPress={handleCloseScanner}>
-					<Text style={styles.backButtonText}>← Back</Text>
-				</TouchableOpacity>
 				<View style={styles.centerHeader}>
 					<Logo size={32} />
 					<Text style={styles.appTitle}>Is It Vegan?</Text>
 				</View>
-				<View style={styles.rightSpacer} />
 			</View>
 
 			<View style={styles.instructionsContainer}>
@@ -719,7 +712,14 @@ export default function ScannerScreen() {
 			{/* Product Detail Overlay */}
 			{showProductDetail && scannedProduct && (
 				<View style={styles.productDetailOverlay}>
-					<ProductResult product={scannedProduct} onBack={handleBackFromDetail} />
+					<ProductResult product={scannedProduct} onBack={handleBackFromDetail} hideHeaderBackButton={true} />
+					<View style={styles.buttonContainer}>
+						<TouchableOpacity onPress={handleBackFromDetail}>
+							<Text style={styles.backToScannerButton}>
+								← Back to Scanner
+							</Text>
+						</TouchableOpacity>
+					</View>
 				</View>
 			)}
 		</SafeAreaView>
@@ -751,36 +751,23 @@ const styles = StyleSheet.create({
 	header: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		justifyContent: 'space-between',
+		justifyContent: 'center',
 		paddingVertical: 12,
 		paddingHorizontal: 16,
 		backgroundColor: 'white',
 		borderBottomWidth: 1,
 		borderBottomColor: '#eee',
 	},
-	backButton: {
-		paddingVertical: 8,
-		paddingHorizontal: 12,
-	},
-	backButtonText: {
-		fontSize: 16,
-		color: '#007AFF',
-		fontWeight: '500',
-	},
 	centerHeader: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		flex: 1,
 	},
 	appTitle: {
 		fontSize: 18,
 		fontWeight: 'bold',
 		marginLeft: 8,
 		color: '#333',
-	},
-	rightSpacer: {
-		width: 60,
 	},
 	instructionsContainer: {
 		flexDirection: 'row',
@@ -1079,5 +1066,20 @@ const styles = StyleSheet.create({
 		bottom: 0,
 		backgroundColor: 'white',
 		zIndex: 1000,
+	},
+	buttonContainer: {
+		padding: 20,
+		backgroundColor: 'white',
+		borderTopWidth: 1,
+		borderTopColor: '#eee',
+	},
+	backToScannerButton: {
+		fontSize: 18,
+		color: '#007AFF',
+		textAlign: 'center',
+		padding: 16,
+		backgroundColor: '#f0f0f0',
+		borderRadius: 8,
+		fontWeight: 'bold',
 	},
 })

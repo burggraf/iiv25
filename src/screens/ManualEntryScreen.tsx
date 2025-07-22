@@ -138,14 +138,10 @@ export default function ManualEntryScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
         <View style={styles.centerHeader}>
           <Logo size={32} />
           <Text style={styles.appTitle}>Is It Vegan?</Text>
         </View>
-        <View style={styles.rightSpacer} />
       </View>
 
       {/* Instructions */}
@@ -218,36 +214,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
   centerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
   appTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
     color: '#333',
-  },
-  rightSpacer: {
-    width: 60,
   },
   instructionsContainer: {
     padding: 20,
