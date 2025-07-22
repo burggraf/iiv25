@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import Logo from '../components/Logo';
 import NumericKeypad from '../components/NumericKeypad';
 import ProductResult from '../components/ProductResult';
@@ -20,12 +21,6 @@ export default function ManualEntryScreen() {
     if (upcCode.length < 13) { // Max length for EAN-13
       setUpcCode(prev => prev + number);
     }
-  };
-
-  const handleDirectInput = (text: string) => {
-    // Only allow numeric input and limit to 13 characters
-    const numericText = text.replace(/[^0-9]/g, '').slice(0, 13);
-    setUpcCode(numericText);
   };
 
   const validateUPC = (code: string): boolean => {
@@ -51,6 +46,20 @@ export default function ManualEntryScreen() {
   const handleClear = () => {
     setUpcCode('');
     setError(null);
+  };
+
+  const handlePaste = async () => {
+    try {
+      const clipboardContent = await Clipboard.getStringAsync();
+      // Only allow numeric input and limit to 13 characters
+      const numericText = clipboardContent.replace(/[^0-9]/g, '').slice(0, 13);
+      if (numericText.length > 0) {
+        setUpcCode(numericText);
+        setError(null);
+      }
+    } catch (error) {
+      console.error('Failed to paste from clipboard:', error);
+    }
   };
 
   const handleLookup = async () => {
@@ -148,22 +157,10 @@ export default function ManualEntryScreen() {
       <View style={styles.upcContainer}>
         <Text style={styles.upcLabel}>UPC Code:</Text>
         <View style={styles.upcDisplay}>
-          <TextInput
-            style={styles.upcTextInput}
-            value={upcCode}
-            onChangeText={handleDirectInput}
-            onSubmitEditing={handleLookup}
-            placeholder="Enter digits"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            maxLength={13}
-            selectTextOnFocus
-            returnKeyType="search"
-          />
+          <Text style={styles.upcDisplayText}>
+            {upcCode}
+          </Text>
         </View>
-        <Text style={styles.digitCount}>
-          {upcCode.length}/13 digits
-        </Text>
       </View>
 
       {/* Error Display */}
@@ -198,6 +195,17 @@ export default function ManualEntryScreen() {
         onBackspace={handleBackspace}
         onClear={handleClear}
       />
+
+      {/* Paste Button */}
+      <View style={styles.pasteContainer}>
+        <TouchableOpacity 
+          style={styles.pasteButton} 
+          onPress={handlePaste}
+        >
+          <Text style={styles.pasteButtonIcon}>📋</Text>
+          <Text style={styles.pasteButtonLabel}>Paste from clipboard</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -276,25 +284,37 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 16,
-    minWidth: 280,
+    minWidth: 340,
     justifyContent: 'center',
   },
-  upcTextInput: {
+  upcDisplayText: {
     fontSize: 24,
     fontWeight: '600',
     color: '#333',
     letterSpacing: 2,
     fontFamily: 'monospace',
-    flex: 1,
     textAlign: 'center',
-    padding: 0,
-    margin: 0,
     minHeight: 30,
   },
-  digitCount: {
+  pasteContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  pasteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  pasteButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  pasteButtonLabel: {
     fontSize: 14,
     color: '#666',
-    marginTop: 8,
+    fontWeight: '400',
   },
   errorContainer: {
     paddingHorizontal: 20,
