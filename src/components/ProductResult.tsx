@@ -1,13 +1,23 @@
-import React, { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
+import React, { useEffect, useState } from 'react'
+import {
+	ActivityIndicator,
+	Alert,
+	Image,
+	Modal,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
-import { supabase } from '../services/supabaseClient'
 import { IngredientOCRService } from '../services/ingredientOCRService'
-import { ProductCreationService } from '../services/productCreationService' 
+import { ProductCreationService } from '../services/productCreationService'
 import { ProductImageUploadService } from '../services/productImageUploadService'
 import { ProductLookupService } from '../services/productLookupService'
+import { supabase } from '../services/supabaseClient'
 import { Product, VeganStatus } from '../types'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
@@ -24,7 +34,12 @@ interface IngredientClassification {
 	class: string
 }
 
-export default function ProductResult({ product, onBack, hideHeaderBackButton = false, onProductUpdated }: ProductResultProps) {
+export default function ProductResult({
+	product,
+	onBack,
+	hideHeaderBackButton = false,
+	onProductUpdated,
+}: ProductResultProps) {
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
@@ -61,20 +76,20 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 
 		try {
 			const result = await ProductLookupService.lookupProductByBarcode(currentProduct.barcode)
-			
+
 			if (result.product) {
 				setCurrentProduct(result.product)
-				
+
 				// Notify parent component of the update
 				if (onProductUpdated) {
 					onProductUpdated(result.product)
 				}
-				
+
 				// Also refresh ingredient classifications for the updated product
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
 					input_upc: currentProduct.barcode,
 				})
-				
+
 				if (!error && data) {
 					setIngredientClassifications(data)
 				}
@@ -86,28 +101,24 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	}
 
 	const showReportIssueAlert = () => {
-		Alert.alert(
-			'Report an issue',
-			'What would you like to update?',
-			[
-				{
-					text: 'Take new product photo',
-					onPress: () => handleReportIssue('image'),
-				},
-				{
-					text: 'Take photo of product name and brand name',
-					onPress: () => handleReportIssue('name'),
-				},
-				{
-					text: 'Take photo of ingredients',
-					onPress: () => handleReportIssue('ingredients'),
-				},
-				{
-					text: 'Cancel',
-					style: 'cancel',
-				},
-			]
-		)
+		Alert.alert('Report an issue', 'What would you like to update?', [
+			{
+				text: 'Take new product photo',
+				onPress: () => handleReportIssue('image'),
+			},
+			{
+				text: 'Take photo of product name',
+				onPress: () => handleReportIssue('name'),
+			},
+			{
+				text: 'Take photo of ingredients',
+				onPress: () => handleReportIssue('ingredients'),
+			},
+			{
+				text: 'Cancel',
+				style: 'cancel',
+			},
+		])
 	}
 
 	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients') => {
@@ -117,9 +128,12 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 		try {
 			// Request camera permission
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			
+
 			if (status !== 'granted') {
-				Alert.alert('Permission Required', 'Camera permission is required to update product information')
+				Alert.alert(
+					'Permission Required',
+					'Camera permission is required to update product information'
+				)
 				setProcessingReport(false)
 				return
 			}
@@ -161,7 +175,7 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			}
 
 			// Launch camera with a small delay to let modal state settle
-			await new Promise(resolve => setTimeout(resolve, 100))
+			await new Promise((resolve) => setTimeout(resolve, 100))
 			const result = await ImagePicker.launchCameraAsync(cameraConfig)
 
 			if (result.canceled) {
@@ -211,23 +225,26 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 
 	const handleImageUpdate = async (imageUri: string, imageBase64: string) => {
 		if (!currentProduct.barcode) return
-		
+
 		// Upload new image to storage
-		const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, currentProduct.barcode)
-		
+		const uploadResult = await ProductImageUploadService.uploadProductImage(
+			imageUri,
+			currentProduct.barcode
+		)
+
 		if (!uploadResult.success) {
 			throw new Error(uploadResult.error || 'Failed to upload image')
 		}
-		
+
 		// Update product imageurl in database via edge function with timestamp for cache busting
 		const timestampedImageUrl = `[SUPABASE]?t=${Date.now()}`
 		const { error } = await supabase.functions.invoke('update-product-image', {
 			body: {
 				upc: currentProduct.barcode,
-				imageUrl: timestampedImageUrl
-			}
+				imageUrl: timestampedImageUrl,
+			},
 		})
-		
+
 		if (error) {
 			throw new Error(`Failed to update product image URL: ${error.message}`)
 		}
@@ -235,10 +252,13 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 
 	const handleNameUpdate = async (imageBase64: string) => {
 		if (!currentProduct.barcode) return
-		
+
 		// Use product creation service to extract name and brand - this edge function handles the database update
-		const response = await ProductCreationService.createProductFromPhoto(imageBase64, currentProduct.barcode)
-		
+		const response = await ProductCreationService.createProductFromPhoto(
+			imageBase64,
+			currentProduct.barcode
+		)
+
 		if (response.error) {
 			throw new Error(response.error)
 		}
@@ -246,10 +266,13 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 
 	const handleIngredientsUpdate = async (imageBase64: string) => {
 		if (!currentProduct.barcode) return
-		
+
 		// Extract ingredients using OCR service - this edge function handles the database update
-		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(imageBase64, currentProduct.barcode)
-		
+		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(
+			imageBase64,
+			currentProduct.barcode
+		)
+
 		if (ocrResponse.error) {
 			throw new Error(ocrResponse.error)
 		}
@@ -368,8 +391,13 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			<ScrollView style={styles.scrollView}>
 				{/* Status Header */}
 				<View
-					style={[styles.statusHeader, { backgroundColor: getStatusColor(currentProduct.veganStatus) }]}>
-					<View style={styles.statusIconContainer}>{getStatusIcon(currentProduct.veganStatus)}</View>
+					style={[
+						styles.statusHeader,
+						{ backgroundColor: getStatusColor(currentProduct.veganStatus) },
+					]}>
+					<View style={styles.statusIconContainer}>
+						{getStatusIcon(currentProduct.veganStatus)}
+					</View>
 					<Text style={styles.statusText}>{getStatusText(currentProduct.veganStatus)}</Text>
 				</View>
 
@@ -385,7 +413,9 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 
 					<Text style={styles.productBarcode}>Barcode: {currentProduct.barcode}</Text>
 
-					<Text style={styles.statusDescription}>{getStatusDescription(currentProduct.veganStatus)}</Text>
+					<Text style={styles.statusDescription}>
+						{getStatusDescription(currentProduct.veganStatus)}
+					</Text>
 				</View>
 
 				{/* Non-Vegan Ingredients Analysis */}
@@ -563,26 +593,22 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 					<TouchableOpacity
 						style={styles.reportIssueButton}
 						onPress={showReportIssueAlert}
-						disabled={processingReport}
-					>
-						<Text style={styles.reportIssueButtonText}>
-							Report an issue with this product
-						</Text>
+						disabled={processingReport}>
+						<Text style={styles.reportIssueButtonText}>Report an issue with this product</Text>
 					</TouchableOpacity>
 				</View>
-
 			</ScrollView>
 
 			{/* Processing Modal */}
 			<Modal
 				visible={showProcessingModal}
 				transparent={true}
-				animationType="fade"
+				animationType='fade'
 				onRequestClose={() => {}} // Prevent dismissal
 			>
 				<View style={styles.processingModalOverlay}>
 					<View style={styles.processingModalContent}>
-						<ActivityIndicator size="large" color="#FF6B35" />
+						<ActivityIndicator size='large' color='#FF6B35' />
 						<Text style={styles.processingModalTitle}>Processing</Text>
 						<Text style={styles.processingModalSubtitle}>
 							{reportType === 'image' && 'Uploading new image...'}
