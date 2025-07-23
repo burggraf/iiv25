@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 
@@ -28,6 +28,7 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	>([])
 	const [processingReport, setProcessingReport] = useState(false)
 	const [reportType, setReportType] = useState<string>('')
+	const [showProcessingModal, setShowProcessingModal] = useState(false)
 
 	// Fetch ingredient classifications from database
 	useEffect(() => {
@@ -78,15 +79,12 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	}
 
 	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients') => {
-		console.log('Report issue clicked:', issueType)
 		setProcessingReport(true)
 		setReportType(issueType)
 
 		try {
 			// Request camera permission
-			console.log('Requesting camera permission...')
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			console.log('Camera permission status:', status)
 			
 			if (status !== 'granted') {
 				Alert.alert('Permission Required', 'Camera permission is required to update product information')
@@ -131,13 +129,10 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			}
 
 			// Launch camera with a small delay to let modal state settle
-			console.log('Launching camera with config:', cameraConfig)
 			await new Promise(resolve => setTimeout(resolve, 100))
 			const result = await ImagePicker.launchCameraAsync(cameraConfig)
-			console.log('Camera result:', result)
 
 			if (result.canceled) {
-				console.log('Camera was canceled')
 				setProcessingReport(false)
 				return
 			}
@@ -150,6 +145,9 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 				setProcessingReport(false)
 				return
 			}
+
+			// Show processing modal immediately after image capture
+			setShowProcessingModal(true)
 
 			// Process based on issue type
 			switch (issueType) {
@@ -164,12 +162,13 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 					break
 			}
 
-			// Show success
+			// Hide processing modal and show success
+			setShowProcessingModal(false)
 			Alert.alert('Success', successMessage)
 		} catch (error) {
 			console.error('Error processing report:', error)
-			console.error('Error details:', JSON.stringify(error))
-			// Show error
+			// Hide processing modal and show error
+			setShowProcessingModal(false)
 			Alert.alert('Error', `Failed to update product information: ${error}`)
 		} finally {
 			setProcessingReport(false)
@@ -180,11 +179,8 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	const handleImageUpdate = async (imageUri: string, imageBase64: string) => {
 		if (!product.barcode) return
 		
-		console.log('Starting image update for barcode:', product.barcode)
-		
 		// Upload new image to storage
 		const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, product.barcode)
-		console.log('Image upload result:', uploadResult)
 		
 		if (!uploadResult.success) {
 			throw new Error(uploadResult.error || 'Failed to upload image')
@@ -198,13 +194,9 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			}
 		})
 		
-		console.log('Image URL update result:', { data, error })
-		
 		if (error) {
 			throw new Error(`Failed to update product image URL: ${error.message}`)
 		}
-		
-		console.log('Successfully updated product image via edge function')
 	}
 
 	const handleNameUpdate = async (imageBase64: string) => {
@@ -216,39 +208,22 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 		if (response.error) {
 			throw new Error(response.error)
 		}
-
-		// The edge function has already updated the database with product name and brand
-		console.log('Successfully updated product name and brand via edge function')
 	}
 
 	const handleIngredientsUpdate = async (imageBase64: string) => {
-		if (!product.barcode) {
-			console.log('No barcode available for ingredients update')
-			return
-		}
+		if (!product.barcode) return
 		
-		console.log('Starting ingredients update for barcode:', product.barcode)
 		// Extract ingredients using OCR service - this edge function handles the database update
 		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(imageBase64, product.barcode)
-		console.log('OCR response:', ocrResponse)
 		
 		if (ocrResponse.error) {
-			console.log('OCR error:', ocrResponse.error)
 			throw new Error(ocrResponse.error)
 		}
 
-		if (ocrResponse.ingredients && ocrResponse.ingredients.length > 0) {
-			console.log('Extracted ingredients:', ocrResponse.ingredients)
-			console.log('Successfully updated product ingredients via edge function')
-			// The edge function has already updated the database with ingredients and classification
-		} else {
-			console.log('No ingredients extracted from image')
+		if (!ocrResponse.ingredients || ocrResponse.ingredients.length === 0) {
 			throw new Error('No ingredients could be extracted from the image')
 		}
 	}
-
-	// Keep minimal logging for ingredient classifications
-	console.log('Ingredient classifications loaded:', ingredientClassifications.length)
 
 	const getVerdictColor = (verdict: string): string => {
 		switch (verdict) {
@@ -563,6 +538,26 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 				</View>
 
 			</ScrollView>
+
+			{/* Processing Modal */}
+			<Modal
+				visible={showProcessingModal}
+				transparent={true}
+				animationType="fade"
+				onRequestClose={() => {}} // Prevent dismissal
+			>
+				<View style={styles.processingModalOverlay}>
+					<View style={styles.processingModalContent}>
+						<ActivityIndicator size="large" color="#FF6B35" />
+						<Text style={styles.processingModalTitle}>Processing</Text>
+						<Text style={styles.processingModalSubtitle}>
+							{reportType === 'image' && 'Uploading new image...'}
+							{reportType === 'name' && 'Extracting product name and brand...'}
+							{reportType === 'ingredients' && 'Analyzing ingredients...'}
+						</Text>
+					</View>
+				</View>
+			</Modal>
 		</SafeAreaView>
 	)
 }
@@ -936,5 +931,39 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: '#495057',
 		fontWeight: '500',
+	},
+	processingModalOverlay: {
+		flex: 1,
+		backgroundColor: 'rgba(0, 0, 0, 0.7)',
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	processingModalContent: {
+		backgroundColor: 'white',
+		borderRadius: 12,
+		padding: 32,
+		alignItems: 'center',
+		minWidth: 200,
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 2,
+		},
+		shadowOpacity: 0.25,
+		shadowRadius: 3.84,
+		elevation: 5,
+	},
+	processingModalTitle: {
+		fontSize: 18,
+		fontWeight: 'bold',
+		color: '#333',
+		marginTop: 16,
+		marginBottom: 8,
+	},
+	processingModalSubtitle: {
+		fontSize: 14,
+		color: '#666',
+		textAlign: 'center',
+		lineHeight: 20,
 	},
 })
