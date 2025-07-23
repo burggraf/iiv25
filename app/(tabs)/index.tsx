@@ -123,18 +123,6 @@ export default function HomeScreen() {
           <View style={styles.actionGrid}>
             <TouchableOpacity 
               style={styles.actionCard} 
-              onPress={() => navigateToTab('scanner')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconContainer}>
-                <BarcodeIcon size={32} color="#14A44A" />
-              </View>
-              <Text style={styles.actionTitle}>Scanner</Text>
-              <Text style={styles.actionDescription}>Scan barcodes with your camera</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.actionCard} 
               onPress={() => navigateToTab('manual')}
               activeOpacity={0.7}
             >
@@ -147,14 +135,14 @@ export default function HomeScreen() {
 
             <TouchableOpacity 
               style={styles.actionCard} 
-              onPress={() => navigateToTab('search')}
+              onPress={() => navigateToTab('scanner')}
               activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
-                <SearchIcon size={32} color="#14A44A" />
+                <BarcodeIcon size={32} color="#14A44A" />
               </View>
-              <Text style={styles.actionTitle}>Search</Text>
-              <Text style={styles.actionDescription}>Find products & ingredients</Text>
+              <Text style={styles.actionTitle}>Scanner</Text>
+              <Text style={styles.actionDescription}>Scan barcodes with your camera</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -167,6 +155,18 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.actionTitle}>History</Text>
               <Text style={styles.actionDescription}>View your past scans</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionCard} 
+              onPress={() => navigateToTab('search')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconContainer}>
+                <SearchIcon size={32} color="#14A44A" />
+              </View>
+              <Text style={styles.actionTitle}>Search</Text>
+              <Text style={styles.actionDescription}>Find products & ingredients</Text>
             </TouchableOpacity>
           </View>
         </View>
