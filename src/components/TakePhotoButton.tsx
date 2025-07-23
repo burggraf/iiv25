@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
-    color: 'white',
+    color: 'black',
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
