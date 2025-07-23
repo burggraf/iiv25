@@ -78,9 +78,12 @@
     "@testing-library/react-native": "^13.2.0",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.0.10",
+    "babel-preset-expo": "^13.2.3",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
     "react-test-renderer": "^19.0.0",
     "ts-jest": "^29.4.0",
     "typescript": "~5.8.3"
