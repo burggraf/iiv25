@@ -128,8 +128,19 @@ Instructions:
 2. Extract each individual ingredient from the list
 3. Clean up the text (remove parentheses, allergen warnings, etc.)
 4. TRANSLATE all ingredients to English if they are in another language
-5. Return ONLY the actual food ingredients in English
+5. Return ONLY the actual food ingredients that are part of this product
 6. Determine if this appears to be a valid food ingredients list
+
+IMPORTANT EXCLUSIONS - Skip any text that mentions:
+- "Made in a facility that also processes..." or similar facility warnings
+- "May contain..." statements
+- "Processed in a facility with..." warnings
+- Cross-contamination or allergen facility information
+- Manufacturing location or equipment information
+
+Focus ONLY on ingredients that are actually added to make this specific product.
+
+CRITICAL: If you only find facility warnings or processing statements (like "Made in a facility that processes...") but NO actual ingredients list, then return an empty ingredients array and set isValidIngredientsList to false. Do NOT include the facility warning items as ingredients.
 
 Return a JSON object with this exact structure:
 {
@@ -144,7 +155,7 @@ IMPORTANT: All ingredients must be translated to English. For example:
 - "lait" should become "milk"
 - "farine de blé" should become "wheat flour"
 
-If you cannot find or read ingredients clearly, set confidence below 0.7 and isValidIngredientsList to false.`
+If you cannot find or read ingredients clearly, OR if you only find facility warnings without actual ingredients, set confidence below 0.7 and isValidIngredientsList to false.`
               },
               {
                 inline_data: {

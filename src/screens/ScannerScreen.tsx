@@ -51,6 +51,7 @@ export default function ScannerScreen() {
 	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
 	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
 	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
+	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
 	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
@@ -282,13 +283,13 @@ export default function ScannerScreen() {
 			)
 
 			if (data.error) {
-				setError(data.error)
+				setIngredientScanError(data.error)
 				setShowIngredientScanModal(false)
 				return
 			}
 
 			if (!data.isValidIngredientsList || data.confidence < 0.7) {
-				setError(
+				setIngredientScanError(
 					'Could not clearly read ingredients from the image. Please try again with better lighting.'
 				)
 				setShowIngredientScanModal(false)
@@ -414,6 +415,15 @@ export default function ScannerScreen() {
 		setRetryableError(null);
 		// Clear error state and hide overlay to allow new scans
 		hideOverlay();
+	}
+
+	const handleIngredientScanRetry = () => {
+		setIngredientScanError(null);
+		handleScanIngredients();
+	}
+
+	const handleIngredientScanCancel = () => {
+		setIngredientScanError(null);
 	}
 
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
@@ -941,6 +951,38 @@ export default function ScannerScreen() {
 								onPress={handleRetryProductCreation}
 								disabled={isCreatingProduct}>
 								{isCreatingProduct ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
+								)}
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			)}
+
+			{/* Ingredient Scan Error Modal */}
+			{ingredientScanError && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>❌</Text>
+							<Text style={styles.createProductModalTitle}>Ingredient Scan Failed</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								{ingredientScanError}
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleIngredientScanCancel}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleIngredientScanRetry}
+								disabled={isParsingIngredients}>
+								{isParsingIngredients ? (
 									<ActivityIndicator size='small' color='white' />
 								) : (
 									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
