@@ -1,194 +1,136 @@
-# Is It Vegan? - React Native/Expo App Plan
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-A cross-platform mobile app that allows users to scan food product barcodes and instantly determine if the product is vegan, vegetarian, or neither.
+
+Is It Vegan? - A React Native/Expo app that scans product barcodes to determine vegan/vegetarian status. Published on iOS App Store, Android in development.
 
 ## Technology Stack
-- **Framework**: React Native with Expo
-- **Deployment**: iOS App Store and Google Play Store
-- **Barcode Scanning**: Expo Camera + Barcode Scanner
-- **Backend Database**: Supabase (PostgreSQL) - Primary product/ingredient data source
-- **Product Data**: Open Food Facts API - Secondary/fallback data source
-- **State Management**: React Context/Redux Toolkit
-- **Navigation**: React Navigation
-- **UI Components**: React Native Elements or NativeBase
 
-## Phase 1: Project Setup & Scaffolding
-1. Initialize Expo project with TypeScript
-2. Set up project structure and folder organization
-3. Configure development environment
-4. Install core dependencies (navigation, UI library)
-5. Set up version control and basic CI/CD
-
-## Phase 2: Core Features Development
-1. **Barcode Scanner Implementation**
-   - Integrate Expo Camera for barcode scanning
-   - Handle camera permissions
-   - Parse barcode data (UPC/EAN codes)
-
-2. **Supabase Database Integration**
-   - Set up Supabase client configuration
-   - Create SupabaseService for product/ingredient queries
-   - Implement VeganClassificationService using existing classification field
-   - Query products table by UPC/EAN13 for instant results
-
-3. **Product Data Flow**
-   - Primary: Query Supabase database for existing products
-   - Images: Always fetch product images from OpenFoodFacts for display
-   - Secondary: Fallback to Open Food Facts API for missing products
-   - Sync: Add new products from OpenFoodFacts to Supabase database
-   - Classification: Use enhanced multi-strategy vegan analysis
-
-4. **User Interface**
-   - Home screen with scan button
-   - Camera view with scanning overlay
-   - Results screen showing vegan status with data source indicator
-   - Product details view with ingredient breakdown
-   - History/favorites functionality
-
-## Phase 3: Enhanced Features
-1. **User Experience Improvements**
-   - Add loading states and error handling
-   - Implement search functionality (manual product lookup)
-   - Add user preferences and settings
-   - Include ingredient explanations
-
-2. **Data & Performance**
-   - Implement caching for scanned products
-   - Add offline mode support
-   - Optimize app performance and bundle size
-
-## Phase 4: Deployment & Distribution
-1. **App Store Preparation**
-   - Generate app icons and splash screens
-   - Configure app.json for both platforms
-   - Test on physical devices
-   - Prepare store listings and metadata
-
-2. **Release Management**
-   - Set up Expo Application Services (EAS)
-   - Configure build pipelines
-   - Submit to app stores
-   - Set up analytics and crash reporting
-
-## Service Architecture
-
-### Core Services
-1. **SupabaseService** (`src/services/supabaseService.ts`)
-   - Database connection and configuration
-   - Product queries by UPC/EAN13
-   - Ingredient lookups and classifications
-   - Product insertion from OpenFoodFacts data
-
-2. **VeganClassificationService** (`src/services/veganClassificationService.ts`)
-   - Extract and enhance existing classification logic
-   - Map classification field to VeganStatus enum
-   - Ingredient-level classification using ingredients table
-   - Consistent classification across data sources
-
-3. **ProductService** (`src/services/productService.ts`)
-   - Main orchestration service
-   - Implements data flow: Supabase → OpenFoodFacts (images) → Manual
-   - Always fetches product images from OpenFoodFacts for display
-   - Handles caching and synchronization
-   - Provides unified Product interface
-
-4. **Enhanced OpenFoodFactsService** (`src/services/openFoodFactsApi.ts`)
-   - Modified to work as secondary data source
-   - Integration with SupabaseService for product syncing
-   - Maintains existing sophisticated classification logic
-
-### Data Models
-- **Product Interface**: Updated to include data source tracking
-- **Ingredient Interface**: Enhanced with Supabase classification mapping
-- **Classification Details**: Enriched with confidence scores and source attribution
+- **React Native** with **Expo SDK 53** and **Expo Router** (file-based routing)
+- **TypeScript** with strict mode and path aliases (@/\*)
+- **Supabase** for authentication and PostgreSQL database (411K+ products)
+- **Open Food Facts API** as secondary data source
+- **EAS Build** for deployment to iOS TestFlight and Android APK
 
 ## Development Commands
+
+### Core Development
+
 ```bash
-# Create new Expo project
-npx create-expo-app@latest IsItVegan --template
-
-# Install Supabase dependencies
-npm install @supabase/supabase-js react-native-url-polyfill react-native-dotenv
-
-# Development
-npm start
-npm run ios
-npm run android
-
-# Supabase Integration
-# Set up environment variables (.env file):
-# SUPABASE_URL=your-supabase-project-url
-# SUPABASE_ANON_KEY=your-supabase-anon-key
-
-# Test database connections
-npm run test:db
-
-# Build for production
-eas build --platform all
-eas submit --platform all
+npm start           # Start Expo development server
+npm run android     # Run on Android device/emulator
+npm run ios         # Run on iOS device/simulator
+npm run web         # Run on web browser
 ```
 
-## Data Integration Architecture
+### Building & Deployment
 
-### Primary Data Source: Supabase Database
-- **Products Table**: 411,000+ products with UPC/EAN13, ingredients, calculated vegan status
-- **Ingredients Table**: 227,000+ ingredients with vegan/vegetarian classifications
-- **Classification System**: Uses classification field for vegan status determination
-- **Performance**: Instant local database queries for existing products
+```bash
+npm run build:android     # Build Android APK
+npm run build:ios        # Build iOS TestFlight
+npm run build:production # Build for production (both platforms)
+npm run submit:ios       # Submit to App Store
+```
 
-### Secondary Data Source: Open Food Facts API
-- **Purpose**: Fallback for products not in Supabase database
-- **Integration**: When product found in OpenFoodFacts, add to Supabase for future queries
-- **Barcode Format**: Support UPC-A, UPC-E, EAN-13, EAN-8
-- **Vegan Classification**: Enhanced multi-strategy analysis (structured, product-level, text-based)
+### Testing & Quality
 
-### Data Flow Strategy
-1. **Barcode Scan** → Query Supabase products table by UPC/EAN13
-2. **If Found in Supabase**: 
-   - Use existing classification field + ingredients classification
-   - Query OpenFoodFacts API for product image and additional metadata
-3. **If Not Found in Supabase**: Query Open Food Facts API for complete product data
-4. **If Found in OpenFoodFacts**: Process with VeganClassificationService and add to Supabase
-5. **Fallback**: Manual ingredient entry for completely unknown products
+```bash
+npm run test        # Run all tests
+npm run lint        # Run ESLint (flat config format)
+npm run type-check  # Run TypeScript compiler check
+```
 
-## Key Dependencies to Research
-- **Database & Backend**:
-  - @supabase/supabase-js (Supabase client for React Native)
-  - react-native-url-polyfill (Required for Supabase)
-- **Core App**:
-  - expo-camera
-  - expo-barcode-scanner
-  - @react-navigation/native
-  - react-native-elements or nativebase
-- **API & Storage**:
-  - axios for API calls (OpenFoodFacts fallback)
-  - react-native-async-storage (local caching)
-- **Environment**:
-  - react-native-dotenv (environment variables for Supabase config)
+## Testing Requirements
 
-## Next Steps
-1. **Supabase Integration Setup**
-   - Configure Supabase client with environment variables
-   - Create SupabaseService for database queries
-   - Test connection to existing products/ingredients tables
+- **Write tests for all new features** unless explicitly told not to
+- **Run tests before committing** to ensure code quality and functionality
+- Use `npm run test` to verify all tests pass before making commits
+- Tests should cover both happy path and edge cases for new functionality
 
-2. **VeganClassificationService Development**
-   - Extract classification logic from OpenFoodFactsService
-   - Implement classification field mapping to VeganStatus
-   - Create ingredient-level classification using ingredients table
+## Architecture Overview
 
-3. **ProductService Implementation**
-   - Build main orchestration service
-   - Implement Supabase → OpenFoodFacts → Manual data flow
-   - Add product synchronization from OpenFoodFacts to Supabase
+### Routing & Navigation
 
-4. **Enhanced User Interface**
-   - Update existing screens to use new ProductService
-   - Add data source indicators (Supabase vs OpenFoodFacts)
-   - Implement enhanced product details with ingredient breakdown
+- **Expo Router** with file-based routing in `/app/` directory
+- **Authentication Flow**: `/app/index.tsx` → `/app/auth/` or `/app/(tabs)/`
+- **Tab Navigation**: Home, Scanner, Manual, History, Search in `/app/(tabs)/`
 
-5. **Testing & Optimization**
-   - Test with existing 411K+ products in Supabase
-   - Optimize query performance for barcode lookups
-   - Validate classification accuracy with existing data
+### State Management
+
+- **React Context API** with AuthContext and AppContext providers
+- **Authentication**: Supabase Auth with PKCE flow (email, Google, anonymous)
+- **Local Storage**: AsyncStorage for offline caching
+
+### Data Architecture (Hybrid Approach)
+
+1. **Primary**: Supabase PostgreSQL database (products and ingredients tables)
+2. **Secondary**: Open Food Facts API for missing products
+3. **Flow**: Supabase query → OFF API fallback → sync new products to Supabase
+4. **Images**: Always fetched from Open Food Facts for display
+
+### Key Services Layer (`/src/services/`)
+
+- **ProductLookupService**: Main orchestration for product searches
+- **SupabaseService**: Database queries and operations
+- **OpenFoodFactsService**: External API with enhanced vegan classification
+- **VeganClassificationService**: Multi-strategy ingredient analysis
+- **ProductImageUrlService**: Image URL resolution and caching
+
+### Directory Structure
+
+```
+app/                 # Expo Router pages and layouts
+├── (tabs)/         # Tab navigation screens
+├── auth/           # Authentication screens
+├── _layout.tsx     # Root layout with providers
+└── index.tsx       # Authentication routing logic
+
+src/
+├── components/     # Reusable UI components
+├── context/        # React Context providers
+├── hooks/          # Custom React hooks
+├── screens/        # Screen components (legacy)
+├── services/       # Business logic and API services
+├── types/          # TypeScript type definitions
+└── utils/          # Utility functions
+```
+
+## Important Configuration
+
+### Environment Setup
+
+- **Supabase**: Requires SUPABASE_URL and SUPABASE_ANON_KEY in environment
+- **Bundle ID**: `net.isitvegan.app`
+- **Metro Config**: Custom resolver with polyfills for crypto/URL APIs
+- **EAS Config**: Profiles for development, preview, production, testflight
+
+### Type Safety
+
+- Comprehensive TypeScript definitions in `/src/types/index.ts`
+- Path aliases configured: `@/*` maps to `src/*`
+- Strict TypeScript configuration with all strict checks enabled
+
+### Key Data Models
+
+- **Product**: Core product interface with UPC/EAN13, ingredients, vegan status
+- **VeganStatus**: Enum (VEGAN, VEGETARIAN, NOT_VEGAN, UNKNOWN)
+- **Ingredient**: Enhanced with Supabase classification mapping
+- **User**: Supabase auth user with profile management
+
+## Production Considerations
+
+- **iOS**: Published on App Store, TestFlight builds via EAS
+- **Android**: APK builds ready for Google Play Store
+- **Database**: 411K+ products in Supabase with UPC/EAN13 indexing
+- **Images**: CDN optimized through Open Food Facts
+- **Auth**: Production-ready with multiple OAuth providers
+
+## Critical Files to Understand
+
+- `/app/_layout.tsx`: Root providers and navigation setup
+- `/src/services/ProductLookupService.ts`: Main product search orchestration
+- `/src/types/index.ts`: Complete type definitions
+- `/src/context/AuthContext.tsx`: Authentication state management
+- `app.json` & `eas.json`: Build and deployment configuration
