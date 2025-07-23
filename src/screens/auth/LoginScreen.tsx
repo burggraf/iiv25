@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { Input, Button } from 'react-native-elements';
 import { useRouter } from 'expo-router';
@@ -113,10 +114,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <StatusBar style="dark" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -127,7 +129,7 @@ export default function LoginScreen() {
           <Logo size={80} />
           <Text style={styles.title}>Is It Vegan?</Text>
           <Text style={styles.subtitle}>
-            Scan any food product to instantly discover if it&apos;s vegan, vegetarian, or contains animal products
+            Just scan to find out!
           </Text>
         </View>
 
@@ -207,7 +209,8 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -215,6 +218,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
