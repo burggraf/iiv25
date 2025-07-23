@@ -91,15 +91,15 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			'What would you like to update?',
 			[
 				{
-					text: 'Incorrect image',
+					text: 'Take new product photo',
 					onPress: () => handleReportIssue('image'),
 				},
 				{
-					text: 'Incorrect product name or brand name',
+					text: 'Take photo of product name and brand name',
 					onPress: () => handleReportIssue('name'),
 				},
 				{
-					text: 'Incorrect ingredients',
+					text: 'Take photo of ingredients',
 					onPress: () => handleReportIssue('ingredients'),
 				},
 				{
