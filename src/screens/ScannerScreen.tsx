@@ -6,6 +6,7 @@ import { useIsFocused } from '@react-navigation/native'
 import React, { useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
+	Alert,
 	Animated,
 	Image,
 	Platform,
@@ -22,10 +23,12 @@ import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
 import ProductResult from '../components/ProductResult'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
+import TakePhotoButton from '../components/TakePhotoButton'
 import { useApp } from '../context/AppContext'
 import { IngredientOCRService } from '../services/ingredientOCRService'
 import { ProductCreationService } from '../services/productCreationService'
 import { ProductLookupService } from '../services/productLookupService'
+import { ProductImageUploadService } from '../services/productImageUploadService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 
@@ -48,6 +51,7 @@ export default function ScannerScreen() {
 	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
 	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
 	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
+	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -488,6 +492,120 @@ export default function ScannerScreen() {
 		}
 	}
 
+	const handleTakeProductPhoto = async () => {
+		// Show prompt first, like in product creation
+		Alert.alert(
+			"Add Product Photo",
+			"Take a photo of the entire front of the product package.",
+			[
+				{
+					text: "Cancel",
+					style: "cancel"
+				},
+				{
+					text: "Take Photo",
+					onPress: async () => {
+						await captureProductPhoto()
+					}
+				}
+			]
+		)
+	}
+
+	const captureProductPhoto = async () => {
+		try {
+			setIsCapturingPhoto(true)
+			setError(null)
+
+			// Request camera permission for image picker
+			const { status } = await ImagePicker.requestCameraPermissionsAsync()
+			if (status !== 'granted') {
+				setError('Camera permission is required to take product photo')
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			// Launch camera to take photo
+			const result = await ImagePicker.launchCameraAsync({
+				mediaTypes: 'images',
+				allowsEditing: true,
+				aspect: [4, 3],
+				quality: 0.8,
+				base64: true,
+			})
+
+			if (result.canceled) {
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			if (!result.assets[0].base64 || !result.assets[0].uri) {
+				setError('Failed to capture image data')
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			// Process the photo upload
+			await processProductPhotoUpload(result.assets[0].uri)
+
+		} catch (err) {
+			console.error('Error in photo capture flow:', err)
+			setError('Failed to capture photo. Please try again.')
+			setIsCapturingPhoto(false)
+		}
+	}
+
+	const processProductPhotoUpload = async (imageUri: string) => {
+		try {
+			if (!currentBarcode || !scannedProduct) {
+				setError('No product available for photo upload')
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			console.log(`📸 Starting photo upload for product: ${scannedProduct.name}`)
+
+			// Upload image and update database using existing service
+			const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, currentBarcode)
+			
+			if (!uploadResult.success || !uploadResult.imageUrl) {
+				setError(uploadResult.error || 'Failed to upload image')
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			// Update the database with the new image URL using edge function
+			const updateSuccess = await ProductImageUploadService.updateProductImageUrl(currentBarcode, uploadResult.imageUrl)
+			
+			if (!updateSuccess) {
+				setError('Image uploaded but failed to update product record')
+				setIsCapturingPhoto(false)
+				return
+			}
+
+			console.log(`✅ Successfully added photo for product: ${scannedProduct.name}`)
+
+			// Refresh the product data to show the new image
+			try {
+				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'PhotoUpload' })
+				if (refreshResult.product) {
+					setScannedProduct(refreshResult.product)
+					addToCache(currentBarcode, refreshResult.product)
+					console.log(`✅ Product refreshed with new image`)
+				}
+			} catch (refreshError) {
+				console.error('Error refreshing product after photo upload:', refreshError)
+				// Don't show error for refresh failure since upload succeeded
+			}
+
+		} catch (err) {
+			console.error('Error uploading product photo:', err)
+			setError('Failed to upload photo. Please try again.')
+		} finally {
+			setIsCapturingPhoto(false)
+		}
+	}
+
 	const handleOverlayPress = () => {
 		if (scannedProduct) {
 			setShowProductDetail(true)
@@ -666,8 +784,18 @@ export default function ScannerScreen() {
 						<View style={styles.overlayContent}>
 							<TouchableOpacity style={styles.overlayProductInfo} onPress={handleOverlayPress}>
 								<View style={styles.overlayLeft}>
-									{scannedProduct.imageUrl && (
+									{scannedProduct.imageUrl ? (
 										<Image source={{ uri: scannedProduct.imageUrl }} style={styles.overlayImage} />
+									) : (
+										<TakePhotoButton 
+											onPress={handleTakeProductPhoto}
+											style={[styles.overlayImage, isCapturingPhoto && styles.overlayImageLoading]}
+										/>
+									)}
+									{isCapturingPhoto && (
+										<View style={styles.overlayImageLoadingOverlay}>
+											<ActivityIndicator size="small" color="white" />
+										</View>
 									)}
 								</View>
 								<View style={styles.overlayCenter}>
@@ -1030,6 +1158,20 @@ const styles = StyleSheet.create({
 		height: 60,
 		borderRadius: 8,
 		backgroundColor: '#f0f0f0',
+	},
+	overlayImageLoading: {
+		opacity: 0.7,
+	},
+	overlayImageLoadingOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		justifyContent: 'center',
+		alignItems: 'center',
+		backgroundColor: 'rgba(0, 0, 0, 0.3)',
+		borderRadius: 8,
 	},
 	overlayCenter: {
 		flex: 1,
