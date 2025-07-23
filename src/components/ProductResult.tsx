@@ -7,6 +7,7 @@ import { supabase } from '../services/supabaseClient'
 import { IngredientOCRService } from '../services/ingredientOCRService'
 import { ProductCreationService } from '../services/productCreationService' 
 import { ProductImageUploadService } from '../services/productImageUploadService'
+import { ProductLookupService } from '../services/productLookupService'
 import { Product, VeganStatus } from '../types'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
@@ -23,6 +24,7 @@ interface IngredientClassification {
 }
 
 export default function ProductResult({ product, onBack, hideHeaderBackButton = false }: ProductResultProps) {
+	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
@@ -33,11 +35,11 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	// Fetch ingredient classifications from database
 	useEffect(() => {
 		const fetchIngredientClassifications = async () => {
-			if (!product.barcode) return
+			if (!currentProduct.barcode) return
 
 			try {
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
-					input_upc: product.barcode,
+					input_upc: currentProduct.barcode,
 				})
 
 				if (error) {
@@ -51,7 +53,30 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 		}
 
 		fetchIngredientClassifications()
-	}, [product.barcode])
+	}, [currentProduct.barcode])
+
+	const refreshProductData = async () => {
+		if (!currentProduct.barcode) return
+
+		try {
+			const result = await ProductLookupService.lookupProductByBarcode(currentProduct.barcode)
+			
+			if (result.product) {
+				setCurrentProduct(result.product)
+				// Also refresh ingredient classifications for the updated product
+				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
+					input_upc: currentProduct.barcode,
+				})
+				
+				if (!error && data) {
+					setIngredientClassifications(data)
+				}
+			}
+		} catch (error) {
+			console.error('Error refreshing product data:', error)
+			// Don't show an error to user - this is background refresh
+		}
+	}
 
 	const showReportIssueAlert = () => {
 		Alert.alert(
@@ -162,8 +187,9 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 					break
 			}
 
-			// Hide processing modal and show success
+			// Hide processing modal, refresh product data, and show success
 			setShowProcessingModal(false)
+			await refreshProductData()
 			Alert.alert('Success', successMessage)
 		} catch (error) {
 			console.error('Error processing report:', error)
@@ -177,19 +203,19 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	}
 
 	const handleImageUpdate = async (imageUri: string, imageBase64: string) => {
-		if (!product.barcode) return
+		if (!currentProduct.barcode) return
 		
 		// Upload new image to storage
-		const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, product.barcode)
+		const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, currentProduct.barcode)
 		
 		if (!uploadResult.success) {
 			throw new Error(uploadResult.error || 'Failed to upload image')
 		}
 		
 		// Update product imageurl in database via edge function
-		const { data, error } = await supabase.functions.invoke('update-product-image', {
+		const { error } = await supabase.functions.invoke('update-product-image', {
 			body: {
-				upc: product.barcode,
+				upc: currentProduct.barcode,
 				imageUrl: uploadResult.imageUrl || 'supabase://product-images'
 			}
 		})
@@ -200,10 +226,10 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	}
 
 	const handleNameUpdate = async (imageBase64: string) => {
-		if (!product.barcode) return
+		if (!currentProduct.barcode) return
 		
 		// Use product creation service to extract name and brand - this edge function handles the database update
-		const response = await ProductCreationService.createProductFromPhoto(imageBase64, product.barcode)
+		const response = await ProductCreationService.createProductFromPhoto(imageBase64, currentProduct.barcode)
 		
 		if (response.error) {
 			throw new Error(response.error)
@@ -211,10 +237,10 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	}
 
 	const handleIngredientsUpdate = async (imageBase64: string) => {
-		if (!product.barcode) return
+		if (!currentProduct.barcode) return
 		
 		// Extract ingredients using OCR service - this edge function handles the database update
-		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(imageBase64, product.barcode)
+		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(imageBase64, currentProduct.barcode)
 		
 		if (ocrResponse.error) {
 			throw new Error(ocrResponse.error)
@@ -334,39 +360,39 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			<ScrollView style={styles.scrollView}>
 				{/* Status Header */}
 				<View
-					style={[styles.statusHeader, { backgroundColor: getStatusColor(product.veganStatus) }]}>
-					<View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
-					<Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
+					style={[styles.statusHeader, { backgroundColor: getStatusColor(currentProduct.veganStatus) }]}>
+					<View style={styles.statusIconContainer}>{getStatusIcon(currentProduct.veganStatus)}</View>
+					<Text style={styles.statusText}>{getStatusText(currentProduct.veganStatus)}</Text>
 				</View>
 
 				{/* Product Info */}
 				<View style={styles.productInfo}>
-					{product.imageUrl && (
-						<Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+					{currentProduct.imageUrl && (
+						<Image source={{ uri: currentProduct.imageUrl }} style={styles.productImage} />
 					)}
 
-					<Text style={styles.productName}>{product.name}</Text>
+					<Text style={styles.productName}>{currentProduct.name}</Text>
 
-					{product.brand && <Text style={styles.productBrand}>{product.brand}</Text>}
+					{currentProduct.brand && <Text style={styles.productBrand}>{currentProduct.brand}</Text>}
 
-					<Text style={styles.productBarcode}>Barcode: {product.barcode}</Text>
+					<Text style={styles.productBarcode}>Barcode: {currentProduct.barcode}</Text>
 
-					<Text style={styles.statusDescription}>{getStatusDescription(product.veganStatus)}</Text>
+					<Text style={styles.statusDescription}>{getStatusDescription(currentProduct.veganStatus)}</Text>
 				</View>
 
 				{/* Non-Vegan Ingredients Analysis */}
-				{product.nonVeganIngredients && product.nonVeganIngredients.length > 0 && (
+				{currentProduct.nonVeganIngredients && currentProduct.nonVeganIngredients.length > 0 && (
 					<View style={styles.analysisSection}>
 						<Text style={styles.analysisSectionTitle}>⚠️ Classification Analysis</Text>
 						<Text style={styles.analysisSubtitle}>
-							{product.veganStatus === 'vegetarian'
+							{currentProduct.veganStatus === 'vegetarian'
 								? 'Contains dairy or eggs but no meat:'
-								: product.veganStatus === 'not_vegan'
+								: currentProduct.veganStatus === 'not_vegan'
 								? 'Contains animal products:'
 								: 'Uncertain ingredients:'}
 						</Text>
 						<View style={styles.analysisItemsList}>
-							{product.nonVeganIngredients.map((detail, index) => (
+							{currentProduct.nonVeganIngredients.map((detail, index) => (
 								<View key={index} style={styles.analysisItem}>
 									<Text style={styles.analysisIngredient}>• {detail.ingredient}</Text>
 									<Text style={styles.analysisReason}>{detail.reason}</Text>
@@ -384,9 +410,9 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 								</View>
 							))}
 						</View>
-						{product.classificationMethod && (
+						{currentProduct.classificationMethod && (
 							<Text style={styles.classificationMethod}>
-								Classification method: {product.classificationMethod}
+								Classification method: {currentProduct.classificationMethod}
 							</Text>
 						)}
 					</View>
@@ -511,11 +537,11 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 				)}
 
 				{/* Ingredients */}
-				{product.ingredients.length > 0 && (
+				{currentProduct.ingredients.length > 0 && (
 					<View style={styles.ingredientsSection}>
 						<Text style={styles.sectionTitle}>All Ingredients:</Text>
 						<View style={styles.ingredientsList}>
-							{product.ingredients.map((ingredient, index) => (
+							{currentProduct.ingredients.map((ingredient, index) => (
 								<Text key={index} style={styles.ingredient}>
 									• {ingredient}
 								</Text>
