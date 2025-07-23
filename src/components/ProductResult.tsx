@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+import { useApp } from '../context/AppContext'
 import { IngredientOCRService } from '../services/ingredientOCRService'
 import { ProductCreationService } from '../services/productCreationService'
 import { ProductImageUploadService } from '../services/productImageUploadService'
@@ -40,6 +41,7 @@ export default function ProductResult({
 	hideHeaderBackButton = false,
 	onProductUpdated,
 }: ProductResultProps) {
+	const { addToHistory } = useApp()
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
@@ -84,6 +86,9 @@ export default function ProductResult({
 				if (onProductUpdated) {
 					onProductUpdated(result.product)
 				}
+
+				// Update the product in history as well
+				addToHistory(result.product)
 
 				// Also refresh ingredient classifications for the updated product
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
