@@ -52,6 +52,8 @@ export default function ScannerScreen() {
 	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
 	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
 	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
+	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
+	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
 	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
@@ -365,7 +367,12 @@ export default function ScannerScreen() {
 			// Request camera permission for image picker
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
 			if (status !== 'granted') {
-				setError('Camera permission is required to create product')
+				setProductCreationError({
+					error: 'Camera permission is required to create product',
+					imageBase64: '',
+					imageUri: '',
+					retryable: false
+				});
 				setIsCreatingProduct(false)
 				return
 			}
@@ -387,7 +394,12 @@ export default function ScannerScreen() {
 			}
 
 			if (!result.assets[0].base64) {
-				setError('Failed to capture image data')
+				setProductCreationError({
+					error: 'Failed to capture image data',
+					imageBase64: '',
+					imageUri: '',
+					retryable: true
+				});
 				setIsCreatingProduct(false)
 				return
 			}
@@ -395,7 +407,12 @@ export default function ScannerScreen() {
 			await processProductCreation(result.assets[0].base64, result.assets[0].uri)
 		} catch (err) {
 			console.error('Error in camera flow:', err)
-			setError('Failed to capture photo. Please try again.')
+			setProductCreationError({
+				error: 'Failed to capture photo. Please try again.',
+				imageBase64: '',
+				imageUri: '',
+				retryable: true
+			});
 			setIsCreatingProduct(false)
 		}
 	}
@@ -426,6 +443,27 @@ export default function ScannerScreen() {
 		setIngredientScanError(null);
 	}
 
+	const handleProductCreationRetry = () => {
+		if (!productCreationError) return;
+		const { imageBase64, imageUri } = productCreationError;
+		setProductCreationError(null);
+		processProductCreation(imageBase64, imageUri);
+	}
+
+	const handleProductCreationCancel = () => {
+		setProductCreationError(null);
+		hideOverlay();
+	}
+
+	const handleProductPhotoRetry = () => {
+		setProductPhotoError(null);
+		handleTakeProductPhoto();
+	}
+
+	const handleProductPhotoCancel = () => {
+		setProductPhotoError(null);
+	}
+
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
 		try {
 			setShowProductCreationModal(true)
@@ -445,17 +483,13 @@ export default function ScannerScreen() {
 			)
 
 			if (data.error) {
-				// Check if the error is retryable
-				if (data.retryable) {
-					console.log('Retryable error detected:', data.error);
-					setRetryableError({
-						error: data.error,
-						imageBase64,
-						imageUri
-					});
-				} else {
-					setError(data.error);
-				}
+				console.log('Product creation error:', data.error, 'Retryable:', data.retryable);
+				setProductCreationError({
+					error: data.error,
+					imageBase64,
+					imageUri,
+					retryable: data.retryable || false
+				});
 				setIsCreatingProduct(false)
 				setShowProductCreationModal(false)
 				return
@@ -489,13 +523,36 @@ export default function ScannerScreen() {
 					console.log('⚠️ Product refresh failed after creation')
 					setError('Product created but could not load details. Please scan again.')
 				}
+
+				// Add delayed refresh to catch async image upload
+				// The ProductCreationService uploads the image with a 1-second delay
+				setTimeout(async () => {
+					try {
+						console.log(`🔄 Secondary refresh to catch uploaded image`)
+						const secondRefreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreationImage' })
+						if (secondRefreshResult.product && secondRefreshResult.product.imageUrl) {
+							console.log(`✅ Product image found on second refresh`)
+							setScannedProduct(secondRefreshResult.product)
+							addToCache(currentBarcode, secondRefreshResult.product)
+						}
+					} catch (secondRefreshError) {
+						console.error('Error in secondary refresh after product creation:', secondRefreshError)
+						// Silent fail - don't show error for secondary refresh
+					}
+				}, 2500); // Wait 2.5 seconds (1s delay + 1.5s for upload)
+
 			} catch (refreshError) {
 				console.error('Error refreshing product after creation:', refreshError)
 				setError('Product created but could not load details. Please scan again.')
 			}
 		} catch (err) {
 			console.error('Error creating product:', err)
-			setError('Failed to create product. Please try again.')
+			setProductCreationError({
+				error: 'Failed to create product. Please try again.',
+				imageBase64,
+				imageUri: imageUri || '',
+				retryable: true
+			});
 		} finally {
 			setIsCreatingProduct(false)
 			setShowProductCreationModal(false)
@@ -530,7 +587,7 @@ export default function ScannerScreen() {
 			// Request camera permission for image picker
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
 			if (status !== 'granted') {
-				setError('Camera permission is required to take product photo')
+				setProductPhotoError('Camera permission is required to take product photo');
 				setIsCapturingPhoto(false)
 				return
 			}
@@ -550,7 +607,7 @@ export default function ScannerScreen() {
 			}
 
 			if (!result.assets[0].base64 || !result.assets[0].uri) {
-				setError('Failed to capture image data')
+				setProductPhotoError('Failed to capture image data');
 				setIsCapturingPhoto(false)
 				return
 			}
@@ -560,7 +617,7 @@ export default function ScannerScreen() {
 
 		} catch (err) {
 			console.error('Error in photo capture flow:', err)
-			setError('Failed to capture photo. Please try again.')
+			setProductPhotoError('Failed to capture photo. Please try again.');
 			setIsCapturingPhoto(false)
 		}
 	}
@@ -568,7 +625,7 @@ export default function ScannerScreen() {
 	const processProductPhotoUpload = async (imageUri: string) => {
 		try {
 			if (!currentBarcode || !scannedProduct) {
-				setError('No product available for photo upload')
+				setProductPhotoError('No product available for photo upload');
 				setIsCapturingPhoto(false)
 				return
 			}
@@ -579,7 +636,7 @@ export default function ScannerScreen() {
 			const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, currentBarcode)
 			
 			if (!uploadResult.success || !uploadResult.imageUrl) {
-				setError(uploadResult.error || 'Failed to upload image')
+				setProductPhotoError(uploadResult.error || 'Failed to upload image');
 				setIsCapturingPhoto(false)
 				return
 			}
@@ -588,7 +645,7 @@ export default function ScannerScreen() {
 			const updateSuccess = await ProductImageUploadService.updateProductImageUrl(currentBarcode, uploadResult.imageUrl)
 			
 			if (!updateSuccess) {
-				setError('Image uploaded but failed to update product record')
+				setProductPhotoError('Image uploaded but failed to update product record');
 				setIsCapturingPhoto(false)
 				return
 			}
@@ -610,7 +667,7 @@ export default function ScannerScreen() {
 
 		} catch (err) {
 			console.error('Error uploading product photo:', err)
-			setError('Failed to upload photo. Please try again.')
+			setProductPhotoError('Failed to upload photo. Please try again.');
 		} finally {
 			setIsCapturingPhoto(false)
 		}
@@ -983,6 +1040,72 @@ export default function ScannerScreen() {
 								onPress={handleIngredientScanRetry}
 								disabled={isParsingIngredients}>
 								{isParsingIngredients ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
+								)}
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			)}
+
+			{/* Product Creation Error Modal */}
+			{productCreationError && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>❌</Text>
+							<Text style={styles.createProductModalTitle}>Product Creation Failed</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								{productCreationError.error}
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleProductCreationCancel}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							{productCreationError.retryable && (
+								<TouchableOpacity
+									style={styles.createProductModalConfirmButton}
+									onPress={handleProductCreationRetry}
+									disabled={isCreatingProduct}>
+									{isCreatingProduct ? (
+										<ActivityIndicator size='small' color='white' />
+									) : (
+										<Text style={styles.createProductModalConfirmText}>Try Again</Text>
+									)}
+								</TouchableOpacity>
+							)}
+						</View>
+					</View>
+				</View>
+			)}
+
+			{/* Product Photo Error Modal */}
+			{productPhotoError && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>❌</Text>
+							<Text style={styles.createProductModalTitle}>Photo Upload Failed</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								{productPhotoError}
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleProductPhotoCancel}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleProductPhotoRetry}
+								disabled={isCapturingPhoto}>
+								{isCapturingPhoto ? (
 									<ActivityIndicator size='small' color='white' />
 								) : (
 									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
