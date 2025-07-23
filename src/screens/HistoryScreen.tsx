@@ -22,7 +22,7 @@ export default function HistoryScreen() {
   const handleClearHistory = () => {
     Alert.alert(
       'Clear History',
-      'Are you sure you want to clear all scan history? This action cannot be undone.',
+      'Are you sure? This action cannot be undone.',
       [
         {
           text: 'Cancel',

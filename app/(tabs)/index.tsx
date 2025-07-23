@@ -100,7 +100,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <Logo size={100} style={styles.logo} />
           <Text style={styles.title}>Is It Vegan?</Text>
-          <Text style={styles.subtitle}>Check if products are vegan instantly!</Text>
+          <Text style={styles.subtitle}>Just scan to find out!</Text>
         </View>
 
         {/* Quick Actions Section */}
