@@ -221,6 +221,11 @@ export default function SearchScreen() {
     setSupabaseIngredients([]);
   };
 
+  const handleProductUpdated = (updatedProduct: Product) => {
+    // Update the selected product state to reflect changes
+    setSelectedProduct(updatedProduct);
+  };
+
   const handleNewSearch = () => {
     setSearchQuery('');
     setProductResults([]);
@@ -267,7 +272,11 @@ export default function SearchScreen() {
   if (selectedProduct) {
     return (
       <View style={styles.container}>
-        <ProductResult product={selectedProduct} onBack={handleBackToSearch} />
+        <ProductResult 
+          product={selectedProduct} 
+          onBack={handleBackToSearch}
+          onProductUpdated={handleProductUpdated}
+        />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleBackToSearch}>
             <Text style={styles.backButton}>← Back to Search Results</Text>

@@ -106,6 +106,11 @@ export default function ManualEntryScreen() {
     setUpcCode('');
   };
 
+  const handleProductUpdated = (updatedProduct: Product) => {
+    // Update the product state to reflect changes
+    setProduct(updatedProduct);
+  };
+
   // Show loading screen
   if (isLoading) {
     return (
@@ -121,7 +126,11 @@ export default function ManualEntryScreen() {
   if (product) {
     return (
       <View style={styles.container}>
-        <ProductResult product={product} onBack={handleNewSearch} />
+        <ProductResult 
+          product={product} 
+          onBack={handleNewSearch}
+          onProductUpdated={handleProductUpdated}
+        />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleNewSearch}>
             <Text style={styles.newSearchButton}>

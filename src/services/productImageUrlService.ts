@@ -19,13 +19,21 @@ export class ProductImageUrlService {
       return null;
     }
 
-    // Handle Supabase storage marker
-    if (imageUrl === this.SUPABASE_MARKER) {
+    // Handle Supabase storage marker (with or without query parameters for cache busting)
+    if (imageUrl === this.SUPABASE_MARKER || imageUrl.startsWith(this.SUPABASE_MARKER + '?')) {
       if (!upc) {
         console.warn('Cannot resolve [SUPABASE] image URL without UPC');
         return null;
       }
-      return this.buildSupabaseImageUrl(upc);
+      const baseUrl = this.buildSupabaseImageUrl(upc);
+      
+      // If there are query parameters in the imageUrl, append them for cache busting
+      if (imageUrl.includes('?')) {
+        const queryParams = imageUrl.split('?')[1];
+        return `${baseUrl}?${queryParams}`;
+      }
+      
+      return baseUrl;
     }
 
     // Handle full URLs (OpenFoodFacts, etc.)

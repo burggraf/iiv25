@@ -19,6 +19,11 @@ export default function HistoryScreen() {
     setSelectedProduct(null);
   };
 
+  const handleProductUpdated = (updatedProduct: Product) => {
+    // Update the selected product state to reflect changes
+    setSelectedProduct(updatedProduct);
+  };
+
   const handleClearHistory = () => {
     Alert.alert(
       'Clear History',
@@ -41,7 +46,12 @@ export default function HistoryScreen() {
   if (selectedProduct) {
     return (
       <View style={styles.container}>
-        <ProductResult product={selectedProduct} onBack={handleBackToHistory} hideHeaderBackButton={true} />
+        <ProductResult 
+          product={selectedProduct} 
+          onBack={handleBackToHistory} 
+          hideHeaderBackButton={true}
+          onProductUpdated={handleProductUpdated} 
+        />
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={handleBackToHistory}>
             <Text style={styles.backToHistoryButton}>

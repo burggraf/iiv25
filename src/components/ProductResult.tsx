@@ -16,6 +16,7 @@ interface ProductResultProps {
 	product: Product
 	onBack: () => void
 	hideHeaderBackButton?: boolean
+	onProductUpdated?: (updatedProduct: Product) => void
 }
 
 interface IngredientClassification {
@@ -23,7 +24,7 @@ interface IngredientClassification {
 	class: string
 }
 
-export default function ProductResult({ product, onBack, hideHeaderBackButton = false }: ProductResultProps) {
+export default function ProductResult({ product, onBack, hideHeaderBackButton = false, onProductUpdated }: ProductResultProps) {
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
@@ -63,6 +64,12 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			
 			if (result.product) {
 				setCurrentProduct(result.product)
+				
+				// Notify parent component of the update
+				if (onProductUpdated) {
+					onProductUpdated(result.product)
+				}
+				
 				// Also refresh ingredient classifications for the updated product
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
 					input_upc: currentProduct.barcode,
@@ -212,11 +219,12 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 			throw new Error(uploadResult.error || 'Failed to upload image')
 		}
 		
-		// Update product imageurl in database via edge function
+		// Update product imageurl in database via edge function with timestamp for cache busting
+		const timestampedImageUrl = `[SUPABASE]?t=${Date.now()}`
 		const { error } = await supabase.functions.invoke('update-product-image', {
 			body: {
 				upc: currentProduct.barcode,
-				imageUrl: uploadResult.imageUrl || 'supabase://product-images'
+				imageUrl: timestampedImageUrl
 			}
 		})
 		

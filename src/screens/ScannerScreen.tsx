@@ -683,6 +683,16 @@ export default function ScannerScreen() {
 		setShowProductDetail(false)
 	}
 
+	const handleProductUpdated = (updatedProduct: Product) => {
+		// Update the current scanned product state
+		setScannedProduct(updatedProduct)
+		
+		// Update the cache to reflect the changes
+		if (updatedProduct.barcode) {
+			scannedResultsCache.current.set(updatedProduct.barcode, updatedProduct)
+		}
+	}
+
 
 	const handleSoundToggle = async () => {
 		try {
@@ -1146,7 +1156,12 @@ export default function ScannerScreen() {
 			{/* Product Detail Overlay */}
 			{showProductDetail && scannedProduct && (
 				<View style={styles.productDetailOverlay}>
-					<ProductResult product={scannedProduct} onBack={handleBackFromDetail} hideHeaderBackButton={true} />
+					<ProductResult 
+						product={scannedProduct} 
+						onBack={handleBackFromDetail} 
+						hideHeaderBackButton={true}
+						onProductUpdated={handleProductUpdated} 
+					/>
 					<View style={styles.buttonContainer}>
 						<TouchableOpacity onPress={handleBackFromDetail}>
 							<Text style={styles.backToScannerButton}>
