@@ -1,5 +1,6 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from './supabaseClient';
+import { ProductImageUrlService } from './productImageUrlService';
 
 export interface ImageUploadResult {
   success: boolean;
@@ -146,12 +147,9 @@ export class ProductImageUploadService {
 
       console.log('Upload completed successfully');
       
-      // Step 5: Get public URL for the uploaded image
-      const { data: publicUrlData } = supabase.storage
-        .from(this.BUCKET_NAME)
-        .getPublicUrl(fileName);
-
-      console.log(`✅ Image upload successful. Public URL: ${publicUrlData.publicUrl}`);
+      // Step 5: Return the Supabase marker instead of full URL
+      const supabaseMarker = ProductImageUrlService.getSupabaseMarker();
+      console.log(`✅ Image upload successful. Using Supabase marker: ${supabaseMarker}`);
       
       // Step 6: Verify the uploaded file by trying to download it
       console.log('Verifying uploaded file...');
@@ -179,7 +177,7 @@ export class ProductImageUploadService {
       
       return {
         success: true,
-        imageUrl: publicUrlData.publicUrl
+        imageUrl: supabaseMarker
       };
 
     } catch (error) {

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { OpenFoodFactsProduct, Product, VeganStatus, StructuredIngredient, ClassificationDetail } from '../types';
+import { ProductImageUrlService } from './productImageUrlService';
 
 const BASE_URL = 'https://world.openfoodfacts.org/api/v0/product';
 
@@ -22,7 +23,7 @@ export class OpenFoodFactsService {
         brand: product.brands || undefined,
         ingredients: this.parseIngredients(product.ingredients_text || ''),
         veganStatus: classificationResult.status,
-        imageUrl: product.image_url || undefined,
+        imageUrl: ProductImageUrlService.resolveImageUrl(product.image_url) || undefined,
         lastScanned: new Date(),
         structuredIngredients: product.ingredients || undefined,
         nonVeganIngredients: classificationResult.nonVeganIngredients,
@@ -359,7 +360,7 @@ export class OpenFoodFactsService {
             brand: product.brands || undefined,
             ingredients: this.parseIngredients(product.ingredients_text || ''),
             veganStatus: classificationResult.status,
-            imageUrl: product.image_url || undefined,
+            imageUrl: ProductImageUrlService.resolveImageUrl(product.image_url) || undefined,
             lastScanned: new Date(),
             structuredIngredients: product.ingredients || undefined,
             nonVeganIngredients: classificationResult.nonVeganIngredients,

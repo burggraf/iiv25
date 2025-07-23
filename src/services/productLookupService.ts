@@ -2,6 +2,7 @@ import { OpenFoodFactsService } from './openFoodFactsApi'
 import { SupabaseService } from './supabaseService'
 import { supabase } from './supabaseClient'
 import { Product, VeganStatus } from '../types'
+import { ProductImageUrlService } from './productImageUrlService'
 
 export interface ProductLookupResult {
 	product: Product | null
@@ -72,7 +73,7 @@ export class ProductLookupService {
 							? supabaseResult.product.ingredients.split(',').map((i) => i.trim())
 							: [],
 						veganStatus: veganStatus,
-						imageUrl: supabaseResult.product.imageurl || undefined,
+						imageUrl: ProductImageUrlService.resolveImageUrl(supabaseResult.product.imageurl, barcode) || undefined,
 						issues: supabaseResult.product.issues || undefined,
 						lastScanned: new Date(),
 						classificationMethod: 'structured',
@@ -108,7 +109,7 @@ export class ProductLookupService {
 							const offProduct = await OpenFoodFactsService.getProductByBarcode(barcode)
 							console.log('🌐 OpenFoodFacts image fetch result:', offProduct)
 							if (offProduct?.imageUrl) {
-								finalProduct.imageUrl = offProduct.imageUrl
+								finalProduct.imageUrl = ProductImageUrlService.resolveImageUrl(offProduct.imageUrl, barcode) || undefined
 								console.log('✅ Got product image from OpenFoodFacts')
 								decisionLog.push('🖼️ Product image fetched from OpenFoodFacts')
 								
