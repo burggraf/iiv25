@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "es2022"]
+  },
+  "tasks": {
+    "dev": "deno run --allow-all --watch index.ts"
+  }
+}

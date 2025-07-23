@@ -13,10 +13,139 @@ interface CreateProductResponse {
   confidence?: number;
   classification?: string;
   error?: string;
+  retryable?: boolean; // New field to indicate if error is retryable
   apiCost?: {
     inputTokens: number;
     outputTokens: number;
     totalCost: string;
+  };
+}
+
+// Helper function to make Gemini API calls with retry logic
+async function callGeminiWithRetry(apiKey: string, imageBase64: string, maxRetries = 3): Promise<{
+  success: boolean;
+  data?: any;
+  error?: string;
+  retryable?: boolean;
+}> {
+  const geminiPrompt = `You are an expert at analyzing product packaging images. Your task is to extract the product name and brand from this product package image.
+
+Instructions:
+1. Look for the main product name (not ingredients or nutritional info)
+2. Identify the brand name if visible
+3. Focus on the front-facing text that would help identify the product
+4. If you can't clearly read the product name, respond with null values
+5. Provide a confidence score from 0-100
+
+Return your response in this exact JSON format:
+{
+  "productName": "string or null",
+  "brand": "string or null", 
+  "confidence": number
+}
+
+Do not include any other text or explanation, only the JSON response.`;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempting Gemini API call (attempt ${attempt}/${maxRetries})`);
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: geminiPrompt },
+                {
+                  inline_data: {
+                    mime_type: "image/jpeg",
+                    data: imageBase64
+                  }
+                }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 1000,
+            }
+          })
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Gemini API call successful on attempt ${attempt}`);
+        return { success: true, data };
+      }
+
+      // Handle different error types
+      const errorText = await response.text();
+      console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
+
+      // Parse error response
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: { code: response.status, message: errorText } };
+      }
+
+      const errorCode = errorData?.error?.code || response.status;
+      const errorMessage = errorData?.error?.message || 'Unknown error';
+
+      // Check if error is retryable
+      const retryableErrors = [503, 429, 500, 502, 504]; // Service unavailable, rate limit, server errors
+      const isRetryable = retryableErrors.includes(errorCode);
+
+      if (!isRetryable) {
+        // Non-retryable error (like 400 Bad Request)
+        return {
+          success: false,
+          error: `Gemini API error: ${errorMessage}`,
+          retryable: false
+        };
+      }
+
+      if (attempt === maxRetries) {
+        // Last attempt failed
+        return {
+          success: false,
+          error: `Gemini API is temporarily unavailable (${errorMessage}). Please try again in a few moments.`,
+          retryable: true
+        };
+      }
+
+      // Wait before retrying (exponential backoff)
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Cap at 10 seconds
+      console.log(`Waiting ${waitTime}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+
+    } catch (networkError) {
+      console.error(`Network error on attempt ${attempt}:`, networkError);
+      
+      if (attempt === maxRetries) {
+        return {
+          success: false,
+          error: 'Network error connecting to Gemini API. Please check your connection and try again.',
+          retryable: true
+        };
+      }
+
+      // Wait before retrying network errors too
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  return {
+    success: false,
+    error: 'Unexpected error in Gemini API retry logic',
+    retryable: true
   };
 }
 
@@ -83,58 +212,23 @@ Deno.serve(async (req) => {
       throw new Error('GEMINI_API_KEY not configured');
     }
 
-    const geminiPrompt = `You are an expert at analyzing product packaging images. Your task is to extract the product name and brand from this product package image.
-
-Instructions:
-1. Look for the main product name (not ingredients or nutritional info)
-2. Identify the brand name if visible
-3. Focus on the front-facing text that would help identify the product
-4. If you can't clearly read the product name, respond with null values
-5. Provide a confidence score from 0-100
-
-Return your response in this exact JSON format:
-{
-  "productName": "string or null",
-  "brand": "string or null", 
-  "confidence": number
-}
-
-Do not include any other text or explanation, only the JSON response.`;
-
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: geminiPrompt },
-              {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: imageBase64
-                }
-              }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1000,
-          }
-        })
-      }
-    );
-
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error('Gemini API error:', errorText);
-      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+    const geminiApiResult = await callGeminiWithRetry(geminiApiKey, imageBase64);
+    
+    if (!geminiApiResult.success) {
+      console.error('Gemini API failed after retries:', geminiApiResult.error);
+      return new Response(
+        JSON.stringify({ 
+          error: geminiApiResult.error,
+          retryable: geminiApiResult.retryable
+        }),
+        { 
+          status: 503, // Service Unavailable
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
-    const geminiResult = await geminiResponse.json();
+    const geminiResult = geminiApiResult.data;
     console.log('Gemini API response:', JSON.stringify(geminiResult, null, 2));
 
     // Calculate API cost
@@ -281,6 +375,31 @@ Do not include any other text or explanation, only the JSON response.`;
     };
 
     console.log('Product creation completed successfully');
+    
+    // Debug: Test if we can immediately query the product we just created/updated
+    // This helps determine if the timing issue is between edge function and client
+    try {
+      const { data: verifyProduct, error: verifyError } = await supabaseService
+        .from('products')
+        .select('upc, ean13, product_name, imageurl')
+        .or(`upc.eq.${normalizedUpc},ean13.eq.${ean13}`)
+        .limit(1);
+        
+      if (verifyError) {
+        console.log('❌ Edge function immediate verification failed:', verifyError);
+      } else if (verifyProduct && verifyProduct.length > 0) {
+        console.log('✅ Edge function can immediately see created product:', {
+          name: verifyProduct[0].product_name,
+          upc: verifyProduct[0].upc,
+          ean13: verifyProduct[0].ean13,
+          hasImage: !!verifyProduct[0].imageurl
+        });
+      } else {
+        console.log('❌ Edge function cannot see the product it just created - this indicates a serious issue');
+      }
+    } catch (debugError) {
+      console.log('Debug query failed:', debugError);
+    }
 
     return new Response(
       JSON.stringify(response),

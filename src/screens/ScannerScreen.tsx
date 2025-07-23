@@ -47,6 +47,7 @@ export default function ScannerScreen() {
 	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
 	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
 	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
+	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -386,7 +387,7 @@ export default function ScannerScreen() {
 				return
 			}
 
-			await processProductCreation(result.assets[0].base64)
+			await processProductCreation(result.assets[0].base64, result.assets[0].uri)
 		} catch (err) {
 			console.error('Error in camera flow:', err)
 			setError('Failed to capture photo. Please try again.')
@@ -394,7 +395,24 @@ export default function ScannerScreen() {
 		}
 	}
 
-	const processProductCreation = async (imageBase64: string) => {
+	const handleRetryProductCreation = async () => {
+		if (!retryableError || !currentBarcode) {
+			console.error('No retryable error or barcode available');
+			return;
+		}
+
+		console.log('Retrying product creation...');
+		setRetryableError(null); // Clear the retry error
+		await processProductCreation(retryableError.imageBase64, retryableError.imageUri);
+	}
+
+	const handleCancelRetry = () => {
+		setRetryableError(null);
+		// Clear error state and hide overlay to allow new scans
+		hideOverlay();
+	}
+
+	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
 		try {
 			setShowProductCreationModal(true)
 			
@@ -408,15 +426,29 @@ export default function ScannerScreen() {
 
 			const data = await ProductCreationService.createProductFromPhoto(
 				imageBase64,
-				currentBarcode
+				currentBarcode,
+				imageUri
 			)
 
 			if (data.error) {
-				setError(data.error)
+				// Check if the error is retryable
+				if (data.retryable) {
+					console.log('Retryable error detected:', data.error);
+					setRetryableError({
+						error: data.error,
+						imageBase64,
+						imageUri
+					});
+				} else {
+					setError(data.error);
+				}
 				setIsCreatingProduct(false)
 				setShowProductCreationModal(false)
 				return
 			}
+
+			// Clear any retryable error since we succeeded
+			setRetryableError(null);
 
 			// Always refresh the product data after successful product creation
 			console.log(`🔄 Refreshing product data after product creation`)
@@ -755,6 +787,38 @@ export default function ScannerScreen() {
 						<BarcodeIcon size={48} color="#FF6B35" />
 						<Text style={styles.loadingModalTitle}>Adding new product...</Text>
 						<ActivityIndicator size="large" color="#FF6B35" style={styles.loadingSpinner} />
+					</View>
+				</View>
+			)}
+
+			{/* Retry Error Modal */}
+			{retryableError && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>⚠️</Text>
+							<Text style={styles.createProductModalTitle}>Service Temporarily Unavailable</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								{retryableError.error}
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleCancelRetry}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleRetryProductCreation}
+								disabled={isCreatingProduct}>
+								{isCreatingProduct ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
+								)}
+							</TouchableOpacity>
+						</View>
 					</View>
 				</View>
 			)}
@@ -1273,5 +1337,10 @@ const styles = StyleSheet.create({
 		color: '#666',
 		fontSize: 16,
 		fontStyle: 'italic',
+	},
+	retryErrorIcon: {
+		fontSize: 32,
+		textAlign: 'center',
+		marginBottom: 8,
 	},
 })
