@@ -416,7 +416,7 @@ export default function ProductResult({
 
 					{currentProduct.brand && <Text style={styles.productBrand}>{currentProduct.brand}</Text>}
 
-					<Text style={styles.productBarcode}>Barcode: {currentProduct.barcode}</Text>
+					<Text style={styles.productBarcode}>UPC: {currentProduct.barcode}</Text>
 
 					<Text style={styles.statusDescription}>
 						{getStatusDescription(currentProduct.veganStatus)}
@@ -426,7 +426,7 @@ export default function ProductResult({
 				{/* Non-Vegan Ingredients Analysis */}
 				{currentProduct.nonVeganIngredients && currentProduct.nonVeganIngredients.length > 0 && (
 					<View style={styles.analysisSection}>
-						<Text style={styles.analysisSectionTitle}>⚠️ Classification Analysis</Text>
+						<Text style={styles.analysisSectionTitle}>⚠️ Product Summary:</Text>
 						<Text style={styles.analysisSubtitle}>
 							{currentProduct.veganStatus === 'vegetarian'
 								? 'Contains dairy or eggs but no meat:'
@@ -453,11 +453,6 @@ export default function ProductResult({
 								</View>
 							))}
 						</View>
-						{currentProduct.classificationMethod && (
-							<Text style={styles.classificationMethod}>
-								Classification method: {currentProduct.classificationMethod}
-							</Text>
-						)}
 					</View>
 				)}
 
