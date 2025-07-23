@@ -795,7 +795,7 @@ export default function ScannerScreen() {
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={handleBarcodeScanned} />
-				) : isFocused ? (
+				) : isFocused && !showProductDetail ? (
 					<>
 						<CameraView
 							style={styles.camera}
