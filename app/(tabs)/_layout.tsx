@@ -58,11 +58,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="scanner"
+        name="manual"
         options={{
-          title: 'Scanner',
+          title: 'Manual',
           tabBarIcon: ({ focused }) => (
-            <BarcodeIcon 
+            <ManualIcon 
               size={24} 
               color={focused ? WHITE_COLOR : GREEN_COLOR} 
             />
@@ -70,11 +70,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="manual"
+        name="scanner"
         options={{
-          title: 'Manual',
+          title: 'Scanner',
           tabBarIcon: ({ focused }) => (
-            <ManualIcon 
+            <BarcodeIcon 
               size={24} 
               color={focused ? WHITE_COLOR : GREEN_COLOR} 
             />
