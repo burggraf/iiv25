@@ -1,5 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 interface ParseIngredientsRequest {
   imageBase64: string;
@@ -43,24 +44,24 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
+
     // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ 
-        error: 'Authorization header required' 
+      return new Response(JSON.stringify({
+        error: 'Authorization header required'
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     const token = authHeader.replace('Bearer ', '');
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    
+
     // Verify user authentication
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    
+
     console.log('🔍 Auth debug:', {
       authError: authError?.message,
       user: user ? {
@@ -73,11 +74,11 @@ Deno.serve(async (req: Request) => {
       } : null,
       authHeader: authHeader ? 'present' : 'missing'
     });
-    
+
     if (authError || !user) {
       console.log('Authentication failed:', authError);
-      return new Response(JSON.stringify({ 
-        error: 'Authentication failed' 
+      return new Response(JSON.stringify({
+        error: 'Authentication failed'
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -86,12 +87,12 @@ Deno.serve(async (req: Request) => {
 
     // Allow both authenticated and anonymous users
     console.log('Authenticated user:', user.id, user.is_anonymous ? '(anonymous)' : '(registered)');
-    
+
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { imageBase64, upc, openFoodFactsData }: ParseIngredientsRequest = await req.json();
-    
+
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: 'Image data required' }), {
         status: 400,
@@ -124,7 +125,7 @@ Deno.serve(async (req: Request) => {
                 text: `Analyze this food product label image and extract the ingredients list. 
 
 Instructions:
-1. Look for an "INGREDIENTS:" or "Ingredients:" section
+1. Look for an "INGREDIENTS:" or "Ingredients:" section (or a "CONTAINS:" or "Contains:" section)
 2. Extract each individual ingredient from the list
 3. Clean up the text (remove parentheses, allergen warnings, etc.)
 4. TRANSLATE all ingredients to English if they are in another language
@@ -190,21 +191,21 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
     if (usage) {
       const inputTokens = usage.promptTokenCount || 0;
       const outputTokens = usage.candidatesTokenCount || 0;
-      
+
       // Gemini 1.5 Flash pricing (as of 2024)
       const inputCostPer1M = 0.075; // $0.075 per 1M input tokens
       const outputCostPer1M = 0.30;  // $0.30 per 1M output tokens
-      
+
       const inputCost = (inputTokens / 1000000) * inputCostPer1M;
       const outputCost = (outputTokens / 1000000) * outputCostPer1M;
       const totalCost = inputCost + outputCost;
-      
+
       apiCostInfo = {
         inputTokens,
         outputTokens,
         totalCost: `$${totalCost.toFixed(6)}`
       };
-      
+
       console.log(`🔍 Gemini API Usage:`, {
         inputTokens,
         outputTokens,
@@ -224,7 +225,7 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
         throw new Error('No JSON found in response');
       }
       parsedResult = JSON.parse(jsonMatch[0]);
-      
+
       // Add cost info to successful response
       if (apiCostInfo) {
         parsedResult.apiCost = apiCostInfo;
@@ -233,14 +234,14 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
       // If ingredients were successfully parsed, update the database
       if (parsedResult.isValidIngredientsList && parsedResult.ingredients.length > 0) {
         console.log(`🔍 Processing ingredients for UPC: ${upc}`);
-        
+
         try {
           // Normalize barcode format - convert UPC-E to UPC-A if needed
           const normalizedUPC = upc.length === 11 ? '0' + upc : upc;
           const normalizedEAN13 = normalizedUPC; // Use normalized UPC as EAN13 for consistency
-          
+
           console.log(`📋 Normalized barcode: ${upc} → ${normalizedUPC}`);
-          
+
           // Prepare ingredients data
           const ingredientsCommaDelimited = parsedResult.ingredients.join(', ');
           const analysisTildeDelimited = parsedResult.ingredients
@@ -262,21 +263,21 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
           if (existingProduct) {
             // Update existing product (use the existing product's UPC for the update)
             console.log(`📝 Updating existing product: ${existingProduct.upc}`);
-            
+
             // Also normalize the existing product's barcode format if needed
             const updateData: any = {
               ingredients: ingredientsCommaDelimited,
               analysis: analysisTildeDelimited,
               lastupdated: new Date().toISOString()
             };
-            
+
             // If the existing product has 11-digit UPC but we have 12-digit normalized, update it
             if (existingProduct.upc.length === 11 && normalizedUPC.length === 12 && normalizedUPC !== existingProduct.upc) {
               console.log(`🔄 Normalizing existing product barcode: ${existingProduct.upc} → ${normalizedUPC}`);
               updateData.upc = normalizedUPC;
               updateData.ean13 = normalizedEAN13;
             }
-            
+
             productOperation = await supabase
               .from('products')
               .update(updateData)
