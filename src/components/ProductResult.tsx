@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import * as ImagePicker from 'expo-image-picker'
 
 import { supabase } from '../services/supabaseClient'
+import { IngredientOCRService } from '../services/ingredientOCRService'
+import { ProductCreationService } from '../services/productCreationService' 
+import { ProductImageUploadService } from '../services/productImageUploadService'
 import { Product, VeganStatus } from '../types'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
@@ -22,14 +26,14 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
-	const [loadingIngredients, setLoadingIngredients] = useState(false)
+	const [processingReport, setProcessingReport] = useState(false)
+	const [reportType, setReportType] = useState<string>('')
 
 	// Fetch ingredient classifications from database
 	useEffect(() => {
 		const fetchIngredientClassifications = async () => {
 			if (!product.barcode) return
 
-			setLoadingIngredients(true)
 			try {
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
 					input_upc: product.barcode,
@@ -42,13 +46,206 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 				}
 			} catch (err) {
 				console.error('Exception fetching ingredient classifications:', err)
-			} finally {
-				setLoadingIngredients(false)
 			}
 		}
 
 		fetchIngredientClassifications()
 	}, [product.barcode])
+
+	const showReportIssueAlert = () => {
+		Alert.alert(
+			'Report an issue',
+			'What would you like to update?',
+			[
+				{
+					text: 'Incorrect image',
+					onPress: () => handleReportIssue('image'),
+				},
+				{
+					text: 'Incorrect product name or brand name',
+					onPress: () => handleReportIssue('name'),
+				},
+				{
+					text: 'Incorrect ingredients',
+					onPress: () => handleReportIssue('ingredients'),
+				},
+				{
+					text: 'Cancel',
+					style: 'cancel',
+				},
+			]
+		)
+	}
+
+	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients') => {
+		console.log('Report issue clicked:', issueType)
+		setProcessingReport(true)
+		setReportType(issueType)
+
+		try {
+			// Request camera permission
+			console.log('Requesting camera permission...')
+			const { status } = await ImagePicker.requestCameraPermissionsAsync()
+			console.log('Camera permission status:', status)
+			
+			if (status !== 'granted') {
+				Alert.alert('Permission Required', 'Camera permission is required to update product information')
+				setProcessingReport(false)
+				return
+			}
+
+			let cameraConfig = {}
+			let successMessage = ''
+
+			switch (issueType) {
+				case 'image':
+					cameraConfig = {
+						mediaTypes: 'images',
+						allowsEditing: true,
+						aspect: [1, 1],
+						quality: 0.8,
+						base64: true,
+					}
+					successMessage = 'Product image updated successfully'
+					break
+				case 'name':
+					cameraConfig = {
+						mediaTypes: 'images',
+						allowsEditing: true,
+						aspect: [4, 3],
+						quality: 0.8,
+						base64: true,
+					}
+					successMessage = 'Product name and brand updated successfully'
+					break
+				case 'ingredients':
+					cameraConfig = {
+						mediaTypes: 'images',
+						allowsEditing: true,
+						aspect: [4, 3],
+						quality: 0.8,
+						base64: true,
+					}
+					successMessage = 'Ingredients updated successfully'
+					break
+			}
+
+			// Launch camera with a small delay to let modal state settle
+			console.log('Launching camera with config:', cameraConfig)
+			await new Promise(resolve => setTimeout(resolve, 100))
+			const result = await ImagePicker.launchCameraAsync(cameraConfig)
+			console.log('Camera result:', result)
+
+			if (result.canceled) {
+				console.log('Camera was canceled')
+				setProcessingReport(false)
+				return
+			}
+
+			const imageUri = result.assets[0].uri
+			const imageBase64 = result.assets[0].base64
+
+			if (!imageBase64) {
+				Alert.alert('Error', 'Failed to process image')
+				setProcessingReport(false)
+				return
+			}
+
+			// Process based on issue type
+			switch (issueType) {
+				case 'image':
+					await handleImageUpdate(imageUri, imageBase64)
+					break
+				case 'name':
+					await handleNameUpdate(imageBase64)
+					break
+				case 'ingredients':
+					await handleIngredientsUpdate(imageBase64)
+					break
+			}
+
+			// Show success
+			Alert.alert('Success', successMessage)
+		} catch (error) {
+			console.error('Error processing report:', error)
+			console.error('Error details:', JSON.stringify(error))
+			// Show error
+			Alert.alert('Error', `Failed to update product information: ${error}`)
+		} finally {
+			setProcessingReport(false)
+			setReportType('')
+		}
+	}
+
+	const handleImageUpdate = async (imageUri: string, imageBase64: string) => {
+		if (!product.barcode) return
+		
+		console.log('Starting image update for barcode:', product.barcode)
+		
+		// Upload new image to storage
+		const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, product.barcode)
+		console.log('Image upload result:', uploadResult)
+		
+		if (!uploadResult.success) {
+			throw new Error(uploadResult.error || 'Failed to upload image')
+		}
+		
+		// Update product imageurl in database via edge function
+		const { data, error } = await supabase.functions.invoke('update-product-image', {
+			body: {
+				upc: product.barcode,
+				imageUrl: uploadResult.imageUrl || 'supabase://product-images'
+			}
+		})
+		
+		console.log('Image URL update result:', { data, error })
+		
+		if (error) {
+			throw new Error(`Failed to update product image URL: ${error.message}`)
+		}
+		
+		console.log('Successfully updated product image via edge function')
+	}
+
+	const handleNameUpdate = async (imageBase64: string) => {
+		if (!product.barcode) return
+		
+		// Use product creation service to extract name and brand - this edge function handles the database update
+		const response = await ProductCreationService.createProductFromPhoto(imageBase64, product.barcode)
+		
+		if (response.error) {
+			throw new Error(response.error)
+		}
+
+		// The edge function has already updated the database with product name and brand
+		console.log('Successfully updated product name and brand via edge function')
+	}
+
+	const handleIngredientsUpdate = async (imageBase64: string) => {
+		if (!product.barcode) {
+			console.log('No barcode available for ingredients update')
+			return
+		}
+		
+		console.log('Starting ingredients update for barcode:', product.barcode)
+		// Extract ingredients using OCR service - this edge function handles the database update
+		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(imageBase64, product.barcode)
+		console.log('OCR response:', ocrResponse)
+		
+		if (ocrResponse.error) {
+			console.log('OCR error:', ocrResponse.error)
+			throw new Error(ocrResponse.error)
+		}
+
+		if (ocrResponse.ingredients && ocrResponse.ingredients.length > 0) {
+			console.log('Extracted ingredients:', ocrResponse.ingredients)
+			console.log('Successfully updated product ingredients via edge function')
+			// The edge function has already updated the database with ingredients and classification
+		} else {
+			console.log('No ingredients extracted from image')
+			throw new Error('No ingredients could be extracted from the image')
+		}
+	}
 
 	// Keep minimal logging for ingredient classifications
 	console.log('Ingredient classifications loaded:', ingredientClassifications.length)
@@ -351,6 +548,19 @@ export default function ProductResult({ product, onBack, hideHeaderBackButton = 
 						</View>
 					</View>
 				)}
+
+				{/* Report Issue Button */}
+				<View style={styles.reportIssueSection}>
+					<TouchableOpacity
+						style={styles.reportIssueButton}
+						onPress={showReportIssueAlert}
+						disabled={processingReport}
+					>
+						<Text style={styles.reportIssueButtonText}>
+							Report an issue with this product
+						</Text>
+					</TouchableOpacity>
+				</View>
 
 			</ScrollView>
 		</SafeAreaView>
@@ -705,6 +915,26 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: '#4CAF50',
 		marginBottom: 4,
+		fontWeight: '500',
+	},
+	reportIssueSection: {
+		paddingHorizontal: 16,
+		paddingVertical: 20,
+		alignItems: 'center',
+	},
+	reportIssueButton: {
+		backgroundColor: '#f8f9fa',
+		borderWidth: 1,
+		borderColor: '#dee2e6',
+		borderRadius: 8,
+		paddingVertical: 12,
+		paddingHorizontal: 24,
+		minWidth: 280,
+		alignItems: 'center',
+	},
+	reportIssueButtonText: {
+		fontSize: 16,
+		color: '#495057',
 		fontWeight: '500',
 	},
 })
