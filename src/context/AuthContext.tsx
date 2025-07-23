@@ -3,6 +3,29 @@ import React, { createContext, ReactNode, useContext, useEffect, useState } from
 import { supabase } from '../services/supabaseClient'
 import { AuthContextValue, AuthState } from '../types/auth'
 import { testPolyfill } from '../utils/test-polyfill'
+import { makeRedirectUri } from 'expo-auth-session'
+import * as QueryParams from 'expo-auth-session/build/QueryParams'
+import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
+
+// Required for web only
+WebBrowser.maybeCompleteAuthSession()
+
+const createSessionFromUrl = async (url: string) => {
+	const { params, errorCode } = QueryParams.getQueryParams(url)
+
+	if (errorCode) throw new Error(errorCode)
+	const { access_token, refresh_token } = params
+
+	if (!access_token) return
+
+	const { data, error } = await supabase.auth.setSession({
+		access_token,
+		refresh_token,
+	})
+	if (error) throw error
+	return data.session
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
@@ -21,6 +44,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	useEffect(() => {
 		// Test polyfill on initialization
 		testPolyfill()
+		
+		// Handle deep linking for OAuth callback
+		const handleDeepLink = (url: string) => {
+			if (url) {
+				createSessionFromUrl(url).catch(console.error)
+			}
+		}
+
+		// Check for initial URL
+		Linking.getInitialURL().then((url) => {
+			if (url) handleDeepLink(url)
+		})
+
+		// Listen for URL changes
+		const subscription = Linking.addEventListener('url', ({ url }) => {
+			handleDeepLink(url)
+		})
+
 		// Get initial session
 		const getInitialSession = async () => {
 			try {
@@ -53,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 		// Listen for auth changes
 		const {
-			data: { subscription },
+			data: { authSubscription },
 		} = supabase.auth.onAuthStateChange(async (event, session) => {
 			console.log('Auth state changed:', event, session?.user?.id)
 
@@ -66,7 +107,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		})
 
 		return () => {
-			subscription.unsubscribe()
+			authSubscription.unsubscribe()
+			subscription?.remove()
 		}
 	}, [])
 
@@ -150,12 +192,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 	const signInWithGoogle = async (): Promise<void> => {
 		try {
-			const { error } = await supabase.auth.signInWithOAuth({
+			// Use custom scheme for mobile redirect
+			const redirectTo = makeRedirectUri({
+				scheme: 'net.isitvegan.app',
+				path: 'auth/callback',
+			})
+			console.log('OAuth redirect URI:', redirectTo)
+
+			const { data, error } = await supabase.auth.signInWithOAuth({
 				provider: 'google',
+				options: {
+					redirectTo,
+					skipBrowserRedirect: true,
+				},
 			})
 
 			if (error) {
 				handleAuthError(error)
+				return
+			}
+
+			const res = await WebBrowser.openAuthSessionAsync(data?.url ?? '', redirectTo)
+
+			if (res.type === 'success') {
+				const { url } = res
+				await createSessionFromUrl(url)
 			}
 		} catch (error) {
 			handleAuthError(error as Error)
