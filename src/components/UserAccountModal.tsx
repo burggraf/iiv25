@@ -10,18 +10,14 @@ import {
 	TouchableOpacity,
 	View,
 } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 
 import Logo from './Logo'
+import ManageSubscriptionModal from './ManageSubscriptionModal'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import {
-	PaymentProduct,
-	PaymentService,
-	SUBSCRIPTION_PRODUCT_IDS,
-} from '../services/paymentService'
 import {
 	SubscriptionService,
 	SubscriptionStatus,
@@ -40,16 +36,12 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 	const [isLoading, setIsLoading] = useState(false)
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
-	const [availableProducts, setAvailableProducts] = useState<PaymentProduct[]>([])
-	const [isPaymentInitialized, setIsPaymentInitialized] = useState(false)
-	const [isPurchasing, setIsPurchasing] = useState(false)
-	const [isRestoring, setIsRestoring] = useState(false)
+	const [showManageSubscription, setShowManageSubscription] = useState(false)
 
 	useEffect(() => {
 		if (visible && user && deviceId) {
 			loadSubscriptionStatus()
 			loadUsageStats()
-			initializePaymentService()
 		}
 	}, [visible, user, deviceId])
 
@@ -62,14 +54,6 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 		}
 	}, [visible, user, deviceId])
 
-	// Cleanup payment service on unmount
-	useEffect(() => {
-		return () => {
-			if (isPaymentInitialized) {
-				PaymentService.cleanup()
-			}
-		}
-	}, [isPaymentInitialized])
 
 	const loadSubscriptionStatus = async () => {
 		try {
@@ -105,27 +89,6 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 		}
 	}
 
-	const initializePaymentService = async () => {
-		try {
-			console.log('Initializing payment service...')
-			const initialized = await PaymentService.initialize()
-			setIsPaymentInitialized(initialized)
-
-			if (initialized) {
-				const products = await PaymentService.getAvailableProducts()
-				setAvailableProducts(products)
-				console.log('Payment service initialized with products:', products.length)
-			} else {
-				console.warn('Payment service failed to initialize')
-				// Set empty products array to show appropriate UI message
-				setAvailableProducts([])
-			}
-		} catch (error) {
-			console.error('Failed to initialize payment service:', error)
-			setIsPaymentInitialized(false)
-			setAvailableProducts([])
-		}
-	}
 
 	const handleSignOut = async () => {
 		try {
@@ -133,7 +96,6 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			// Clear state before signing out to prevent stale data
 			setSubscriptionStatus(null)
 			setUsageStats(null)
-			setAvailableProducts([])
 			
 			await signOut()
 			onClose()
@@ -145,107 +107,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 		}
 	}
 
-	const handleUpgrade = async (productId: string) => {
-		if (!deviceId || !isPaymentInitialized) {
-			Alert.alert('Error', 'Payment system not available. Please try again later.')
-			return
-		}
 
-		const product = availableProducts.find((p) => p.productId === productId)
-		if (!product) {
-			Alert.alert('Error', 'Product not found. Please try again.')
-			return
-		}
-
-		Alert.alert(
-			'Confirm Purchase',
-			`Would you like to purchase ${product.title} for ${product.localizedPrice}?`,
-			[
-				{ text: 'Cancel', style: 'cancel' },
-				{
-					text: 'Purchase',
-					onPress: () => processPurchase(productId),
-				},
-			]
-		)
-	}
-
-	const processPurchase = async (productId: string) => {
-		if (!deviceId) return
-
-		try {
-			setIsPurchasing(true)
-			console.log('Starting purchase for:', productId)
-
-			const result = await PaymentService.purchaseSubscription(productId as any, deviceId)
-
-			if (result.success) {
-				Alert.alert(
-					'Purchase Initiated',
-					'Your purchase is being processed. You will receive a confirmation shortly.',
-					[{ text: 'OK' }]
-				)
-
-				// Refresh subscription status after a short delay
-				setTimeout(() => {
-					loadSubscriptionStatus()
-					loadUsageStats()
-				}, 2000)
-			} else {
-				Alert.alert('Purchase Failed', result.error || 'Unable to complete purchase.')
-			}
-		} catch (error) {
-			console.error('Purchase error:', error)
-			Alert.alert('Purchase Failed', 'An unexpected error occurred. Please try again.')
-		} finally {
-			setIsPurchasing(false)
-		}
-	}
-
-	const handleRestorePurchases = async () => {
-		if (!deviceId || !isPaymentInitialized) {
-			Alert.alert('Error', 'Payment system not available. Please try again later.')
-			return
-		}
-
-		try {
-			setIsRestoring(true)
-			console.log('Restoring purchases...')
-
-			const result = await PaymentService.restorePurchases(deviceId)
-
-			if (result.success) {
-				if (result.restoredCount > 0) {
-					Alert.alert(
-						'Purchases Restored',
-						`Successfully restored ${result.restoredCount} purchase(s).`,
-						[{ text: 'OK' }]
-					)
-
-					// Refresh subscription status
-					loadSubscriptionStatus()
-					loadUsageStats()
-				} else {
-					Alert.alert(
-						'No Purchases Found',
-						'No previous purchases were found for this Apple ID / Google account.',
-						[{ text: 'OK' }]
-					)
-				}
-			} else {
-				Alert.alert('Restore Failed', result.error || 'Unable to restore purchases.')
-			}
-		} catch (error) {
-			console.error('Restore error:', error)
-			Alert.alert('Restore Failed', 'An unexpected error occurred. Please try again.')
-		} finally {
-			setIsRestoring(false)
-		}
-	}
-
-	const handleManageSubscription = () => {
-		PaymentService.showSubscriptionManagement()
-	}
 
 	const isPremium =
 		subscriptionStatus?.subscription_level === 'standard' ||
@@ -373,91 +235,23 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 					)}
 
 					{/* Subscription Management */}
-					{!isPremium && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Upgrade Your Plan</Text>
-							<Text style={styles.sectionSubtitle}>
-								Unlock unlimited scans and searches with a premium subscription
+					<View style={styles.section}>
+						<Text style={styles.sectionTitle}>Subscription</Text>
+						<Text style={styles.sectionSubtitle}>
+							{isPremium 
+								? 'Manage your subscription, change plans, or cancel'
+								: 'Upgrade to premium for unlimited scans and searches'
+							}
+						</Text>
+
+						<TouchableOpacity 
+							style={styles.actionButton} 
+							onPress={() => setShowManageSubscription(true)}>
+							<Text style={styles.actionButtonText}>
+								{isPremium ? 'Manage Subscription' : 'View Subscription Options'}
 							</Text>
-
-							{!isPaymentInitialized && (
-								<View style={styles.card}>
-									<Text style={styles.cardLabel}>Loading subscription options...</Text>
-								</View>
-							)}
-
-							{isPaymentInitialized && availableProducts.length === 0 && (
-								<View style={styles.card}>
-									<Text style={styles.cardLabel}>
-										Subscription options not available at this time.
-									</Text>
-								</View>
-							)}
-
-							{availableProducts.map((product) => {
-								const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME
-								return (
-									<TouchableOpacity
-										key={product.productId}
-										style={[styles.tierCard, isLifetime && styles.tierCardHighlight]}
-										onPress={() => handleUpgrade(product.productId)}
-										disabled={isPurchasing}>
-										<View style={styles.tierHeader}>
-											<Text style={[styles.tierName, isLifetime && styles.tierNameHighlight]}>
-												{product.title}
-											</Text>
-											<View style={styles.tierPrice}>
-												<Text
-													style={[styles.tierPriceAmount, isLifetime && styles.tierPriceHighlight]}>
-													{product.localizedPrice}
-												</Text>
-												<Text
-													style={[styles.tierPriceDuration, isLifetime && styles.tierPriceHighlight]}>
-													{product.duration}
-												</Text>
-											</View>
-										</View>
-										<View style={styles.tierFeatures}>
-											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-												• Unlimited product scans
-											</Text>
-											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-												• Unlimited ingredient searches
-											</Text>
-											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-												• No advertisements
-											</Text>
-											{product.savings && (
-												<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-													• {product.savings}
-												</Text>
-											)}
-										</View>
-										{isPurchasing && (
-											<View style={styles.purchasingOverlay}>
-												<ActivityIndicator size='small' color='white' />
-												<Text style={styles.purchasingText}>Processing...</Text>
-											</View>
-										)}
-									</TouchableOpacity>
-								)
-							})}
-						</View>
-					)}
-
-					{/* Premium User Management */}
-					{isPremium && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Subscription Management</Text>
-							<View style={styles.card}>
-								<Text style={styles.cardLabel}>You have an active premium subscription!</Text>
-							</View>
-
-							<TouchableOpacity style={styles.actionButton} onPress={handleManageSubscription}>
-								<Text style={styles.actionButtonText}>Manage Subscription</Text>
-							</TouchableOpacity>
-						</View>
-					)}
+						</TouchableOpacity>
+					</View>
 
 					{/* Account Actions */}
 					<View style={styles.section}>
@@ -474,16 +268,6 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 							</TouchableOpacity>
 						)}
 
-						<TouchableOpacity
-							style={styles.actionButton}
-							onPress={handleRestorePurchases}
-							disabled={!isPaymentInitialized || isRestoring}>
-							{isRestoring ? (
-								<ActivityIndicator size='small' color='white' />
-							) : (
-								<Text style={styles.actionButtonText}>Restore Purchases</Text>
-							)}
-						</TouchableOpacity>
 
 						{user && (
 							<TouchableOpacity
@@ -517,6 +301,12 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 					<View style={styles.bottomPadding} />
 				</ScrollView>
 			</View>
+
+			{/* Manage Subscription Modal */}
+			<ManageSubscriptionModal
+				visible={showManageSubscription}
+				onClose={() => setShowManageSubscription(false)}
+			/>
 		</Modal>
 	)
 }
@@ -607,60 +397,6 @@ const styles = StyleSheet.create({
 		fontSize: 10,
 		fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
 	},
-	tierCard: {
-		backgroundColor: 'white',
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-		borderWidth: 2,
-		borderColor: '#e9ecef',
-	},
-	tierCardHighlight: {
-		borderColor: '#4CAF50',
-		backgroundColor: '#f8fff8',
-	},
-	tierHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: 12,
-	},
-	tierName: {
-		fontSize: 18,
-		fontWeight: 'bold',
-		color: '#333',
-	},
-	tierNameHighlight: {
-		color: '#4CAF50',
-	},
-	tierPrice: {
-		alignItems: 'flex-end',
-	},
-	tierPriceAmount: {
-		fontSize: 20,
-		fontWeight: 'bold',
-		color: '#333',
-	},
-	tierPriceHighlight: {
-		color: '#4CAF50',
-	},
-	tierPriceDuration: {
-		fontSize: 12,
-		color: '#666',
-		marginTop: 2,
-	},
-	tierFeatures: {
-		marginTop: 8,
-	},
-	tierFeature: {
-		fontSize: 14,
-		color: '#666',
-		marginBottom: 4,
-		lineHeight: 20,
-	},
-	tierFeatureHighlight: {
-		color: '#2e7d32',
-	},
 	actionButton: {
 		backgroundColor: '#007AFF',
 		borderRadius: 12,
@@ -681,23 +417,5 @@ const styles = StyleSheet.create({
 	},
 	bottomPadding: {
 		height: 32,
-	},
-	purchasingOverlay: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: 'rgba(0, 0, 0, 0.7)',
-		justifyContent: 'center',
-		alignItems: 'center',
-		borderRadius: 12,
-		flexDirection: 'row',
-	},
-	purchasingText: {
-		color: 'white',
-		marginLeft: 8,
-		fontSize: 16,
-		fontWeight: '600',
 	},
 })
