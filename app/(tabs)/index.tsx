@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { router, useLocalSearchParams } from 'expo-router'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -11,15 +11,26 @@ import SearchIcon from '../../src/components/icons/SearchIcon'
 import Logo from '../../src/components/Logo'
 import UserAccountModal from '../../src/components/UserAccountModal'
 import { useAuth } from '../../src/context/AuthContext'
+import { useApp } from '../../src/context/AppContext'
+import { SubscriptionService, SubscriptionStatus } from '../../src/services/subscriptionService'
 
 export default function HomeScreen() {
 	const { user } = useAuth()
+	const { deviceId } = useApp()
 	const { openSubscription } = useLocalSearchParams<{ openSubscription?: string }>()
 	const [showUserModal, setShowUserModal] = useState(false)
+	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 
 	const navigateToTab = (tabName: string) => {
 		router.push(`/(tabs)/${tabName}` as any)
 	}
+
+	// Load subscription status
+	useEffect(() => {
+		if (user && deviceId) {
+			loadSubscriptionStatus()
+		}
+	}, [user, deviceId, loadSubscriptionStatus])
 
 	// Auto-open UserAccountModal when openSubscription parameter is present
 	useEffect(() => {
@@ -29,6 +40,25 @@ export default function HomeScreen() {
 			router.setParams({ openSubscription: undefined })
 		}
 	}, [openSubscription])
+
+	const loadSubscriptionStatus = useCallback(async () => {
+		try {
+			if (!deviceId || !user) {
+				return
+			}
+
+			const status = await SubscriptionService.getSubscriptionStatus(deviceId)
+			setSubscriptionStatus(status)
+		} catch (error) {
+			console.error('Failed to load subscription status:', error)
+			// Fallback to free tier
+			setSubscriptionStatus({
+				subscription_level: 'free',
+				is_active: true,
+				device_id: deviceId || undefined,
+			})
+		}
+	}, [deviceId, user])
 
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
@@ -44,16 +74,28 @@ export default function HomeScreen() {
 				<View style={styles.actionsSection}>
 					<View style={styles.actionsSectionHeader}>
 						<Text style={styles.sectionTitle}>Quick Actions</Text>
-						<TouchableOpacity
-							style={styles.userIconButton}
-							onPress={() => setShowUserModal(true)}
-							activeOpacity={0.7}>
-							<Ionicons
-								name={user?.is_anonymous ? 'person-outline' : 'person-circle-outline'}
-								size={28}
-								color='#14A44A'
-							/>
-						</TouchableOpacity>
+						<View style={styles.headerButtons}>
+							{subscriptionStatus && (
+								<TouchableOpacity
+									style={styles.planChicklet}
+									onPress={() => setShowUserModal(true)}
+									activeOpacity={0.7}>
+									<Text style={styles.planChickletText}>
+										{SubscriptionService.getSubscriptionDisplayName(subscriptionStatus.subscription_level)}
+									</Text>
+								</TouchableOpacity>
+							)}
+							<TouchableOpacity
+								style={styles.userIconButton}
+								onPress={() => setShowUserModal(true)}
+								activeOpacity={0.7}>
+								<Ionicons
+									name={user?.is_anonymous ? 'person-outline' : 'person-circle-outline'}
+									size={28}
+									color='#14A44A'
+								/>
+							</TouchableOpacity>
+						</View>
 					</View>
 
 					<View style={styles.actionGrid}>
@@ -169,6 +211,30 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 		paddingHorizontal: 20,
 		paddingBottom: 20,
+	},
+	headerButtons: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	planChicklet: {
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		backgroundColor: '#14A44A',
+		borderRadius: 16,
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 2,
+		},
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 2,
+	},
+	planChickletText: {
+		color: 'white',
+		fontSize: 12,
+		fontWeight: '600',
 	},
 	userIconButton: {
 		padding: 8,
