@@ -450,8 +450,9 @@ const styles = StyleSheet.create({
   },
   rateLimitButtons: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
     width: '100%',
+    justifyContent: 'space-between',
   },
   rateLimitCloseButton: {
     flex: 1,

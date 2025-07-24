@@ -1147,7 +1147,7 @@ export default function ScannerScreen() {
 							<Text style={styles.retryErrorIcon}>⏰</Text>
 							<Text style={styles.createProductModalTitle}>Rate Limit Exceeded</Text>
 							<Text style={styles.createProductModalSubtitle}>
-								You can search 10 products per day on the free plan. Upgrade to unlock unlimited searches.
+								The free plan includes 10 product lookups and 3 searches per day.
 							</Text>
 						</View>
 						<View style={styles.createProductModalButtons}>
@@ -1631,32 +1631,39 @@ const styles = StyleSheet.create({
 	},
 	createProductModalButtons: {
 		flexDirection: 'row',
-		gap: 16,
+		gap: 12,
 		width: '100%',
+		justifyContent: 'space-between',
 	},
 	createProductModalCancelButton: {
 		flex: 1,
 		backgroundColor: '#f0f0f0',
 		paddingVertical: 16,
+		paddingHorizontal: 8,
 		borderRadius: 12,
 		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	createProductModalCancelText: {
 		color: '#666',
 		fontSize: 16,
 		fontWeight: '600',
+		textAlign: 'center',
 	},
 	createProductModalConfirmButton: {
 		flex: 1,
 		backgroundColor: '#FF6B35',
 		paddingVertical: 16,
+		paddingHorizontal: 8,
 		borderRadius: 12,
 		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	createProductModalConfirmText: {
 		color: 'white',
 		fontSize: 16,
 		fontWeight: '600',
+		textAlign: 'center',
 	},
 	loadingModal: {
 		position: 'absolute',
