@@ -1,10 +1,10 @@
 Current database values in the products table calculated code field:
 100 Definitely Vegan -> maps to VEGAN
 200 Definitely Vegetarian -> maps to VEGETARIAN
-300 Probably Not Vegan -> maps to NOT VEGAN
+300 Probably Not Vegetarian -> maps to NOT VEGETARIAN
 400 Probably Vegetarian -> maps to VEGETARIAN
 500 Not Sure -> maps to UNKNOWN
-600 May Not Be Vegetarian -> maps to NOT VEGAN
-700 Probably Not Vegetarian -> maps to NOT VEGAN
-800 Definitely Not Vegetarian -> maps to NOT VEGAN
+600 May Not Be Vegetarian -> maps to NOT VEGETARIAN
+700 Probably Not Vegetarian -> maps to NOT VEGETARIAN
+800 Definitely Not Vegetarian -> maps to NOT VEGETARIAN
 

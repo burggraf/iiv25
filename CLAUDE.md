@@ -115,7 +115,7 @@ src/
 ### Key Data Models
 
 - **Product**: Core product interface with UPC/EAN13, ingredients, vegan status
-- **VeganStatus**: Enum (VEGAN, VEGETARIAN, NOT_VEGAN, UNKNOWN)
+- **VeganStatus**: Enum (VEGAN, VEGETARIAN, NOT_VEGETARIAN, UNKNOWN)
 - **Ingredient**: Enhanced with Supabase classification mapping
 - **User**: Supabase auth user with profile management
 

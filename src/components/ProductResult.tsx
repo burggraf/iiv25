@@ -293,7 +293,7 @@ export default function ProductResult({
 				return '#4CAF50' // Green
 			case 'vegetarian':
 				return '#FF9800' // Orange/Yellow
-			case 'not_vegan':
+			case 'not_vegetarian':
 				return '#F44336' // Red
 			case 'unknown':
 				return '#9E9E9E' // Gray
@@ -308,8 +308,8 @@ export default function ProductResult({
 				return 'VEGAN'
 			case 'vegetarian':
 				return 'VEGETARIAN'
-			case 'not_vegan':
-				return 'NOT VEGAN'
+			case 'not_vegetarian':
+				return 'NOT VEGETARIAN'
 			case 'unknown':
 				return 'UNKNOWN'
 			default:
@@ -323,7 +323,7 @@ export default function ProductResult({
 				return '#4CAF50' // Green
 			case VeganStatus.VEGETARIAN:
 				return '#FF9800' // Orange
-			case VeganStatus.NOT_VEGAN:
+			case VeganStatus.NOT_VEGETARIAN:
 				return '#F44336' // Red
 			case VeganStatus.UNKNOWN:
 				return '#9E9E9E' // Gray
@@ -338,7 +338,7 @@ export default function ProductResult({
 				return <LogoWhite size={64} />
 			case VeganStatus.VEGETARIAN:
 				return <Text style={styles.statusIconText}>🥛</Text>
-			case VeganStatus.NOT_VEGAN:
+			case VeganStatus.NOT_VEGETARIAN:
 				return <Text style={styles.statusIconText}>🥩</Text>
 			case VeganStatus.UNKNOWN:
 				return <Text style={styles.unknownIconText}>?</Text>
@@ -353,8 +353,8 @@ export default function ProductResult({
 				return 'VEGAN'
 			case VeganStatus.VEGETARIAN:
 				return 'VEGETARIAN'
-			case VeganStatus.NOT_VEGAN:
-				return 'NOT VEGAN'
+			case VeganStatus.NOT_VEGETARIAN:
+				return 'NOT VEGETARIAN'
 			case VeganStatus.UNKNOWN:
 				return 'UNKNOWN'
 			default:
@@ -368,7 +368,7 @@ export default function ProductResult({
 				return 'This product contains no animal-derived ingredients.'
 			case VeganStatus.VEGETARIAN:
 				return 'This product may contain dairy or eggs but no meat.'
-			case VeganStatus.NOT_VEGAN:
+			case VeganStatus.NOT_VEGETARIAN:
 				return 'This product contains animal-derived ingredients.'
 			case VeganStatus.UNKNOWN:
 				return 'Could not determine vegan status. Check ingredients manually.'
@@ -423,14 +423,14 @@ export default function ProductResult({
 					</Text>
 				</View>
 
-				{/* Non-Vegan Ingredients Analysis */}
+				{/* Non-Vegetarian Ingredients Analysis */}
 				{currentProduct.nonVeganIngredients && currentProduct.nonVeganIngredients.length > 0 && (
 					<View style={styles.analysisSection}>
 						<Text style={styles.analysisSectionTitle}>⚠️ Product Summary:</Text>
 						<Text style={styles.analysisSubtitle}>
 							{currentProduct.veganStatus === 'vegetarian'
 								? 'Contains dairy or eggs but no meat:'
-								: currentProduct.veganStatus === 'not_vegan'
+								: currentProduct.veganStatus === 'not_vegetarian'
 								? 'Contains animal products:'
 								: 'Uncertain ingredients:'}
 						</Text>

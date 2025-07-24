@@ -347,7 +347,7 @@ export class ProductLookupService {
 			case 'vegetarian':
 				return VeganStatus.VEGETARIAN
 			case 'non-vegetarian':
-				return VeganStatus.NOT_VEGAN
+				return VeganStatus.NOT_VEGETARIAN
 			case 'undetermined':
 			default:
 				return VeganStatus.UNKNOWN

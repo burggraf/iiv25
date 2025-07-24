@@ -130,7 +130,7 @@ describe('OpenFoodFactsService', () => {
       expect(result?.classificationMethod).toBe('product-level')
     })
 
-    it('should classify as NOT_VEGAN when both vegan and vegetarian are "no"', async () => {
+    it('should classify as NOT_VEGETARIAN when both vegan and vegetarian are "no"', async () => {
       const mockProduct = {
         product_name: 'Non-Vegetarian Product',
         vegan: 'no',
@@ -148,7 +148,7 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('product-level')
     })
 
@@ -157,9 +157,9 @@ describe('OpenFoodFactsService', () => {
         { vegan: '1', expected: VeganStatus.VEGAN },
         { vegan: 'true', expected: VeganStatus.VEGAN },
         { vegan: 'VEGAN', expected: VeganStatus.VEGAN },
-        { vegan: '0', expected: VeganStatus.NOT_VEGAN },
-        { vegan: 'false', expected: VeganStatus.NOT_VEGAN },
-        { vegan: 'non-vegan', expected: VeganStatus.NOT_VEGAN }
+        { vegan: '0', expected: VeganStatus.NOT_VEGETARIAN },
+        { vegan: 'false', expected: VeganStatus.NOT_VEGETARIAN },
+        { vegan: 'non-vegan', expected: VeganStatus.NOT_VEGETARIAN }
       ]
 
       for (const testCase of testCases) {
@@ -186,7 +186,7 @@ describe('OpenFoodFactsService', () => {
   })
 
   describe('Structured ingredients classification strategy', () => {
-    it('should classify as NOT_VEGAN when contains meat ingredients', async () => {
+    it('should classify as NOT_VEGETARIAN when contains meat ingredients', async () => {
       const structuredIngredients: StructuredIngredient[] = [
         {
           id: 'water',
@@ -203,7 +203,7 @@ describe('OpenFoodFactsService', () => {
       ]
 
       const mockProduct = {
-        product_name: 'Non-Vegan Product',
+        product_name: 'Non-Vegetarian Product',
         ingredients: structuredIngredients,
         ingredients_text: 'water, beef'
       }
@@ -218,13 +218,13 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('structured')
       expect(result?.nonVeganIngredients).toHaveLength(1)
       expect(result?.nonVeganIngredients?.[0]).toEqual({
         ingredient: 'Beef',
         reason: 'Contains meat or animal products',
-        verdict: 'not_vegan'
+        verdict: 'not_vegetarian'
       })
     })
 
@@ -356,7 +356,7 @@ describe('OpenFoodFactsService', () => {
   })
 
   describe('Text-based classification strategy', () => {
-    it('should classify as VEGAN when no non-vegan ingredients found', async () => {
+    it('should classify as VEGAN when no non-vegetarian ingredients found', async () => {
       const mockProduct = {
         product_name: 'Vegan Product',
         ingredients_text: 'water, salt, sugar, flour, oil'
@@ -403,7 +403,7 @@ describe('OpenFoodFactsService', () => {
       expect(ingredientNames).toContain('cheese')
     })
 
-    it('should classify as NOT_VEGAN when contains meat products', async () => {
+    it('should classify as NOT_VEGETARIAN when contains meat products', async () => {
       const mockProduct = {
         product_name: 'Non-Vegetarian Product',
         ingredients_text: 'water, beef, chicken, salt'
@@ -419,7 +419,7 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('text-based')
       expect(result?.nonVeganIngredients).toHaveLength(2)
       
@@ -428,9 +428,9 @@ describe('OpenFoodFactsService', () => {
       expect(ingredientNames).toContain('chicken')
     })
 
-    it('should classify as NOT_VEGAN when contains both dairy and meat', async () => {
+    it('should classify as NOT_VEGETARIAN when contains both dairy and meat', async () => {
       const mockProduct = {
-        product_name: 'Mixed Non-Vegan Product',
+        product_name: 'Mixed Non-Vegetarian Product',
         ingredients_text: 'water, beef, milk, salt'
       }
 
@@ -444,7 +444,7 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('text-based')
       expect(result?.nonVeganIngredients).toHaveLength(2)
     })
@@ -465,8 +465,8 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      // Honey is considered non-vegan (not just vegetarian), so this should be NOT_VEGAN
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      // Honey is considered non-vegetarian (not just vegetarian), so this should be NOT_VEGETARIAN
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('text-based')
       
       const ingredientNames = result?.nonVeganIngredients?.map(ing => ing.ingredient.toLowerCase())
@@ -622,7 +622,7 @@ describe('OpenFoodFactsService', () => {
 
       const result = await OpenFoodFactsService.getProductByBarcode(mockBarcode)
 
-      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGAN)
+      expect(result?.veganStatus).toBe(VeganStatus.NOT_VEGETARIAN)
       expect(result?.classificationMethod).toBe('text-based')
     })
   })

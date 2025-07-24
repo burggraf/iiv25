@@ -18,7 +18,7 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
         return '#4CAF50';
       case VeganStatus.VEGETARIAN:
         return '#FF9800';
-      case VeganStatus.NOT_VEGAN:
+      case VeganStatus.NOT_VEGETARIAN:
         return '#F44336';
       case VeganStatus.UNKNOWN:
         return '#9E9E9E';
@@ -33,7 +33,7 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
         return <LogoWhite size={64} />;
       case VeganStatus.VEGETARIAN:
         return <Text style={styles.statusIconText}>🥛</Text>;
-      case VeganStatus.NOT_VEGAN:
+      case VeganStatus.NOT_VEGETARIAN:
         return <Text style={styles.statusIconText}>🥩</Text>;
       case VeganStatus.UNKNOWN:
         return <Text style={styles.unknownIconText}>?</Text>;
@@ -48,8 +48,8 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
         return 'VEGAN';
       case VeganStatus.VEGETARIAN:
         return 'VEGETARIAN';
-      case VeganStatus.NOT_VEGAN:
-        return 'NOT VEGAN';
+      case VeganStatus.NOT_VEGETARIAN:
+        return 'NOT VEGETARIAN';
       case VeganStatus.UNKNOWN:
         return 'UNKNOWN';
       default:
@@ -63,8 +63,8 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
         return 'This ingredient is plant-based and suitable for vegans.';
       case VeganStatus.VEGETARIAN:
         return 'This ingredient may contain dairy or eggs but no meat.';
-      case VeganStatus.NOT_VEGAN:
-        return 'This ingredient is derived from animals and is not vegan.';
+      case VeganStatus.NOT_VEGETARIAN:
+        return 'This ingredient is derived from animals and is not vegetarian.';
       case VeganStatus.UNKNOWN:
         return 'The vegan status of this ingredient depends on its source or processing method.';
       default:

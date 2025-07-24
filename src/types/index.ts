@@ -2,7 +2,7 @@
 export interface ClassificationDetail {
   ingredient: string;
   reason: string;
-  verdict: 'vegan' | 'vegetarian' | 'not_vegan' | 'unknown';
+  verdict: 'vegan' | 'vegetarian' | 'not_vegetarian' | 'unknown';
 }
 
 // Product related types
@@ -24,7 +24,7 @@ export interface Product {
 export enum VeganStatus {
   VEGAN = 'vegan',
   VEGETARIAN = 'vegetarian',
-  NOT_VEGAN = 'not_vegan',
+  NOT_VEGETARIAN = 'not_vegetarian',
   UNKNOWN = 'unknown'
 }
 

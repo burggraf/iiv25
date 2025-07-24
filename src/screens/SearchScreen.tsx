@@ -253,7 +253,7 @@ export default function SearchScreen() {
       case 'non-vegetarian':
       case 'typically non-vegan':
       case 'typically non-vegetarian':
-        status = VeganStatus.NOT_VEGAN;
+        status = VeganStatus.NOT_VEGETARIAN;
         break;
       case 'may be non-vegetarian':
       default:
@@ -331,9 +331,9 @@ export default function SearchScreen() {
                     ]}>
                       <Text style={styles.statusText}>
                         {item.class === 'vegan' || item.class === 'typically vegan' ? 'VEGAN' : 
-                         item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian' ? 'NOT VEGAN' : 
+                         item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian' ? 'NOT VEGETARIAN' : 
                          item.class === 'vegetarian' || item.class === 'typically vegetarian' ? 'VEGETARIAN' : 
-                         item.class === 'may be non-vegetarian' ? 'MAYBE NOT VEGAN' : 'UNKNOWN'}
+                         item.class === 'may be non-vegetarian' ? 'MAYBE NOT VEGETARIAN' : 'UNKNOWN'}
                       </Text>
                     </View>
                   </View>

@@ -9,94 +9,94 @@ export interface IngredientInfo {
 
 // Comprehensive ingredient database
 const ingredientDatabase: { [key: string]: IngredientInfo } = {
-  // Definitely NOT VEGAN - Animal products
+  // Definitely NOT VEGETARIAN - Animal products
   'milk': {
     name: 'Milk',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Dairy product from cows. Contains lactose and casein.',
     alternatives: ['Almond milk', 'Oat milk', 'Soy milk', 'Coconut milk']
   },
   'cheese': {
     name: 'Cheese',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Dairy product made from milk. Often contains rennet from animal sources.',
     alternatives: ['Nutritional yeast', 'Cashew cheese', 'Vegan cheese alternatives']
   },
   'butter': {
     name: 'Butter',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Dairy fat from milk.',
     alternatives: ['Vegan butter', 'Coconut oil', 'Olive oil']
   },
   'eggs': {
     name: 'Eggs',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Chicken eggs.',
     alternatives: ['Flax eggs', 'Chia seeds', 'Applesauce', 'Commercial egg replacers']
   },
   'honey': {
     name: 'Honey',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Sweet substance produced by bees.',
     alternatives: ['Maple syrup', 'Agave nectar', 'Date syrup']
   },
   'gelatin': {
     name: 'Gelatin',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Protein derived from animal collagen, usually from bones and skin.',
     alternatives: ['Agar', 'Carrageenan', 'Pectin']
   },
   'lard': {
     name: 'Lard',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Rendered fat from pigs.',
     alternatives: ['Vegetable shortening', 'Coconut oil', 'Vegan butter']
   },
   'beef': {
     name: 'Beef',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Meat from cattle.',
     alternatives: ['Seitan', 'Tempeh', 'Plant-based meat alternatives']
   },
   'chicken': {
     name: 'Chicken',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Poultry meat.',
     alternatives: ['Tofu', 'Jackfruit', 'Plant-based chicken alternatives']
   },
   'pork': {
     name: 'Pork',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Meat from pigs.',
     alternatives: ['Smoky tempeh', 'Mushrooms', 'Plant-based bacon']
   },
   'fish': {
     name: 'Fish',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Seafood.',
     alternatives: ['Seaweed', 'Hearts of palm', 'Plant-based fish alternatives']
   },
   'whey': {
     name: 'Whey',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Protein derived from milk during cheese production.',
     alternatives: ['Pea protein', 'Rice protein', 'Hemp protein']
   },
   'casein': {
     name: 'Casein',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Milk protein.',
     alternatives: ['Plant-based protein powders']
   },
   'lactose': {
     name: 'Lactose',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Sugar found in milk.',
     alternatives: ['Plant-based sugars']
   },
   'carmine': {
     name: 'Carmine',
-    status: VeganStatus.NOT_VEGAN,
+    status: VeganStatus.NOT_VEGETARIAN,
     description: 'Red dye made from crushed cochineal insects.',
     alternatives: ['Beet juice', 'Plant-based red dyes']
   },
@@ -217,7 +217,7 @@ const ingredientDatabase: { [key: string]: IngredientInfo } = {
   'vitamin d3': {
     name: 'Vitamin D3',
     status: VeganStatus.UNKNOWN,
-    description: 'Can be derived from sheep wool (not vegan) or lichen (vegan). Check source.',
+    description: 'Can be derived from sheep wool (not vegetarian) or lichen (vegetarian). Check source.',
   },
   'glycerin': {
     name: 'Glycerin',

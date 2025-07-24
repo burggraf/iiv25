@@ -95,13 +95,13 @@ export class OpenFoodFactsService {
     const nonVeganIngredients: ClassificationDetail[] = [];
 
     for (const ingredient of ingredients) {
-      // Check for definitely non-vegan (meat/animal products)
+      // Check for definitely non-vegetarian (meat/animal products)
       if (ingredient.vegetarian === 'no') {
         hasDefinitelyNonVeganIngredient = true;
         nonVeganIngredients.push({
           ingredient: ingredient.text,
           reason: 'Contains meat or animal products',
-          verdict: 'not_vegan'
+          verdict: 'not_vegetarian'
         });
         continue;
       }
@@ -122,7 +122,7 @@ export class OpenFoodFactsService {
         veganIngredientCount++;
       }
 
-      // Handle remaining non-vegan ingredients that aren't clearly vegetarian
+      // Handle remaining non-vegetarian ingredients that aren't clearly vegetarian
       if (ingredient.vegan === 'no') {
         // Apply domain knowledge for common dairy ingredients that might be misclassified
         const knownDairyIngredients = ['milk', 'whey', 'casein', 'lactose', 'cheese', 'butter', 'cream', 'yogurt'];
@@ -141,7 +141,7 @@ export class OpenFoodFactsService {
           nonVeganIngredients.push({
             ingredient: ingredient.text,
             reason: 'Contains animal products',
-            verdict: 'not_vegan'
+            verdict: 'not_vegetarian'
           });
         }
       }
@@ -150,7 +150,7 @@ export class OpenFoodFactsService {
     // Determine final status based on definitive evidence
     let status: VeganStatus;
     if (hasDefinitelyNonVeganIngredient) {
-      status = VeganStatus.NOT_VEGAN;
+      status = VeganStatus.NOT_VEGETARIAN;
     } else if (hasVegetarianOnlyIngredient) {
       status = VeganStatus.VEGETARIAN;
     } else if (veganIngredientCount > 0 && veganIngredientCount >= totalIngredientCount * 0.6) {
@@ -182,7 +182,7 @@ export class OpenFoodFactsService {
       if (vegetarianValue === 'yes' || vegetarianValue === '1' || vegetarianValue === 'true' || vegetarianValue === 'vegetarian') {
         return VeganStatus.VEGETARIAN;
       }
-      return VeganStatus.NOT_VEGAN;
+      return VeganStatus.NOT_VEGETARIAN;
     }
 
     // Check vegetarian status if vegan is unclear
@@ -191,7 +191,7 @@ export class OpenFoodFactsService {
     }
     
     if (vegetarianValue === 'no' || vegetarianValue === '0' || vegetarianValue === 'false' || vegetarianValue === 'non-vegetarian') {
-      return VeganStatus.NOT_VEGAN;
+      return VeganStatus.NOT_VEGETARIAN;
     }
 
     return VeganStatus.UNKNOWN;
@@ -212,7 +212,7 @@ export class OpenFoodFactsService {
     const individualIngredients = this.parseIngredients(ingredientsText);
     const nonVeganIngredients: ClassificationDetail[] = [];
     
-    // Non-vegan ingredients (exact matches for full ingredient names)
+    // Non-vegetarian ingredients (exact matches for full ingredient names)
     const nonVeganIngredients_list = [
       'milk', 'whole milk', 'skim milk', 'dairy', 'cheese', 'butter', 'cream', 'heavy cream',
       'yogurt', 'whey', 'whey protein', 'casein', 'lactose',
@@ -257,7 +257,7 @@ export class OpenFoodFactsService {
             nonVeganIngredients.push({
               ingredient: ingredient,
               reason: 'Contains animal products',
-              verdict: 'not_vegan'
+              verdict: 'not_vegetarian'
             });
           }
           break; // Found a match, no need to check other items
@@ -268,11 +268,11 @@ export class OpenFoodFactsService {
     // Determine final status
     let status: VeganStatus;
     if (hasNonVeganIngredient && !hasVegetarianOnlyIngredient) {
-      status = VeganStatus.NOT_VEGAN;
+      status = VeganStatus.NOT_VEGETARIAN;
     } else if (hasVegetarianOnlyIngredient && !hasNonVeganIngredient) {
       status = VeganStatus.VEGETARIAN;
     } else if (hasNonVeganIngredient || hasVegetarianOnlyIngredient) {
-      status = VeganStatus.NOT_VEGAN;
+      status = VeganStatus.NOT_VEGETARIAN;
     } else {
       status = VeganStatus.VEGAN;
     }
@@ -288,7 +288,7 @@ export class OpenFoodFactsService {
 
     const ingredients = ingredientsText.toLowerCase();
     
-    // Non-vegan ingredients (animal products)
+    // Non-vegetarian ingredients (animal products)
     const nonVeganIngredients = [
       'milk', 'dairy', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose',
       'meat', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'fish', 'salmon', 'tuna',
@@ -307,7 +307,7 @@ export class OpenFoodFactsService {
       'egg', 'eggs', 'albumin', 'ovalbumin',
     ];
 
-    // Check for non-vegan ingredients
+    // Check for non-vegetarian ingredients
     for (const ingredient of nonVeganIngredients) {
       if (ingredients.includes(ingredient)) {
         // If it's only dairy/eggs, it's vegetarian
@@ -320,11 +320,11 @@ export class OpenFoodFactsService {
             return VeganStatus.VEGETARIAN;
           }
         }
-        return VeganStatus.NOT_VEGAN;
+        return VeganStatus.NOT_VEGETARIAN;
       }
     }
 
-    // If no non-vegan ingredients found, assume vegan
+    // If no non-vegetarian ingredients found, assume vegan
     return VeganStatus.VEGAN;
   }
 

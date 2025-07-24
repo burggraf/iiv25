@@ -710,7 +710,7 @@ export default function ScannerScreen() {
 				return '#4CAF50'
 			case VeganStatus.VEGETARIAN:
 				return '#FF9800'
-			case VeganStatus.NOT_VEGAN:
+			case VeganStatus.NOT_VEGETARIAN:
 				return '#F44336'
 			case VeganStatus.UNKNOWN:
 				return '#9E9E9E'
@@ -725,8 +725,8 @@ export default function ScannerScreen() {
 				return 'VEGAN'
 			case VeganStatus.VEGETARIAN:
 				return 'VEGETARIAN'
-			case VeganStatus.NOT_VEGAN:
-				return 'NOT VEGAN'
+			case VeganStatus.NOT_VEGETARIAN:
+				return 'NOT VEGETARIAN'
 			case VeganStatus.UNKNOWN:
 				return 'UNKNOWN'
 			default:
@@ -740,7 +740,7 @@ export default function ScannerScreen() {
 				return <LogoWhite size={24} />
 			case VeganStatus.VEGETARIAN:
 				return <Text style={styles.overlayStatusIcon}>🥛</Text>
-			case VeganStatus.NOT_VEGAN:
+			case VeganStatus.NOT_VEGETARIAN:
 				return <Text style={styles.overlayStatusIcon}>🥩</Text>
 			case VeganStatus.UNKNOWN:
 				return <Text style={styles.overlayUnknownIcon}>?</Text>

@@ -15,7 +15,7 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
         return '#4CAF50';
       case VeganStatus.VEGETARIAN:
         return '#FF9800';
-      case VeganStatus.NOT_VEGAN:
+      case VeganStatus.NOT_VEGETARIAN:
         return '#F44336';
       case VeganStatus.UNKNOWN:
         return '#9E9E9E';
@@ -30,7 +30,7 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
         return <LogoWhite size={28} />;
       case VeganStatus.VEGETARIAN:
         return <Text style={styles.statusIconText}>🥛</Text>;
-      case VeganStatus.NOT_VEGAN:
+      case VeganStatus.NOT_VEGETARIAN:
         return <Text style={styles.statusIconText}>🥩</Text>;
       case VeganStatus.UNKNOWN:
         return <Text style={styles.unknownIconText}>?</Text>;
@@ -45,8 +45,8 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
         return 'VEGAN';
       case VeganStatus.VEGETARIAN:
         return 'VEGETARIAN';
-      case VeganStatus.NOT_VEGAN:
-        return 'NOT VEGAN';
+      case VeganStatus.NOT_VEGETARIAN:
+        return 'NOT VEGETARIAN';
       case VeganStatus.UNKNOWN:
         return 'UNKNOWN';
       default:

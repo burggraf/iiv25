@@ -136,7 +136,7 @@ describe('History Update Functionality', () => {
         ...mockProduct, 
         name: 'Final Update', 
         ingredients: ['updated', 'ingredients'],
-        veganStatus: VeganStatus.NOT_VEGAN,
+        veganStatus: VeganStatus.NOT_VEGETARIAN,
       };
 
       mockAppContext.addToHistory(firstUpdate);

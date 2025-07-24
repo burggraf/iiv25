@@ -20,7 +20,7 @@ export default function SimulatorBarcodeTester({ onBarcodeScanned }: SimulatorBa
     { name: 'Coca-Cola (Vegan)', code: '5449000000996' },
     { name: 'Oreos (Vegan)', code: '7622210991034' },
     { name: 'Ben & Jerry\'s (Vegetarian)', code: '8712100849503' },
-    { name: 'Snickers (Not Vegan)', code: '5000159407236' },
+    { name: 'Snickers (Not Vegetarian)', code: '5000159407236' },
     { name: 'Test Product', code: '1234567890123' },
   ];
 

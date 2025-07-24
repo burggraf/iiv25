@@ -60,7 +60,7 @@ export default function TestScreen() {
         return '#4CAF50';
       case VeganStatus.VEGETARIAN:
         return '#FF9800';
-      case VeganStatus.NOT_VEGAN:
+      case VeganStatus.NOT_VEGETARIAN:
         return '#F44336';
       default:
         return '#9E9E9E';
@@ -73,8 +73,8 @@ export default function TestScreen() {
         return '🌱 VEGAN';
       case VeganStatus.VEGETARIAN:
         return '🥛 VEGETARIAN';
-      case VeganStatus.NOT_VEGAN:
-        return '🚫 NOT VEGAN';
+      case VeganStatus.NOT_VEGETARIAN:
+        return '🚫 NOT VEGETARIAN';
       default:
         return '❓ UNKNOWN';
     }
@@ -191,7 +191,7 @@ export default function TestScreen() {
 
               {product.nonVeganIngredients && product.nonVeganIngredients.length > 0 && (
                 <View style={styles.nonVeganContainer}>
-                  <Text style={styles.detailLabel}>Non-Vegan Ingredients:</Text>
+                  <Text style={styles.detailLabel}>Non-Vegetarian Ingredients:</Text>
                   {product.nonVeganIngredients.map((item, index) => (
                     <View key={index} style={styles.nonVeganItem}>
                       <Text style={styles.nonVeganIngredient}>{item.ingredient}</Text>
