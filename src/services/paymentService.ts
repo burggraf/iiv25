@@ -3,6 +3,7 @@ import {
   endConnection,
   getProducts,
   requestSubscription,
+  requestPurchase,
   purchaseUpdatedListener,
   purchaseErrorListener,
   finishTransaction,
@@ -24,7 +25,7 @@ export const SUBSCRIPTION_PRODUCT_IDS = {
   QUARTERLY: 'isitvegan_standard_quarterly', 
   SEMIANNUAL: 'isitvegan_standard_semiannual',
   ANNUAL: 'isitvegan_standard_annual',
-  LIFETIME: 'isitvegan_standard_lifetime',
+  LIFETIME: 'isitvegan_standard_lifetime_subscription', // Non-Consumable IAP
 } as const;
 
 export type SubscriptionProductId = typeof SUBSCRIPTION_PRODUCT_IDS[keyof typeof SUBSCRIPTION_PRODUCT_IDS];
@@ -180,24 +181,47 @@ export class PaymentService {
   }
 
   /**
-   * Load available subscription products
+   * Load available subscription products and non-consumable products
    */
   static async loadProducts(): Promise<PaymentProduct[]> {
     try {
-      console.log('PaymentService: Loading subscription products...');
+      console.log('PaymentService: Loading subscription products and IAP products...');
       
-      const productIds = Object.values(SUBSCRIPTION_PRODUCT_IDS);
+      // Separate subscription and non-consumable product IDs
+      const subscriptionIds = [
+        SUBSCRIPTION_PRODUCT_IDS.MONTHLY,
+        SUBSCRIPTION_PRODUCT_IDS.QUARTERLY,
+        SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL,
+        SUBSCRIPTION_PRODUCT_IDS.ANNUAL,
+      ];
+      const iapProductIds = [SUBSCRIPTION_PRODUCT_IDS.LIFETIME];
+      
+      let allProducts: Product[] = [];
       
       if (Platform.OS === 'ios') {
-        const products = await getProducts({ skus: productIds });
-        this.products = products;
+        // On iOS, both subscriptions and products can be fetched with getProducts
+        const products = await getProducts({ skus: [...subscriptionIds, ...iapProductIds] });
+        allProducts = products;
         console.log('PaymentService: Loaded iOS products:', products);
       } else {
-        // Android subscriptions
-        const subscriptions = await getProducts({ skus: productIds });
-        this.products = subscriptions;
-        console.log('PaymentService: Loaded Android subscriptions:', subscriptions);
+        // On Android, we need to fetch subscriptions and products separately
+        try {
+          const subscriptions = await getProducts({ skus: subscriptionIds });
+          const products = await getProducts({ skus: iapProductIds });
+          
+          allProducts = [...subscriptions, ...products];
+          console.log('PaymentService: Loaded Android subscriptions:', subscriptions.length);
+          console.log('PaymentService: Loaded Android products:', products.length);
+        } catch (error) {
+          console.warn('PaymentService: Error loading separate products, trying combined:', error);
+          // Fallback: try loading all together
+          const products = await getProducts({ skus: [...subscriptionIds, ...iapProductIds] });
+          allProducts = products;
+        }
       }
+      
+      this.products = allProducts;
+      console.log('PaymentService: Total products loaded:', allProducts.length);
       
       return this.formatProducts(this.products);
     } catch (error) {
@@ -291,7 +315,7 @@ export class PaymentService {
   }
 
   /**
-   * Purchase a subscription
+   * Purchase a subscription or non-consumable product
    */
   static async purchaseSubscription(
     productId: SubscriptionProductId,
@@ -309,8 +333,18 @@ export class PaymentService {
         await clearTransactionIOS();
       }
 
-      // Request the subscription purchase
-      await requestSubscription({ sku: productId });
+      // Check if this is a lifetime product (non-consumable) or subscription
+      const isLifetimeProduct = productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME;
+      
+      if (isLifetimeProduct) {
+        // For non-consumable products, use requestPurchase
+        console.log('PaymentService: Purchasing non-consumable product:', productId);
+        await requestPurchase({ skus: [productId] });
+      } else {
+        // For subscriptions, use requestSubscription
+        console.log('PaymentService: Purchasing subscription:', productId);
+        await requestSubscription({ sku: productId });
+      }
       
       // Note: The actual purchase processing happens in the purchase listener
       // This method initiates the purchase flow

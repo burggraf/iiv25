@@ -393,31 +393,6 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 						</View>
 					)}
 
-					{/* Premium User Actions */}
-					{isPremium && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Subscription Actions</Text>
-							
-							<TouchableOpacity 
-								style={styles.actionButton} 
-								onPress={handleManageSubscription}>
-								<Text style={styles.actionButtonText}>Manage Subscription Settings</Text>
-							</TouchableOpacity>
-
-							<TouchableOpacity
-								style={[styles.actionButton, styles.cancelButton]}
-								onPress={handleCancelSubscription}
-								disabled={isCancelling}>
-								{isCancelling ? (
-									<ActivityIndicator size='small' color='white' />
-								) : (
-									<Text style={[styles.actionButtonText, styles.cancelButtonText]}>
-										Cancel Subscription
-									</Text>
-								)}
-							</TouchableOpacity>
-						</View>
-					)}
 
 					{/* Available Plans */}
 					{availableProducts.length > 0 && (
@@ -446,7 +421,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 										onPress={() => handleUpgrade(product.productId)}
 										disabled={isPurchasing || isCurrentPlan}>
 										<View style={styles.tierHeader}>
-											<View>
+											<View style={styles.tierNameContainer}>
 												<Text style={[
 													styles.tierName, 
 													isLifetime && styles.tierNameHighlight,
@@ -550,6 +525,24 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 						</TouchableOpacity>
 					</View>
 
+					{/* Cancel Subscription - Bottom of Screen */}
+					{isPremium && (
+						<View style={styles.section}>
+							<TouchableOpacity
+								style={[styles.actionButton, styles.cancelButton]}
+								onPress={handleCancelSubscription}
+								disabled={isCancelling}>
+								{isCancelling ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={[styles.actionButtonText, styles.cancelButtonText]}>
+										Cancel Subscription
+									</Text>
+								)}
+							</TouchableOpacity>
+						</View>
+					)}
+
 					<View style={styles.bottomPadding} />
 				</ScrollView>
 			</View>
@@ -643,9 +636,14 @@ const styles = StyleSheet.create({
 		backgroundColor: 'white',
 		borderRadius: 12,
 		padding: 16,
-		marginBottom: 12,
-		borderWidth: 2,
+		marginBottom: 14,
+		borderWidth: 1.5,
 		borderColor: '#e9ecef',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.05,
+		shadowRadius: 2,
+		elevation: 1,
 	},
 	tierCardHighlight: {
 		borderColor: '#4CAF50',
@@ -653,49 +651,67 @@ const styles = StyleSheet.create({
 	},
 	currentPlanCard: {
 		borderColor: '#2196F3',
-		backgroundColor: '#f3f8ff',
+		backgroundColor: '#f0f7ff',
+		borderWidth: 2,
+		shadowColor: '#2196F3',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 3,
 	},
 	tierHeader: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
-		alignItems: 'center',
+		alignItems: 'flex-start',
 		marginBottom: 12,
+	},
+	tierNameContainer: {
+		flex: 1,
+		marginRight: 8,
 	},
 	tierName: {
 		fontSize: 18,
 		fontWeight: 'bold',
 		color: '#333',
+		flexWrap: 'wrap',
 	},
 	tierNameHighlight: {
 		color: '#4CAF50',
 	},
 	currentPlanText: {
-		color: '#2196F3',
+		color: '#1976D2',
+		fontWeight: '600',
 	},
 	tierPrice: {
 		alignItems: 'flex-end',
+		minWidth: 80,
+		flexShrink: 0,
 	},
 	tierPriceAmount: {
-		fontSize: 20,
+		fontSize: 18,
 		fontWeight: 'bold',
 		color: '#333',
+		textAlign: 'right',
 	},
 	tierPriceHighlight: {
 		color: '#4CAF50',
 	},
 	tierPriceDuration: {
-		fontSize: 12,
+		fontSize: 11,
 		color: '#666',
 		marginTop: 2,
+		textAlign: 'right',
+		lineHeight: 14,
 	},
 	tierFeatures: {
-		marginTop: 8,
+		marginTop: 12,
 	},
 	tierFeature: {
 		fontSize: 14,
 		color: '#666',
-		marginBottom: 4,
+		marginBottom: 6,
 		lineHeight: 20,
+		paddingLeft: 4,
 	},
 	tierFeatureHighlight: {
 		color: '#2e7d32',

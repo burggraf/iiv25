@@ -27,6 +27,7 @@ This guide provides comprehensive instructions for configuring and testing the s
 ### Step 1: Configure Subscription Groups
 
 1. **Navigate to App Store Connect**
+
    - Go to [App Store Connect](https://appstoreconnect.apple.com)
    - Select your app "Is It Vegan?"
 
@@ -41,6 +42,7 @@ This guide provides comprehensive instructions for configuring and testing the s
 Create each subscription with these exact Product IDs:
 
 #### Monthly Subscription
+
 - **Product ID**: `isitvegan_standard_monthly`
 - **Reference Name**: "Monthly Standard"
 - **Subscription Duration**: 1 month
@@ -48,6 +50,7 @@ Create each subscription with these exact Product IDs:
 - **Subscription Group**: Standard Subscriptions
 
 #### Quarterly Subscription
+
 - **Product ID**: `isitvegan_standard_quarterly`
 - **Reference Name**: "3-Month Standard"
 - **Subscription Duration**: 3 months
@@ -55,6 +58,7 @@ Create each subscription with these exact Product IDs:
 - **Subscription Group**: Standard Subscriptions
 
 #### Semiannual Subscription
+
 - **Product ID**: `isitvegan_standard_semiannual`
 - **Reference Name**: "6-Month Standard"
 - **Subscription Duration**: 6 months
@@ -62,6 +66,7 @@ Create each subscription with these exact Product IDs:
 - **Subscription Group**: Standard Subscriptions
 
 #### Annual Subscription
+
 - **Product ID**: `isitvegan_standard_annual`
 - **Reference Name**: "Annual Standard"
 - **Subscription Duration**: 1 year
@@ -69,7 +74,8 @@ Create each subscription with these exact Product IDs:
 - **Subscription Group**: Standard Subscriptions
 
 #### Lifetime Purchase
-- **Product ID**: `isitvegan_standard_lifetime`
+
+- **Product ID**: `isitvegan_standard_lifetime_subscription`
 - **Reference Name**: "Lifetime Standard"
 - **Type**: Non-Consumable In-App Purchase (not subscription)
 - **Price**: $19.99 USD (Tier 20)
@@ -79,16 +85,19 @@ Create each subscription with these exact Product IDs:
 For each subscription, add:
 
 #### Localized Information (English)
+
 - **Display Name**: "[Duration] Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements. [Savings info]"
 
 #### App Store Review Information
+
 - **Screenshot**: Upload screenshot showing subscription benefits
 - **Review Notes**: "Standard subscription unlocks unlimited usage and removes ads"
 
 ### Step 4: Set Up Server-to-Server Notifications
 
 1. **Enable Notifications**
+
    - Go to App Information → App Store Server Notifications
    - Set Notification URL: `https://[your-project].supabase.co/functions/v1/subscription-webhook`
    - Bundle ID: `net.isitvegan.app`
@@ -117,6 +126,7 @@ For each subscription, add:
 ### Step 1: Create Subscription Products
 
 1. **Navigate to Google Play Console**
+
    - Go to [Google Play Console](https://play.google.com/console)
    - Select "Is It Vegan?" app
 
@@ -125,6 +135,7 @@ For each subscription, add:
    - Click "Create subscription"
 
 #### Monthly Subscription
+
 - **Product ID**: `isitvegan_standard_monthly`
 - **Name**: "Monthly Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements"
@@ -134,6 +145,7 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Quarterly Subscription
+
 - **Product ID**: `isitvegan_standard_quarterly`
 - **Name**: "3-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 17%"
@@ -143,6 +155,7 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Semiannual Subscription
+
 - **Product ID**: `isitvegan_standard_semiannual`
 - **Name**: "6-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 42%"
@@ -152,6 +165,7 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Annual Subscription
+
 - **Product ID**: `isitvegan_standard_annual`
 - **Name**: "Annual Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 58%"
@@ -167,6 +181,7 @@ For each subscription, add:
    - Click "Create product"
 
 #### Lifetime Purchase
+
 - **Product ID**: `isitvegan_standard_lifetime`
 - **Name**: "Lifetime Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Pay once, use forever"
@@ -175,6 +190,7 @@ For each subscription, add:
 ### Step 3: Set Up Real-time Developer Notifications
 
 1. **Configure Cloud Pub/Sub**
+
    - Go to Monetize → Real-time developer notifications
    - Set Topic: Create or use existing Cloud Pub/Sub topic
    - Enable notifications for: Subscriptions and One-time products
@@ -190,6 +206,7 @@ For each subscription, add:
 ### Phase 1: Sandbox Testing (iOS)
 
 #### Prerequisites
+
 - Sandbox tester account in App Store Connect
 - Test device with sandbox account signed in
 - Debug build with StoreKit configuration
@@ -197,16 +214,18 @@ For each subscription, add:
 #### Test Cases
 
 1. **Purchase Flow Testing**
+
    ```bash
    # Test each subscription tier
    - Monthly subscription purchase
-   - Quarterly subscription purchase  
+   - Quarterly subscription purchase
    - Semiannual subscription purchase
    - Annual subscription purchase
    - Lifetime purchase
    ```
 
 2. **Subscription Management**
+
    ```bash
    # Test subscription lifecycle
    - Upgrade from monthly to annual
@@ -241,6 +260,7 @@ eas build --platform ios --profile development
 ### Phase 2: Internal Testing (Android)
 
 #### Prerequisites
+
 - Internal testing track set up in Google Play Console
 - Test account added to internal testing list
 - Debug/release build uploaded to internal testing
@@ -248,6 +268,7 @@ eas build --platform ios --profile development
 #### Test Cases
 
 1. **Purchase Flow Testing**
+
    ```bash
    # Test each subscription and product
    - All subscription tiers
@@ -257,6 +278,7 @@ eas build --platform ios --profile development
    ```
 
 2. **Subscription Management**
+
    ```bash
    # Test Google Play subscription management
    - Access subscription settings
@@ -308,7 +330,7 @@ SELECT * FROM webhook_events ORDER BY created_at DESC LIMIT 10;
 # Test rate limits for free users
 1. Perform 10 product lookups
 2. Verify 11th lookup is blocked
-3. Perform 10 ingredient searches  
+3. Perform 10 ingredient searches
 4. Verify 11th search is blocked
 
 # Test unlimited access for standard users
@@ -342,11 +364,13 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Supabase Edge Function Setup
 
 1. **Deploy Webhook Function**
+
    ```bash
    npx supabase functions deploy subscription-webhook
    ```
 
 2. **Set Environment Variables**
+
    ```bash
    npx supabase secrets set SUPABASE_URL=your-project-url
    npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
@@ -360,6 +384,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Webhook Security
 
 1. **iOS Verification**
+
    - Verify App Store receipts using Apple's verification service
    - Validate signature in production
 
@@ -374,7 +399,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Pre-Deployment Checklist
 
 - [ ] All subscriptions approved in App Store Connect
-- [ ] All subscriptions active in Google Play Console  
+- [ ] All subscriptions active in Google Play Console
 - [ ] Webhook endpoint deployed and tested
 - [ ] Database functions tested with production data
 - [ ] Rate limiting verified
@@ -384,10 +409,11 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### iOS Production Steps
 
 1. **Submit for Review**
+
    ```bash
    # Build production iOS app
    eas build --platform ios --profile production
-   
+
    # Submit to App Store
    eas submit --platform ios
    ```
@@ -400,10 +426,11 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Android Production Steps
 
 1. **Release to Production**
+
    ```bash
    # Build production Android app
    eas build --platform android --profile production
-   
+
    # Submit to Google Play
    eas submit --platform android --track production
    ```
@@ -416,28 +443,30 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Post-Deployment Monitoring
 
 1. **Key Metrics to Track**
+
    - Subscription purchase success rate
    - Webhook processing success rate
    - Rate limiting accuracy
    - User subscription status accuracy
 
 2. **Monitoring Queries**
+
    ```sql
    -- Daily subscription metrics
-   SELECT 
+   SELECT
      subscription_level,
      COUNT(*) as user_count,
      DATE(created_at) as date
-   FROM user_subscriptions 
+   FROM user_subscriptions
    WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '7 days'
    GROUP BY subscription_level, DATE(created_at);
-   
+
    -- Webhook processing success
-   SELECT 
+   SELECT
      event_type,
      COUNT(*) as total_events,
      COUNT(CASE WHEN processed_at IS NOT NULL THEN 1 END) as processed_events
-   FROM webhook_events 
+   FROM webhook_events
    WHERE DATE(created_at) = CURRENT_DATE
    GROUP BY event_type;
    ```
@@ -449,11 +478,13 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Common iOS Issues
 
 1. **"Product not available" Error**
+
    - Verify Product IDs match exactly
    - Check subscription status in App Store Connect
    - Ensure app version matches submitted version
 
 2. **Sandbox Testing Issues**
+
    - Sign out of production Apple ID
    - Use fresh sandbox tester account
    - Clear StoreKit cache in simulator
@@ -466,11 +497,13 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Common Android Issues
 
 1. **"Item not available for purchase" Error**
+
    - Verify Product IDs match exactly
    - Check product status in Google Play Console
    - Ensure app is signed with release key
 
 2. **License Test Response Issues**
+
    - Configure test accounts properly
    - Use correct package name
    - Test with signed APK/AAB
@@ -483,19 +516,21 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Database Issues
 
 1. **Rate Limiting Not Working**
+
    ```sql
    -- Check function exists
    SELECT proname FROM pg_proc WHERE proname = 'get_rate_limits';
-   
+
    -- Test function manually
    SELECT * FROM get_rate_limits('test-device-id', 'PRODUCT_LOOKUP');
    ```
 
 2. **Subscription Status Not Updating**
+
    ```sql
    -- Check webhook events
    SELECT * FROM webhook_events WHERE device_id = 'device-id' ORDER BY created_at DESC;
-   
+
    -- Manually update subscription
    SELECT update_subscription('device-id', 'standard', '2024-12-31'::timestamp, true);
    ```
@@ -503,7 +538,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ### Support Contacts
 
 - **iOS Issues**: Apple Developer Support
-- **Android Issues**: Google Play Developer Support  
+- **Android Issues**: Google Play Developer Support
 - **Payment Processing**: Stripe/Payment Provider Support
 - **Technical Issues**: Development team
 
@@ -512,16 +547,19 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
 ## Security Considerations
 
 1. **API Keys and Secrets**
+
    - Store all secrets in Supabase Vault
    - Use environment variables for configuration
    - Rotate keys regularly
 
 2. **Webhook Security**
+
    - Validate all incoming webhook signatures
    - Use HTTPS for all webhook endpoints
    - Implement rate limiting on webhook endpoints
 
 3. **User Data Protection**
+
    - Store minimal payment information
    - Use device IDs instead of user IDs where possible
    - Implement proper data retention policies
