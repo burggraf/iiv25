@@ -17,7 +17,8 @@
     "build:ios": "eas build --platform ios --profile testflight",
     "build:preview": "eas build --platform all --profile preview",
     "submit:ios": "eas submit --platform ios",
-    "build:production": "eas build --platform all --profile production"
+    "build:production": "eas build --platform all --profile production",
+    "deploy:testflight": "./scripts/deploy-testflight.sh"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
