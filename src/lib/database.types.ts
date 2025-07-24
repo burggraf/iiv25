@@ -144,6 +144,33 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          subscription_level: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id: string
+          is_active?: boolean
+          subscription_level?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          subscription_level?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_subscription: {
         Row: {
           created_at: string | null

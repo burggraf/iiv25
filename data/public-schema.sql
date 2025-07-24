@@ -1262,6 +1262,10 @@ CREATE OR REPLACE FUNCTION "public"."get_subscription_status"("device_id_param" 
 DECLARE
     device_uuid UUID;
     subscription_record RECORD;
+    profile_record RECORD;
+    final_subscription_level TEXT;
+    final_expires_at TIMESTAMP WITH TIME ZONE;
+    final_is_active BOOLEAN;
 BEGIN
     -- Convert device_id_param to UUID
     BEGIN
@@ -1299,8 +1303,56 @@ BEGIN
         );
     END IF;
     
-    -- Check if subscription has expired
-    IF subscription_record.expires_at IS NOT NULL AND subscription_record.expires_at < NOW() THEN
+    -- Initialize with user_subscription values
+    final_subscription_level := subscription_record.subscription_level;
+    final_expires_at := subscription_record.expires_at;
+    final_is_active := subscription_record.is_active;
+    
+    -- Check for profiles override if user is logged in
+    IF subscription_record.userid IS NOT NULL THEN
+        SELECT 
+            p.subscription_level,
+            p.expires_at,
+            p.is_active
+        INTO 
+            profile_record
+        FROM public.profiles p
+        WHERE p.id = subscription_record.userid;
+        
+        -- Apply profiles override if it exists and has higher precedence
+        IF profile_record IS NOT NULL AND profile_record.subscription_level IS NOT NULL THEN
+            -- Check if profile subscription has expired
+            IF profile_record.expires_at IS NOT NULL AND profile_record.expires_at < NOW() THEN
+                -- Profile subscription expired, use user_subscription values
+                -- (already set above)
+                NULL;
+            ELSE
+                -- Profile subscription is active, check if it's higher than user subscription
+                -- Hierarchy: premium > standard > free (null)
+                IF (profile_record.subscription_level = 'premium' AND 
+                    (final_subscription_level != 'premium')) OR
+                   (profile_record.subscription_level = 'standard' AND 
+                    (final_subscription_level NOT IN ('premium', 'standard'))) THEN
+                    
+                    -- Profile has higher subscription level, override user_subscription
+                    final_subscription_level := profile_record.subscription_level;
+                    final_expires_at := profile_record.expires_at;
+                    final_is_active := profile_record.is_active;
+                    
+                    -- Update user_subscription table with profile values
+                    UPDATE public.user_subscription 
+                    SET subscription_level = profile_record.subscription_level,
+                        expires_at = profile_record.expires_at,
+                        is_active = profile_record.is_active,
+                        updated_at = NOW()
+                    WHERE deviceid = device_uuid;
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+    
+    -- Check if final subscription has expired
+    IF final_expires_at IS NOT NULL AND final_expires_at < NOW() THEN
         -- Update subscription to inactive
         UPDATE public.user_subscription 
         SET is_active = FALSE,
@@ -1311,16 +1363,16 @@ BEGIN
             'subscription_level', 'free',
             'is_active', false,
             'device_id', device_id_param,
-            'expires_at', subscription_record.expires_at
+            'expires_at', final_expires_at
         );
     END IF;
     
-    -- Return the current subscription status
+    -- Return the final subscription status
     RETURN json_build_object(
-        'subscription_level', subscription_record.subscription_level,
-        'is_active', subscription_record.is_active,
+        'subscription_level', final_subscription_level,
+        'is_active', final_is_active,
         'device_id', device_id_param,
-        'expires_at', subscription_record.expires_at
+        'expires_at', final_expires_at
     );
 END;
 $$;
@@ -2063,6 +2115,23 @@ COMMENT ON COLUMN "public"."products"."classification" IS 'primary classificatio
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."profiles" (
+    "id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "subscription_level" "text",
+    "expires_at" timestamp with time zone,
+    "is_active" boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE "public"."profiles" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."profiles" IS 'user profiles with subscription overrides';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."user_subscription" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "userid" "uuid",
@@ -2091,6 +2160,11 @@ ALTER TABLE ONLY "public"."ingredients"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_pkey" PRIMARY KEY ("ean13");
+
+
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2172,6 +2246,11 @@ CREATE OR REPLACE TRIGGER "trigger_user_subscription_updated_at" BEFORE UPDATE O
 
 
 
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
 ALTER TABLE "public"."actionlog" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2179,6 +2258,9 @@ ALTER TABLE "public"."ingredients" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."products" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."user_subscription" ENABLE ROW LEVEL SECURITY;
@@ -2419,6 +2501,12 @@ GRANT ALL ON TABLE "public"."ingredients" TO "service_role";
 GRANT ALL ON TABLE "public"."products" TO "anon";
 GRANT ALL ON TABLE "public"."products" TO "authenticated";
 GRANT ALL ON TABLE "public"."products" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."profiles" TO "anon";
+GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 
 
 

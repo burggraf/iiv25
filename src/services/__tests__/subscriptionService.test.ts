@@ -59,6 +59,180 @@ describe('SubscriptionService', () => {
       });
     });
 
+    describe('profiles table override logic', () => {
+      it('should override user_subscription with premium profile when user has free subscription', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'premium',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('premium');
+      });
+
+      it('should override user_subscription with premium profile when user has standard subscription', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'premium',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('premium');
+      });
+
+      it('should override user_subscription with standard profile when user has free subscription', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'standard',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('standard');
+      });
+
+      it('should NOT override user_subscription when profile has lower or equal subscription level', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'premium',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('premium');
+      });
+
+      it('should NOT override when profile subscription has expired', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'free',
+          is_active: true,
+          expires_at: null,
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('free');
+      });
+
+      it('should handle lifetime profile subscription (no expiration)', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'premium',
+          is_active: true,
+          expires_at: null,
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('premium');
+        expect(result?.expires_at).toBeNull();
+      });
+
+      it('should fall back to user_subscription when no profiles record exists', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'standard',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('standard');
+      });
+
+      it('should fall back to user_subscription when profiles.subscription_level is null', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'standard',
+          is_active: true,
+          expires_at: '2024-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('standard');
+      });
+
+      it('should handle user not logged in (no userid in user_subscription)', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'free',
+          is_active: true,
+          expires_at: null,
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('free');
+      });
+
+      it('should return free subscription when final subscription expires', async () => {
+        const deviceId = 'test-device-id';
+        const mockStatus = {
+          subscription_level: 'free',
+          is_active: false,
+          expires_at: '2023-12-31T23:59:59Z',
+          device_id: deviceId,
+        };
+
+        mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
+
+        const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+        expect(result).toEqual(mockStatus);
+        expect(result?.subscription_level).toBe('free');
+        expect(result?.is_active).toBe(false);
+      });
+    });
+
     it('should handle database errors gracefully', async () => {
       const deviceId = 'test-device-id';
 

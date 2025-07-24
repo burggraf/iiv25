@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { ActionLog, ActionType, SubscriptionLevel, VeganStatus } from '../types';
+import { ActionLog, ActionType, VeganStatus } from '../types';
 import deviceIdService from './deviceIdService';
 
 export interface SupabaseIngredient {
@@ -401,29 +401,4 @@ export class SupabaseService {
     }
   }
 
-  /**
-   * Get current user's subscription status
-   * @returns Promise with subscription level ('free', 'standard', or 'premium')
-   * @throws Error if user is not authenticated ('not logged in')
-   */
-  static async getSubscriptionStatus(): Promise<SubscriptionLevel> {
-    try {
-      const { data, error } = await supabase
-        .rpc('get_subscription_status');
-
-      if (error) {
-        // Check if it's an authentication error
-        if (error.message === 'not logged in') {
-          throw new Error('not logged in');
-        }
-        console.error('Error getting subscription status:', error);
-        throw error;
-      }
-
-      return data as SubscriptionLevel;
-    } catch (error) {
-      console.error('Failed to get subscription status:', error);
-      throw error;
-    }
-  }
 }
