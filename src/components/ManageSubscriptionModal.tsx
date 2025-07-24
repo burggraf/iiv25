@@ -335,7 +335,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 			const monthlyPrice = price / 3
 			return `${currencySymbol}${monthlyPrice.toFixed(2)}/mo.`
 		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME) {
-			return 'One-time'
+			return ''
 		} else {
 			// Monthly or unknown - show as is
 			return product.localizedPrice
