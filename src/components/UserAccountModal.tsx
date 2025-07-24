@@ -134,6 +134,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			setSubscriptionStatus(null)
 			setUsageStats(null)
 			setAvailableProducts([])
+			
 			await signOut()
 			onClose()
 			router.replace('/auth/login')

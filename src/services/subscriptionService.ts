@@ -88,10 +88,17 @@ export class SubscriptionService {
    */
   static async updateUserSubscriptionUserId(deviceId: string, userId?: string): Promise<boolean> {
     try {
+      console.log('Calling database function with:', {
+        device_id_param: deviceId,
+        new_user_id: userId || null,
+      });
+      
       const { data, error } = await supabase.rpc('update_user_subscription_userid', {
         device_id_param: deviceId,
         new_user_id: userId || null,
       });
+
+      console.log('Database function response:', { data, error });
 
       if (error) {
         console.error('Error updating user subscription userid:', error);
