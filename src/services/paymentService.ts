@@ -20,11 +20,11 @@ import { SubscriptionService } from './subscriptionService';
 
 // Product IDs for different subscription tiers
 export const SUBSCRIPTION_PRODUCT_IDS = {
-  MONTHLY: 'isitvegan_premium_monthly',
-  QUARTERLY: 'isitvegan_premium_quarterly', 
-  SEMIANNUAL: 'isitvegan_premium_semiannual',
-  ANNUAL: 'isitvegan_premium_annual',
-  LIFETIME: 'isitvegan_premium_lifetime',
+  MONTHLY: 'isitvegan_standard_monthly',
+  QUARTERLY: 'isitvegan_standard_quarterly', 
+  SEMIANNUAL: 'isitvegan_standard_semiannual',
+  ANNUAL: 'isitvegan_standard_annual',
+  LIFETIME: 'isitvegan_standard_lifetime',
 } as const;
 
 export type SubscriptionProductId = typeof SUBSCRIPTION_PRODUCT_IDS[keyof typeof SUBSCRIPTION_PRODUCT_IDS];

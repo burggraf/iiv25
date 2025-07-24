@@ -33,44 +33,44 @@ This guide provides comprehensive instructions for configuring and testing the s
 2. **Create Subscription Group**
    - Go to Features → In-App Purchases
    - Click "+" and select "Subscription Group"
-   - Group Name: "Premium Subscriptions"
-   - Reference Name: "isitvegan_premium_group"
+   - Group Name: "Standard Subscriptions"
+   - Reference Name: "isitvegan_standard_group"
 
 ### Step 2: Create Individual Subscriptions
 
 Create each subscription with these exact Product IDs:
 
 #### Monthly Subscription
-- **Product ID**: `isitvegan_premium_monthly`
-- **Reference Name**: "Monthly Premium"
+- **Product ID**: `isitvegan_standard_monthly`
+- **Reference Name**: "Monthly Standard"
 - **Subscription Duration**: 1 month
 - **Price**: $1.99 USD (Tier 2)
-- **Subscription Group**: Premium Subscriptions
+- **Subscription Group**: Standard Subscriptions
 
 #### Quarterly Subscription
-- **Product ID**: `isitvegan_premium_quarterly`
-- **Reference Name**: "3-Month Premium"
+- **Product ID**: `isitvegan_standard_quarterly`
+- **Reference Name**: "3-Month Standard"
 - **Subscription Duration**: 3 months
 - **Price**: $4.99 USD (Tier 5)
-- **Subscription Group**: Premium Subscriptions
+- **Subscription Group**: Standard Subscriptions
 
 #### Semiannual Subscription
-- **Product ID**: `isitvegan_premium_semiannual`
-- **Reference Name**: "6-Month Premium"
+- **Product ID**: `isitvegan_standard_semiannual`
+- **Reference Name**: "6-Month Standard"
 - **Subscription Duration**: 6 months
 - **Price**: $6.99 USD (Tier 7)
-- **Subscription Group**: Premium Subscriptions
+- **Subscription Group**: Standard Subscriptions
 
 #### Annual Subscription
-- **Product ID**: `isitvegan_premium_annual`
-- **Reference Name**: "Annual Premium"
+- **Product ID**: `isitvegan_standard_annual`
+- **Reference Name**: "Annual Standard"
 - **Subscription Duration**: 1 year
 - **Price**: $9.99 USD (Tier 10)
-- **Subscription Group**: Premium Subscriptions
+- **Subscription Group**: Standard Subscriptions
 
 #### Lifetime Purchase
-- **Product ID**: `isitvegan_premium_lifetime`
-- **Reference Name**: "Lifetime Premium"
+- **Product ID**: `isitvegan_standard_lifetime`
+- **Reference Name**: "Lifetime Standard"
 - **Type**: Non-Consumable In-App Purchase (not subscription)
 - **Price**: $19.99 USD (Tier 20)
 
@@ -79,12 +79,12 @@ Create each subscription with these exact Product IDs:
 For each subscription, add:
 
 #### Localized Information (English)
-- **Display Name**: "[Duration] Premium"
+- **Display Name**: "[Duration] Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements. [Savings info]"
 
 #### App Store Review Information
 - **Screenshot**: Upload screenshot showing subscription benefits
-- **Review Notes**: "Premium subscription unlocks unlimited usage and removes ads"
+- **Review Notes**: "Standard subscription unlocks unlimited usage and removes ads"
 
 ### Step 4: Set Up Server-to-Server Notifications
 
@@ -125,8 +125,8 @@ For each subscription, add:
    - Click "Create subscription"
 
 #### Monthly Subscription
-- **Product ID**: `isitvegan_premium_monthly`
-- **Name**: "Monthly Premium"
+- **Product ID**: `isitvegan_standard_monthly`
+- **Name**: "Monthly Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements"
 - **Billing period**: 1 month
 - **Price**: $1.99 USD
@@ -134,8 +134,8 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Quarterly Subscription
-- **Product ID**: `isitvegan_premium_quarterly`
-- **Name**: "3-Month Premium"
+- **Product ID**: `isitvegan_standard_quarterly`
+- **Name**: "3-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 17%"
 - **Billing period**: 3 months
 - **Price**: $4.99 USD
@@ -143,8 +143,8 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Semiannual Subscription
-- **Product ID**: `isitvegan_premium_semiannual`
-- **Name**: "6-Month Premium"
+- **Product ID**: `isitvegan_standard_semiannual`
+- **Name**: "6-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 42%"
 - **Billing period**: 6 months
 - **Price**: $6.99 USD
@@ -152,8 +152,8 @@ For each subscription, add:
 - **Grace period**: 3 days
 
 #### Annual Subscription
-- **Product ID**: `isitvegan_premium_annual`
-- **Name**: "Annual Premium"
+- **Product ID**: `isitvegan_standard_annual`
+- **Name**: "Annual Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 58%"
 - **Billing period**: 12 months
 - **Price**: $9.99 USD
@@ -167,8 +167,8 @@ For each subscription, add:
    - Click "Create product"
 
 #### Lifetime Purchase
-- **Product ID**: `isitvegan_premium_lifetime`
-- **Name**: "Lifetime Premium"
+- **Product ID**: `isitvegan_standard_lifetime`
+- **Name**: "Lifetime Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Pay once, use forever"
 - **Price**: $19.99 USD
 
@@ -311,7 +311,7 @@ SELECT * FROM webhook_events ORDER BY created_at DESC LIMIT 10;
 3. Perform 10 ingredient searches  
 4. Verify 11th search is blocked
 
-# Test unlimited access for premium users
+# Test unlimited access for standard users
 1. Purchase subscription
 2. Verify unlimited product lookups
 3. Verify unlimited ingredient searches
@@ -326,7 +326,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
   -d '{
     "type": "INITIAL_PURCHASE",
     "data": {
-      "product_id": "isitvegan_premium_monthly",
+      "product_id": "isitvegan_standard_monthly",
       "transaction_id": "test-transaction-123",
       "device_id": "test-device-id",
       "purchase_date": "2024-01-01T00:00:00Z",
@@ -497,7 +497,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
    SELECT * FROM webhook_events WHERE device_id = 'device-id' ORDER BY created_at DESC;
    
    -- Manually update subscription
-   SELECT update_subscription('device-id', 'premium', '2024-12-31'::timestamp, true);
+   SELECT update_subscription('device-id', 'standard', '2024-12-31'::timestamp, true);
    ```
 
 ### Support Contacts

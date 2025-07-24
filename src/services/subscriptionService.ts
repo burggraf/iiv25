@@ -163,7 +163,7 @@ export class SubscriptionService {
   }
 
   /**
-   * Check if device has an active premium subscription
+   * Check if device has an active paid subscription (standard or premium)
    */
   static async isPremiumUser(deviceId: string): Promise<boolean> {
     const status = await this.getSubscriptionStatus(deviceId);

@@ -185,7 +185,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 	const handleCancelSubscription = async () => {
 		Alert.alert(
 			'Cancel Subscription',
-			'Are you sure you want to cancel your subscription? You will continue to have premium access until the current billing period ends.',
+			'Are you sure you want to cancel your subscription? You will continue to have standard access until the current billing period ends.',
 			[
 				{ text: 'Keep Subscription', style: 'cancel' },
 				{
@@ -428,7 +428,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 							<Text style={styles.sectionSubtitle}>
 								{isPremium 
 									? 'Switch to a different subscription plan'
-									: 'Unlock unlimited scans and searches with a premium subscription'
+									: 'Unlock unlimited scans and searches with a standard subscription'
 								}
 							</Text>
 
