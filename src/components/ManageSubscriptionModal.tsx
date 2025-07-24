@@ -319,6 +319,48 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 		return SUBSCRIPTION_PRODUCT_IDS.ANNUAL // Default to annual for old expired subs
 	}
 
+	function getMonthlyPrice(product: PaymentProduct): string {
+		// Extract numeric price from localizedPrice (e.g., "$9.99" -> 9.99)
+		const price = parseFloat(product.localizedPrice.replace(/[^0-9.]/g, '')) || 0
+		const currencySymbol = product.localizedPrice.replace(/[0-9.,]/g, '').charAt(0) || '$'
+		
+		// Calculate monthly equivalent based on product type
+		if (product.productId === SUBSCRIPTION_PRODUCT_IDS.ANNUAL) {
+			const monthlyPrice = price / 12
+			return `${currencySymbol}${monthlyPrice.toFixed(2)}/mo.`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL) {
+			const monthlyPrice = price / 6
+			return `${currencySymbol}${monthlyPrice.toFixed(2)}/mo.`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.QUARTERLY) {
+			const monthlyPrice = price / 3
+			return `${currencySymbol}${monthlyPrice.toFixed(2)}/mo.`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME) {
+			return 'One-time'
+		} else {
+			// Monthly or unknown - show as is
+			return product.localizedPrice
+		}
+	}
+
+	function getBillingText(product: PaymentProduct): string {
+		// Extract numeric price for display
+		const price = parseFloat(product.localizedPrice.replace(/[^0-9.]/g, '')) || 0
+		const currencySymbol = product.localizedPrice.replace(/[0-9.,]/g, '').charAt(0) || '$'
+		
+		if (product.productId === SUBSCRIPTION_PRODUCT_IDS.ANNUAL) {
+			return `${currencySymbol}${price.toFixed(2)} billed annually`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL) {
+			return `${currencySymbol}${price.toFixed(2)} billed every 6 months`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.QUARTERLY) {
+			return `${currencySymbol}${price.toFixed(2)} billed every 3 months`
+		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME) {
+			return `${currencySymbol}${price.toFixed(2)} one-time payment`
+		} else {
+			// Monthly
+			return `${currencySymbol}${price.toFixed(2)} billed monthly`
+		}
+	}
+
 	return (
 		<Modal
 			animationType="slide"
@@ -441,84 +483,79 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 								const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME
 								const isCurrentPlan = product.productId === currentProductId
 								return (
-									<TouchableOpacity
+									<View
 										key={product.productId}
 										style={[
-											styles.tierCard, 
-											isLifetime && styles.tierCardHighlight,
+											styles.subscriptionCard,
+											isLifetime && styles.subscriptionCardLifetime,
 											isCurrentPlan && styles.currentPlanCard
-										]}
-										onPress={() => handleUpgrade(product.productId)}
-										disabled={isPurchasing || isCurrentPlan}>
-										<View style={styles.tierHeader}>
-											<View style={styles.tierNameContainer}>
-												<Text style={[
-													styles.tierName, 
-													isLifetime && styles.tierNameHighlight,
-													isCurrentPlan && styles.currentPlanText
-												]}>
-													{product.title}
-													{isCurrentPlan && ' (Current)'}
-												</Text>
-											</View>
-											<View style={styles.tierPrice}>
-												<Text
-													style={[
-														styles.tierPriceAmount, 
-														isLifetime && styles.tierPriceHighlight,
-														isCurrentPlan && styles.currentPlanText
-													]}>
-													{product.localizedPrice}
-												</Text>
-												<Text
-													style={[
-														styles.tierPriceDuration, 
-														isLifetime && styles.tierPriceHighlight,
-														isCurrentPlan && styles.currentPlanText
-													]}>
-													{product.duration}
-												</Text>
-											</View>
-										</View>
-										<View style={styles.tierFeatures}>
-											<Text style={[
-												styles.tierFeature, 
-												isLifetime && styles.tierFeatureHighlight,
-												isCurrentPlan && styles.currentPlanText
-											]}>
-												• Unlimited product scans
-											</Text>
-											<Text style={[
-												styles.tierFeature, 
-												isLifetime && styles.tierFeatureHighlight,
-												isCurrentPlan && styles.currentPlanText
-											]}>
-												• Unlimited ingredient searches
-											</Text>
-											<Text style={[
-												styles.tierFeature, 
-												isLifetime && styles.tierFeatureHighlight,
-												isCurrentPlan && styles.currentPlanText
-											]}>
-												• No advertisements
-											</Text>
+										]}>
+										{/* Header with title and savings badge */}
+										<View style={styles.subscriptionHeader}>
+											<Text style={styles.subscriptionTitle}>{product.title}</Text>
 											{product.savings && (
-												<Text style={[
-													styles.tierFeature, 
-													isLifetime && styles.tierFeatureHighlight,
-													isCurrentPlan && styles.currentPlanText
+												<View style={[
+													styles.savingsBadge,
+													isLifetime && !isCurrentPlan && styles.savingsBadgeLifetime,
+													isCurrentPlan && styles.savingsBadgeCurrent
 												]}>
-													• {product.savings}
-												</Text>
+													<Text style={styles.savingsText}>{product.savings}</Text>
+												</View>
 											)}
 										</View>
-										{isPurchasing && (
-											<View style={styles.purchasingOverlay}>
-												<ActivityIndicator size='small' color='white' />
-												<Text style={styles.purchasingText}>Processing...</Text>
+
+										{/* Price section */}
+										<View style={styles.priceSection}>
+											<Text style={styles.priceAmount}>{getMonthlyPrice(product)}</Text>
+											<Text style={styles.priceDuration}>{getBillingText(product)}</Text>
+										</View>
+
+										{/* Divider line */}
+										<View style={[
+											styles.divider,
+											isCurrentPlan && styles.dividerCurrent,
+											isLifetime && !isCurrentPlan && styles.dividerLifetime
+										]} />
+
+										{/* Features with checkmarks */}
+										<View style={styles.featuresContainer}>
+											<View style={styles.featureRow}>
+												<Ionicons name="checkmark" size={18} color={isCurrentPlan ? "#94A3B8" : (isLifetime ? "#2196F3" : "#4CAF50")} style={styles.checkmark} />
+												<Text style={styles.featureText}>Unlimited product scans</Text>
 											</View>
-										)}
-									</TouchableOpacity>
+											<View style={styles.featureRow}>
+												<Ionicons name="checkmark" size={18} color={isCurrentPlan ? "#94A3B8" : (isLifetime ? "#2196F3" : "#4CAF50")} style={styles.checkmark} />
+												<Text style={styles.featureText}>Unlimited product searches</Text>
+											</View>
+											<View style={styles.featureRow}>
+												<Ionicons name="checkmark" size={18} color={isCurrentPlan ? "#94A3B8" : (isLifetime ? "#2196F3" : "#4CAF50")} style={styles.checkmark} />
+												<Text style={styles.featureText}>Unlimited ingredient searches</Text>
+											</View>
+											<View style={styles.featureRow}>
+												<Ionicons name="checkmark" size={18} color={isCurrentPlan ? "#94A3B8" : (isLifetime ? "#2196F3" : "#4CAF50")} style={styles.checkmark} />
+												<Text style={styles.featureText}>No advertisements</Text>
+											</View>
+										</View>
+
+
+										{/* Subscribe button */}
+										<TouchableOpacity
+											style={[
+												styles.subscribeButton,
+												isLifetime && styles.subscribeButtonLifetime,
+												isCurrentPlan && styles.currentPlanButton
+											]}
+											onPress={() => handleUpgrade(product.productId)}
+											disabled={isPurchasing || isCurrentPlan}>
+											{isPurchasing ? (
+												<ActivityIndicator size="small" color="white" />
+											) : (
+												<Text style={styles.subscribeButtonText}>
+													{isCurrentPlan ? 'Current Plan' : 'Subscribe now'}
+												</Text>
+											)}
+										</TouchableOpacity>
+									</View>
 								)
 							})}
 						</View>
@@ -680,10 +717,10 @@ const styles = StyleSheet.create({
 		backgroundColor: '#f8fff8',
 	},
 	currentPlanCard: {
-		borderColor: '#2196F3',
-		backgroundColor: '#f0f7ff',
+		borderColor: '#94A3B8',
+		backgroundColor: '#f8fafc',
 		borderWidth: 2,
-		shadowColor: '#2196F3',
+		shadowColor: '#94A3B8',
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.1,
 		shadowRadius: 4,
@@ -784,5 +821,128 @@ const styles = StyleSheet.create({
 		marginLeft: 8,
 		fontSize: 16,
 		fontWeight: '600',
+	},
+	// New MyFitnessPal-inspired styles
+	subscriptionCard: {
+		backgroundColor: '#f8fff8',
+		borderRadius: 16,
+		padding: 20,
+		marginBottom: 16,
+		borderWidth: 2,
+		borderColor: '#4CAF50',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	subscriptionCardLifetime: {
+		backgroundColor: '#f0f7ff',
+		borderColor: '#2196F3',
+	},
+	subscriptionHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'flex-start',
+		marginBottom: 8,
+	},
+	subscriptionTitle: {
+		fontSize: 22,
+		fontWeight: 'bold',
+		color: '#333',
+		flex: 1,
+	},
+	savingsBadge: {
+		backgroundColor: '#4CAF50',
+		borderRadius: 8,
+		paddingHorizontal: 10,
+		paddingVertical: 4,
+		marginLeft: 8,
+	},
+	savingsBadgeLifetime: {
+		backgroundColor: '#2196F3',
+	},
+	savingsBadgeCurrent: {
+		backgroundColor: '#94A3B8',
+	},
+	savingsText: {
+		color: 'white',
+		fontSize: 12,
+		fontWeight: 'bold',
+	},
+	priceSection: {
+		marginBottom: 16,
+	},
+	priceAmount: {
+		fontSize: 32,
+		fontWeight: 'bold',
+		color: '#333',
+	},
+	priceDuration: {
+		fontSize: 14,
+		color: '#666',
+		marginTop: 2,
+	},
+	divider: {
+		height: 1,
+		backgroundColor: '#C8E6C9',
+		marginBottom: 16,
+	},
+	dividerLifetime: {
+		backgroundColor: '#BBDEFB',
+	},
+	dividerCurrent: {
+		backgroundColor: '#CBD5E1',
+	},
+	featuresContainer: {
+		marginBottom: 16,
+	},
+	featureRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginBottom: 12,
+	},
+	checkmark: {
+		marginRight: 12,
+	},
+	featureText: {
+		fontSize: 16,
+		color: '#333',
+		fontWeight: '500',
+		flex: 1,
+	},
+	subscriptionDescription: {
+		fontSize: 14,
+		color: '#666',
+		lineHeight: 20,
+		marginBottom: 20,
+	},
+	subscribeButton: {
+		backgroundColor: '#4CAF50',
+		borderRadius: 12,
+		paddingVertical: 16,
+		paddingHorizontal: 24,
+		alignItems: 'center',
+		justifyContent: 'center',
+		shadowColor: '#4CAF50',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.3,
+		shadowRadius: 8,
+		elevation: 6,
+	},
+	subscribeButtonLifetime: {
+		backgroundColor: '#2196F3',
+		shadowColor: '#2196F3',
+	},
+	subscribeButtonText: {
+		color: 'white',
+		fontSize: 16,
+		fontWeight: 'bold',
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
+	},
+	currentPlanButton: {
+		backgroundColor: '#94A3B8',
+		shadowColor: '#94A3B8',
 	},
 })
