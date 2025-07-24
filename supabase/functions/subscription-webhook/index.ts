@@ -204,11 +204,11 @@ export async function processSubscriptionCancellation(data: WebhookEvent['data']
  */
 export function getSubscriptionInfo(productId: string): { level: string; duration: number } | null {
   const productMap: Record<string, { level: string; duration: number }> = {
-    'isitvegan_premium_monthly': { level: 'premium', duration: 30 },
-    'isitvegan_premium_quarterly': { level: 'premium', duration: 90 },
-    'isitvegan_premium_semiannual': { level: 'premium', duration: 180 },
-    'isitvegan_premium_annual': { level: 'premium', duration: 365 },
-    'isitvegan_premium_lifetime': { level: 'premium', duration: -1 }, // -1 for lifetime
+    'isitvegan_standard_monthly': { level: 'standard', duration: 30 },
+    'isitvegan_standard_quarterly': { level: 'standard', duration: 90 },
+    'isitvegan_standard_semiannual': { level: 'standard', duration: 180 },
+    'isitvegan_standard_annual': { level: 'standard', duration: 365 },
+    'isitvegan_standard_lifetime_subscription': { level: 'standard', duration: -1 }, // -1 for lifetime
   }
 
   return productMap[productId] || null
@@ -224,7 +224,7 @@ async function updateSubscriptionInDatabase(
   try {
     console.log('Updating subscription in database:', update)
 
-    const { data, error } = await supabase.rpc('update_subscription', {
+    const { data, error } = await supabase.rpc('webhook_update_subscription', {
       device_id_param: update.deviceId,
       subscription_level_param: update.subscriptionLevel,
       expires_at_param: update.expiresAt || null,

@@ -10,7 +10,6 @@ import {
   getAvailablePurchases,
   clearTransactionIOS,
   Product,
-  Subscription,
   SubscriptionPurchase,
   ProductPurchase,
   PurchaseError,
@@ -64,6 +63,7 @@ export class PaymentService {
   private static purchaseUpdateSubscription: any = null;
   private static purchaseErrorSubscription: any = null;
   private static products: Product[] = [];
+  private static currentDeviceId: string | null = null;
 
   /**
    * Initialize the payment service
@@ -322,11 +322,14 @@ export class PaymentService {
     deviceId: string
   ): Promise<PurchaseResult> {
     try {
-      console.log('PaymentService: Initiating purchase for:', productId);
+      console.log('PaymentService: Initiating purchase for:', productId, 'deviceId:', deviceId);
       
       if (!this.isInitialized) {
         throw new Error('Payment service not initialized');
       }
+
+      // Store the device ID for use during purchase processing
+      this.currentDeviceId = deviceId;
 
       // Clear any pending iOS transactions first
       if (Platform.OS === 'ios') {
@@ -357,6 +360,9 @@ export class PaymentService {
     } catch (error: any) {
       console.error('PaymentService: Purchase failed:', error);
       
+      // Clear device ID on error
+      this.currentDeviceId = null;
+      
       return {
         success: false,
         error: error.message || 'Purchase failed',
@@ -371,7 +377,7 @@ export class PaymentService {
     purchase: SubscriptionPurchase | ProductPurchase
   ): Promise<void> {
     try {
-      console.log('PaymentService: Processing purchase:', purchase.productId);
+      console.log('PaymentService: Processing purchase:', purchase.productId, 'deviceId:', this.currentDeviceId);
       
       // Determine subscription level and expiration based on product ID
       const subscriptionInfo = this.getSubscriptionInfo(purchase.productId);
@@ -380,16 +386,20 @@ export class PaymentService {
         throw new Error(`Unknown product ID: ${purchase.productId}`);
       }
       
-      // Update subscription in database
-      // Note: We'll need the device ID from the purchase context
-      // For now, we'll store the purchase info and let the app update the subscription
-      console.log('PaymentService: Purchase processed for:', subscriptionInfo);
+      if (!this.currentDeviceId) {
+        throw new Error('Device ID not available for purchase processing');
+      }
       
-      // Store purchase info for the app to pick up
-      await this.storePurchaseInfo(purchase, subscriptionInfo);
+      // Update subscription in database using the stored device ID
+      await this.updateSubscriptionFromPurchase(purchase, subscriptionInfo, this.currentDeviceId);
+      
+      // Clear the device ID after successful processing
+      this.currentDeviceId = null;
       
     } catch (error) {
       console.error('PaymentService: Error processing purchase:', error);
+      // Clear device ID on error
+      this.currentDeviceId = null;
       throw error;
     }
   }
@@ -400,35 +410,61 @@ export class PaymentService {
   private static getSubscriptionInfo(productId: string): { level: string; duration: number } | null {
     switch (productId) {
       case SUBSCRIPTION_PRODUCT_IDS.MONTHLY:
-        return { level: 'premium', duration: 30 };
+        return { level: 'standard', duration: 30 };
       case SUBSCRIPTION_PRODUCT_IDS.QUARTERLY:
-        return { level: 'premium', duration: 90 };
+        return { level: 'standard', duration: 90 };
       case SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL:
-        return { level: 'premium', duration: 180 };
+        return { level: 'standard', duration: 180 };
       case SUBSCRIPTION_PRODUCT_IDS.ANNUAL:
-        return { level: 'premium', duration: 365 };
+        return { level: 'standard', duration: 365 };
       case SUBSCRIPTION_PRODUCT_IDS.LIFETIME:
-        return { level: 'premium', duration: -1 }; // -1 indicates lifetime
+        return { level: 'standard', duration: -1 }; // -1 indicates lifetime
       default:
         return null;
     }
   }
 
   /**
-   * Store purchase information for app to process
+   * Update subscription in database from purchase
    */
-  private static async storePurchaseInfo(
+  private static async updateSubscriptionFromPurchase(
     purchase: SubscriptionPurchase | ProductPurchase,
-    subscriptionInfo: { level: string; duration: number }
+    subscriptionInfo: { level: string; duration: number },
+    deviceId: string
   ): Promise<void> {
-    // This could be stored in AsyncStorage or sent to a webhook
-    // For now, just log it - the app will handle the subscription update
-    console.log('PaymentService: Storing purchase info:', {
-      productId: purchase.productId,
-      transactionId: purchase.transactionId,
-      subscriptionInfo,
-      purchaseTime: purchase.transactionDate,
-    });
+    try {
+      console.log('PaymentService: Updating subscription from purchase:', {
+        productId: purchase.productId,
+        transactionId: purchase.transactionId,
+        subscriptionInfo,
+        deviceId,
+        purchaseTime: purchase.transactionDate,
+      });
+
+      // Calculate expiration date
+      let expiresAt: Date | undefined;
+      if (subscriptionInfo.duration > 0) {
+        const purchaseDate = purchase.transactionDate 
+          ? new Date(typeof purchase.transactionDate === 'string' ? parseInt(purchase.transactionDate) : purchase.transactionDate)
+          : new Date();
+        expiresAt = new Date(purchaseDate);
+        expiresAt.setDate(expiresAt.getDate() + subscriptionInfo.duration);
+      }
+      // For lifetime subscriptions (duration -1), expiresAt remains undefined
+
+      // Update subscription in database
+      await SubscriptionService.updateSubscription(
+        deviceId,
+        subscriptionInfo.level,
+        expiresAt,
+        true
+      );
+
+      console.log('PaymentService: Subscription updated successfully for device:', deviceId);
+    } catch (error) {
+      console.error('PaymentService: Failed to update subscription:', error);
+      throw error;
+    }
   }
 
   /**
