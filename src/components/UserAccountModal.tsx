@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
+	Modal,
 	Platform,
 	ScrollView,
 	StyleSheet,
@@ -10,22 +11,28 @@ import {
 	View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 
-import Logo from '../../src/components/Logo'
-import { useApp } from '../../src/context/AppContext'
-import { useAuth } from '../../src/context/AuthContext'
+import Logo from './Logo'
+import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import {
 	PaymentProduct,
 	PaymentService,
 	SUBSCRIPTION_PRODUCT_IDS,
-} from '../../src/services/paymentService'
+} from '../services/paymentService'
 import {
 	SubscriptionService,
 	SubscriptionStatus,
 	UsageStats,
-} from '../../src/services/subscriptionService'
+} from '../services/subscriptionService'
 
-export default function UserScreen() {
+interface UserAccountModalProps {
+	visible: boolean
+	onClose: () => void
+}
+
+export default function UserAccountModal({ visible, onClose }: UserAccountModalProps) {
 	const { user, signOut, isAnonymous } = useAuth()
 	const { deviceId } = useApp()
 	const [isLoading, setIsLoading] = useState(false)
@@ -37,19 +44,21 @@ export default function UserScreen() {
 	const [isRestoring, setIsRestoring] = useState(false)
 
 	useEffect(() => {
-		loadSubscriptionStatus()
-		loadUsageStats()
-		initializePaymentService()
-	}, [user, deviceId])
+		if (visible) {
+			loadSubscriptionStatus()
+			loadUsageStats()
+			initializePaymentService()
+		}
+	}, [visible, user, deviceId])
 
 	// Handle auth state changes to update user_subscription table
 	useEffect(() => {
-		if (deviceId) {
+		if (visible && deviceId) {
 			SubscriptionService.handleAuthStateChange(deviceId, user?.id).catch((error) => {
 				console.error('Failed to update user subscription for auth change:', error)
 			})
 		}
-	}, [user, deviceId])
+	}, [visible, user, deviceId])
 
 	// Cleanup payment service on unmount
 	useEffect(() => {
@@ -120,6 +129,7 @@ export default function UserScreen() {
 		try {
 			setIsLoading(true)
 			await signOut()
+			onClose()
 		} catch (error) {
 			Alert.alert('Error', 'Failed to sign out. Please try again.')
 		} finally {
@@ -234,259 +244,272 @@ export default function UserScreen() {
 		subscriptionStatus?.subscription_level === 'premium'
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
-			{/* Header */}
-			<View style={styles.header}>
-				<Logo size={32} />
-				<Text style={styles.appTitle}>User Account</Text>
-			</View>
-
-			<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-				{/* Authentication Status */}
-				<View style={styles.section}>
-					<Text style={styles.sectionTitle}>Account Status</Text>
-					<View style={styles.card}>
-						<View style={styles.cardRow}>
-							<Text style={styles.cardLabel}>Status:</Text>
-							<Text style={[styles.cardValue, { color: user ? '#4CAF50' : '#FF6B35' }]}>
-								{user ? (isAnonymous ? 'Anonymous User' : 'Signed In') : 'Not Signed In'}
-							</Text>
-						</View>
-						{user?.email && (
-							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Email:</Text>
-								<Text style={styles.cardValue}>{user.email}</Text>
-							</View>
-						)}
-						<View style={styles.cardRow}>
-							<Text style={styles.cardLabel}>Device ID:</Text>
-							<Text style={[styles.cardValue, styles.deviceId]}>{deviceId}</Text>
-						</View>
+		<Modal
+			animationType="slide"
+			transparent={false}
+			visible={visible}
+			onRequestClose={onClose}
+			presentationStyle="fullScreen">
+			<SafeAreaView style={styles.container}>
+				{/* Header with Close Button */}
+				<View style={styles.header}>
+					<TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+						<Ionicons name="close" size={24} color="#333" />
+					</TouchableOpacity>
+					<View style={styles.headerContent}>
+						<Logo size={32} />
+						<Text style={styles.appTitle}>User Account</Text>
 					</View>
+					<View style={styles.placeholder} />
 				</View>
 
-				{/* Subscription Status */}
-				<View style={styles.section}>
-					<Text style={styles.sectionTitle}>Subscription</Text>
-					<View style={styles.card}>
-						<View style={styles.cardRow}>
-							<Text style={styles.cardLabel}>Plan:</Text>
-							<Text
-								style={[
-									styles.cardValue,
-									{
-										color: isPremium ? '#4CAF50' : '#FF6B35',
-										fontWeight: 'bold',
-									},
-								]}>
-								{subscriptionStatus
-									? SubscriptionService.getSubscriptionDisplayName(
-											subscriptionStatus.subscription_level
-									  )
-									: 'Loading...'}
-							</Text>
-						</View>
-						{subscriptionStatus?.expires_at && (
-							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Expires:</Text>
-								<Text style={styles.cardValue}>
-									{SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)}
-								</Text>
-							</View>
-						)}
-					</View>
-				</View>
-
-				{/* Usage Statistics */}
-				{usageStats && (
+				<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+					{/* Authentication Status */}
 					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Today&apos;s Usage</Text>
+						<Text style={styles.sectionTitle}>Account Status</Text>
 						<View style={styles.card}>
 							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Product Lookups:</Text>
-								<Text
-									style={[
-										styles.cardValue,
-										{
-											color: isPremium
-												? '#4CAF50'
-												: usageStats.product_lookups_today >= usageStats.product_lookups_limit
-												? '#F44336'
-												: '#333',
-										},
-									]}>
-									{isPremium
-										? 'Unlimited'
-										: `${usageStats.product_lookups_today}/${usageStats.product_lookups_limit}`}
+								<Text style={styles.cardLabel}>Status:</Text>
+								<Text style={[styles.cardValue, { color: user ? '#4CAF50' : '#FF6B35' }]}>
+									{user ? (isAnonymous ? 'Anonymous User' : 'Signed In') : 'Not Signed In'}
 								</Text>
 							</View>
+							{user?.email && (
+								<View style={styles.cardRow}>
+									<Text style={styles.cardLabel}>Email:</Text>
+									<Text style={styles.cardValue}>{user.email}</Text>
+								</View>
+							)}
 							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Ingredient Searches:</Text>
-								<Text
-									style={[
-										styles.cardValue,
-										{
-											color: isPremium
-												? '#4CAF50'
-												: usageStats.searches_today >= usageStats.searches_limit
-												? '#F44336'
-												: '#333',
-										},
-									]}>
-									{isPremium
-										? 'Unlimited'
-										: `${usageStats.searches_today}/${usageStats.searches_limit}`}
-								</Text>
+								<Text style={styles.cardLabel}>Device ID:</Text>
+								<Text style={[styles.cardValue, styles.deviceId]}>{deviceId}</Text>
 							</View>
 						</View>
 					</View>
-				)}
 
-				{/* Subscription Management */}
-				{!isPremium && (
+					{/* Subscription Status */}
 					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Upgrade Your Plan</Text>
-						<Text style={styles.sectionSubtitle}>
-							Unlock unlimited scans and searches with a premium subscription
-						</Text>
-
-						{!isPaymentInitialized && (
-							<View style={styles.card}>
-								<Text style={styles.cardLabel}>Loading subscription options...</Text>
-							</View>
-						)}
-
-						{isPaymentInitialized && availableProducts.length === 0 && (
-							<View style={styles.card}>
-								<Text style={styles.cardLabel}>
-									Subscription options not available at this time.
+						<Text style={styles.sectionTitle}>Subscription</Text>
+						<View style={styles.card}>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Plan:</Text>
+								<Text
+									style={[
+										styles.cardValue,
+										{
+											color: isPremium ? '#4CAF50' : '#FF6B35',
+											fontWeight: 'bold',
+										},
+									]}>
+									{subscriptionStatus
+										? SubscriptionService.getSubscriptionDisplayName(
+												subscriptionStatus.subscription_level
+										  )
+										: 'Loading...'}
 								</Text>
 							</View>
-						)}
+							{subscriptionStatus?.expires_at && (
+								<View style={styles.cardRow}>
+									<Text style={styles.cardLabel}>Expires:</Text>
+									<Text style={styles.cardValue}>
+										{SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)}
+									</Text>
+								</View>
+							)}
+						</View>
+					</View>
 
-						{availableProducts.map((product) => {
-							const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME
-							return (
-								<TouchableOpacity
-									key={product.productId}
-									style={[styles.tierCard, isLifetime && styles.tierCardHighlight]}
-									onPress={() => handleUpgrade(product.productId)}
-									disabled={isPurchasing}>
-									<View style={styles.tierHeader}>
-										<Text style={[styles.tierName, isLifetime && styles.tierNameHighlight]}>
-											{product.title}
-										</Text>
-										<View style={styles.tierPrice}>
-											<Text
-												style={[styles.tierPriceAmount, isLifetime && styles.tierPriceHighlight]}>
-												{product.localizedPrice}
+					{/* Usage Statistics */}
+					{usageStats && (
+						<View style={styles.section}>
+							<Text style={styles.sectionTitle}>Today&apos;s Usage</Text>
+							<View style={styles.card}>
+								<View style={styles.cardRow}>
+									<Text style={styles.cardLabel}>Product Lookups:</Text>
+									<Text
+										style={[
+											styles.cardValue,
+											{
+												color: isPremium
+													? '#4CAF50'
+													: usageStats.product_lookups_today >= usageStats.product_lookups_limit
+													? '#F44336'
+													: '#333',
+											},
+										]}>
+										{isPremium
+											? 'Unlimited'
+											: `${usageStats.product_lookups_today}/${usageStats.product_lookups_limit}`}
+									</Text>
+								</View>
+								<View style={styles.cardRow}>
+									<Text style={styles.cardLabel}>Ingredient Searches:</Text>
+									<Text
+										style={[
+											styles.cardValue,
+											{
+												color: isPremium
+													? '#4CAF50'
+													: usageStats.searches_today >= usageStats.searches_limit
+													? '#F44336'
+													: '#333',
+											},
+										]}>
+										{isPremium
+											? 'Unlimited'
+											: `${usageStats.searches_today}/${usageStats.searches_limit}`}
+									</Text>
+								</View>
+							</View>
+						</View>
+					)}
+
+					{/* Subscription Management */}
+					{!isPremium && (
+						<View style={styles.section}>
+							<Text style={styles.sectionTitle}>Upgrade Your Plan</Text>
+							<Text style={styles.sectionSubtitle}>
+								Unlock unlimited scans and searches with a premium subscription
+							</Text>
+
+							{!isPaymentInitialized && (
+								<View style={styles.card}>
+									<Text style={styles.cardLabel}>Loading subscription options...</Text>
+								</View>
+							)}
+
+							{isPaymentInitialized && availableProducts.length === 0 && (
+								<View style={styles.card}>
+									<Text style={styles.cardLabel}>
+										Subscription options not available at this time.
+									</Text>
+								</View>
+							)}
+
+							{availableProducts.map((product) => {
+								const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME
+								return (
+									<TouchableOpacity
+										key={product.productId}
+										style={[styles.tierCard, isLifetime && styles.tierCardHighlight]}
+										onPress={() => handleUpgrade(product.productId)}
+										disabled={isPurchasing}>
+										<View style={styles.tierHeader}>
+											<Text style={[styles.tierName, isLifetime && styles.tierNameHighlight]}>
+												{product.title}
 											</Text>
-											<Text
-												style={[styles.tierPriceDuration, isLifetime && styles.tierPriceHighlight]}>
-												{product.duration}
-											</Text>
+											<View style={styles.tierPrice}>
+												<Text
+													style={[styles.tierPriceAmount, isLifetime && styles.tierPriceHighlight]}>
+													{product.localizedPrice}
+												</Text>
+												<Text
+													style={[styles.tierPriceDuration, isLifetime && styles.tierPriceHighlight]}>
+													{product.duration}
+												</Text>
+											</View>
 										</View>
-									</View>
-									<View style={styles.tierFeatures}>
-										<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-											• Unlimited product scans
-										</Text>
-										<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-											• Unlimited ingredient searches
-										</Text>
-										<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-											• No advertisements
-										</Text>
-										{product.savings && (
+										<View style={styles.tierFeatures}>
 											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
-												• {product.savings}
+												• Unlimited product scans
 											</Text>
-										)}
-									</View>
-									{isPurchasing && (
-										<View style={styles.purchasingOverlay}>
-											<ActivityIndicator size='small' color='white' />
-											<Text style={styles.purchasingText}>Processing...</Text>
+											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+												• Unlimited ingredient searches
+											</Text>
+											<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+												• No advertisements
+											</Text>
+											{product.savings && (
+												<Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+													• {product.savings}
+												</Text>
+											)}
 										</View>
-									)}
-								</TouchableOpacity>
-							)
-						})}
-					</View>
-				)}
-
-				{/* Premium User Management */}
-				{isPremium && (
-					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Subscription Management</Text>
-						<View style={styles.card}>
-							<Text style={styles.cardLabel}>You have an active premium subscription!</Text>
+										{isPurchasing && (
+											<View style={styles.purchasingOverlay}>
+												<ActivityIndicator size='small' color='white' />
+												<Text style={styles.purchasingText}>Processing...</Text>
+											</View>
+										)}
+									</TouchableOpacity>
+								)
+							})}
 						</View>
+					)}
 
-						<TouchableOpacity style={styles.actionButton} onPress={handleManageSubscription}>
-							<Text style={styles.actionButtonText}>Manage Subscription</Text>
-						</TouchableOpacity>
-					</View>
-				)}
+					{/* Premium User Management */}
+					{isPremium && (
+						<View style={styles.section}>
+							<Text style={styles.sectionTitle}>Subscription Management</Text>
+							<View style={styles.card}>
+								<Text style={styles.cardLabel}>You have an active premium subscription!</Text>
+							</View>
 
-				{/* Account Actions */}
-				<View style={styles.section}>
-					<Text style={styles.sectionTitle}>Account Actions</Text>
+							<TouchableOpacity style={styles.actionButton} onPress={handleManageSubscription}>
+								<Text style={styles.actionButtonText}>Manage Subscription</Text>
+							</TouchableOpacity>
+						</View>
+					)}
 
-					{!user && (
+					{/* Account Actions */}
+					<View style={styles.section}>
+						<Text style={styles.sectionTitle}>Account Actions</Text>
+
+						{!user && (
+							<TouchableOpacity
+								style={styles.actionButton}
+								onPress={() => {
+									// TODO: Navigate to authentication screen
+									Alert.alert('Coming Soon', 'Sign in functionality will be available soon!')
+								}}>
+								<Text style={styles.actionButtonText}>Sign In / Sign Up</Text>
+							</TouchableOpacity>
+						)}
+
 						<TouchableOpacity
 							style={styles.actionButton}
-							onPress={() => {
-								// TODO: Navigate to authentication screen
-								Alert.alert('Coming Soon', 'Sign in functionality will be available soon!')
-							}}>
-							<Text style={styles.actionButtonText}>Sign In / Sign Up</Text>
-						</TouchableOpacity>
-					)}
-
-					<TouchableOpacity
-						style={styles.actionButton}
-						onPress={handleRestorePurchases}
-						disabled={!isPaymentInitialized || isRestoring}>
-						{isRestoring ? (
-							<ActivityIndicator size='small' color='white' />
-						) : (
-							<Text style={styles.actionButtonText}>Restore Purchases</Text>
-						)}
-					</TouchableOpacity>
-
-					{user && (
-						<TouchableOpacity
-							style={[styles.actionButton, styles.signOutButton]}
-							onPress={handleSignOut}
-							disabled={isLoading}>
-							{isLoading ? (
+							onPress={handleRestorePurchases}
+							disabled={!isPaymentInitialized || isRestoring}>
+							{isRestoring ? (
 								<ActivityIndicator size='small' color='white' />
 							) : (
-								<Text style={[styles.actionButtonText, styles.signOutButtonText]}>Sign Out</Text>
+								<Text style={styles.actionButtonText}>Restore Purchases</Text>
 							)}
 						</TouchableOpacity>
-					)}
-				</View>
 
-				{/* App Information */}
-				<View style={styles.section}>
-					<Text style={styles.sectionTitle}>App Information</Text>
-					<View style={styles.card}>
-						<View style={styles.cardRow}>
-							<Text style={styles.cardLabel}>Version:</Text>
-							<Text style={styles.cardValue}>4.0.0</Text>
-						</View>
-						<View style={styles.cardRow}>
-							<Text style={styles.cardLabel}>Platform:</Text>
-							<Text style={styles.cardValue}>{Platform.OS === 'ios' ? 'iOS' : 'Android'}</Text>
+						{user && (
+							<TouchableOpacity
+								style={[styles.actionButton, styles.signOutButton]}
+								onPress={handleSignOut}
+								disabled={isLoading}>
+								{isLoading ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={[styles.actionButtonText, styles.signOutButtonText]}>Sign Out</Text>
+								)}
+							</TouchableOpacity>
+						)}
+					</View>
+
+					{/* App Information */}
+					<View style={styles.section}>
+						<Text style={styles.sectionTitle}>App Information</Text>
+						<View style={styles.card}>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Version:</Text>
+								<Text style={styles.cardValue}>4.0.0</Text>
+							</View>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Platform:</Text>
+								<Text style={styles.cardValue}>{Platform.OS === 'ios' ? 'iOS' : 'Android'}</Text>
+							</View>
 						</View>
 					</View>
-				</View>
 
-				<View style={styles.bottomPadding} />
-			</ScrollView>
-		</SafeAreaView>
+					<View style={styles.bottomPadding} />
+				</ScrollView>
+			</SafeAreaView>
+		</Modal>
 	)
 }
 
@@ -498,12 +521,28 @@ const styles = StyleSheet.create({
 	header: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		justifyContent: 'center',
+		justifyContent: 'space-between',
 		paddingVertical: 12,
 		paddingHorizontal: 16,
 		backgroundColor: 'white',
 		borderBottomWidth: 1,
 		borderBottomColor: '#eee',
+	},
+	closeButton: {
+		padding: 8,
+		width: 40,
+		height: 40,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	headerContent: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		flex: 1,
+	},
+	placeholder: {
+		width: 40,
 	},
 	appTitle: {
 		fontSize: 18,

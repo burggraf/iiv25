@@ -473,8 +473,8 @@ export default function ScannerScreen() {
 
 	const handleSubscribe = () => {
 		setShowRateLimitModal(false);
-		// Navigate to subscription/user tab
-		router.push('/(tabs)/user');
+		// Navigate to home tab where user can access account
+		router.push('/(tabs)/');
 	}
 
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {

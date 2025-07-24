@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
-import React, { useEffect, useState } from 'react'
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React, { useState } from 'react'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import BarcodeIcon from '../../src/components/icons/BarcodeIcon'
@@ -9,86 +9,17 @@ import HistoryIcon from '../../src/components/icons/HistoryIcon'
 import ManualIcon from '../../src/components/icons/ManualIcon'
 import SearchIcon from '../../src/components/icons/SearchIcon'
 import Logo from '../../src/components/Logo'
+import UserAccountModal from '../../src/components/UserAccountModal'
 import { useAuth } from '../../src/context/AuthContext'
-import { SupabaseService } from '../../src/services/supabaseService'
-import { SubscriptionLevel } from '../../src/types'
 
 export default function HomeScreen() {
-	const { user, signOut } = useAuth()
+	const { user } = useAuth()
 	const [showUserModal, setShowUserModal] = useState(false)
-	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionLevel>('free')
-	const [loadingSubscription, setLoadingSubscription] = useState(false)
 
 	const navigateToTab = (tabName: string) => {
 		router.push(`/(tabs)/${tabName}` as any)
 	}
 
-	const handleLogout = () => {
-		setShowUserModal(false)
-		Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-			{ text: 'Cancel', style: 'cancel' },
-			{
-				text: 'Sign Out',
-				style: 'destructive',
-				onPress: async () => {
-					await signOut()
-					router.replace('/auth/login')
-				},
-			},
-		])
-	}
-
-	const loadSubscriptionStatus = async () => {
-		if (!user || user.is_anonymous) {
-			setSubscriptionStatus('free')
-			return
-		}
-
-		setLoadingSubscription(true)
-		try {
-			const status = await SupabaseService.getSubscriptionStatus()
-			setSubscriptionStatus(status)
-		} catch (error: any) {
-			console.error('Error loading subscription status:', error)
-			// Default to free if there's an error
-			setSubscriptionStatus('free')
-		} finally {
-			setLoadingSubscription(false)
-		}
-	}
-
-	// Load subscription status when modal opens
-	useEffect(() => {
-		if (showUserModal) {
-			loadSubscriptionStatus()
-		}
-	}, [showUserModal, user])
-
-	const getSubscriptionDisplayText = (level: SubscriptionLevel) => {
-		switch (level) {
-			case 'free':
-				return 'Free'
-			case 'standard':
-				return 'Standard'
-			case 'premium':
-				return 'Premium'
-			default:
-				return 'Free'
-		}
-	}
-
-	const getSubscriptionColor = (level: SubscriptionLevel) => {
-		switch (level) {
-			case 'free':
-				return '#666'
-			case 'standard':
-				return '#FF9800'
-			case 'premium':
-				return '#14A44A'
-			default:
-				return '#666'
-		}
-	}
 
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
@@ -187,69 +118,11 @@ export default function HomeScreen() {
 				</View>
 			</ScrollView>
 
-			{/* User Modal */}
-			<Modal
-				animationType='fade'
-				transparent={true}
+			{/* User Account Modal */}
+			<UserAccountModal
 				visible={showUserModal}
-				onRequestClose={() => setShowUserModal(false)}>
-				<View style={styles.modalOverlay}>
-					<View style={styles.modalContent}>
-						<View style={styles.modalHeader}>
-							<Text style={styles.modalTitle}>Account Information</Text>
-							<TouchableOpacity onPress={() => setShowUserModal(false)} style={styles.closeButton}>
-								<Ionicons name='close' size={24} color='#666' />
-							</TouchableOpacity>
-						</View>
-
-						<View style={styles.modalBody}>
-							<View style={styles.userInfoRow}>
-								<Ionicons
-									name={user?.is_anonymous ? 'person-outline' : 'person-circle-outline'}
-									size={24}
-									color='#14A44A'
-									style={styles.userIcon}
-								/>
-								<Text style={styles.userEmail}>{user?.email || 'Anonymous User'}</Text>
-							</View>
-
-							{user?.is_anonymous && <Text style={styles.anonymousText}>Anonymous Session</Text>}
-
-							<View style={styles.subscriptionRow}>
-								<View style={styles.subscriptionInfo}>
-									<Text style={styles.subscriptionLabel}>Subscription:</Text>
-									<Text
-										style={[
-											styles.subscriptionValue,
-											{ color: getSubscriptionColor(subscriptionStatus) },
-										]}>
-										{loadingSubscription
-											? 'Loading...'
-											: getSubscriptionDisplayText(subscriptionStatus)}
-									</Text>
-								</View>
-								<View
-									style={[
-										styles.subscriptionBadge,
-										{ backgroundColor: getSubscriptionColor(subscriptionStatus) },
-									]}>
-									<Text style={styles.subscriptionBadgeText}>
-										{getSubscriptionDisplayText(subscriptionStatus).toUpperCase()}
-									</Text>
-								</View>
-							</View>
-
-							<TouchableOpacity
-								style={styles.modalLogoutButton}
-								onPress={handleLogout}
-								activeOpacity={0.7}>
-								<Ionicons name='log-out-outline' size={20} color='white' />
-								<Text style={styles.modalLogoutText}>Sign Out</Text>
-							</TouchableOpacity>
-						</View>
-					</View>
-				</View>
-			</Modal>
+				onClose={() => setShowUserModal(false)}
+			/>
 		</SafeAreaView>
 	)
 }
@@ -307,113 +180,6 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#666',
 		lineHeight: 22,
-	},
-	modalOverlay: {
-		flex: 1,
-		backgroundColor: 'rgba(0, 0, 0, 0.5)',
-		justifyContent: 'center',
-		alignItems: 'center',
-	},
-	modalContent: {
-		backgroundColor: 'white',
-		borderRadius: 16,
-		width: '80%',
-		maxWidth: 320,
-		shadowColor: '#000',
-		shadowOffset: {
-			width: 0,
-			height: 2,
-		},
-		shadowOpacity: 0.25,
-		shadowRadius: 8,
-		elevation: 5,
-	},
-	modalHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		paddingHorizontal: 20,
-		paddingVertical: 16,
-		borderBottomWidth: 1,
-		borderBottomColor: '#f0f0f0',
-	},
-	modalTitle: {
-		fontSize: 18,
-		fontWeight: '600',
-		color: '#333',
-	},
-	closeButton: {
-		padding: 4,
-	},
-	modalBody: {
-		padding: 20,
-	},
-	userInfoRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		marginBottom: 12,
-	},
-	userIcon: {
-		marginRight: 12,
-	},
-	userEmail: {
-		fontSize: 16,
-		fontWeight: '500',
-		color: '#333',
-		flex: 1,
-	},
-	anonymousText: {
-		fontSize: 12,
-		color: '#14A44A',
-		fontWeight: '500',
-		marginBottom: 20,
-	},
-	subscriptionRow: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: 20,
-		paddingVertical: 8,
-	},
-	subscriptionInfo: {
-		flex: 1,
-	},
-	subscriptionLabel: {
-		fontSize: 12,
-		color: '#666',
-		fontWeight: '500',
-		marginBottom: 2,
-	},
-	subscriptionValue: {
-		fontSize: 16,
-		fontWeight: '600',
-	},
-	subscriptionBadge: {
-		paddingHorizontal: 10,
-		paddingVertical: 4,
-		borderRadius: 12,
-		marginLeft: 12,
-	},
-	subscriptionBadgeText: {
-		fontSize: 10,
-		fontWeight: '700',
-		color: 'white',
-		letterSpacing: 0.5,
-	},
-	modalLogoutButton: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#F44336',
-		borderRadius: 8,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-	},
-	modalLogoutText: {
-		color: 'white',
-		fontSize: 16,
-		fontWeight: '600',
-		marginLeft: 8,
 	},
 	actionsSection: {
 		marginBottom: 32,
