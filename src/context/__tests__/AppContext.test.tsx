@@ -5,6 +5,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppProvider, useApp } from '../AppContext';
 import { VeganStatus, Product } from '../../types';
 
+// Mock React Native components for testing
+jest.mock('react-native', () => ({
+  Text: 'Text',
+  TouchableOpacity: 'TouchableOpacity',
+  View: 'View',
+}));
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),

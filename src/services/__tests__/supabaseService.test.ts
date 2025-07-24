@@ -219,18 +219,13 @@ describe('SupabaseService', () => {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
         in: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
-          data: null,
-          error: mockError,
-        }),
+        single: jest.fn().mockRejectedValue(mockError),
       };
 
       mockSupabase.from.mockReturnValue(mockQuery);
 
-      const result = await SupabaseService.getIngredientByTitle('milk');
-
-      expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith('Error getting ingredient by title:', mockError);
+      await expect(SupabaseService.getIngredientByTitle('milk')).rejects.toEqual(mockError);
+      expect(console.error).toHaveBeenCalledWith('Failed to get ingredient:', mockError);
     });
   });
 
