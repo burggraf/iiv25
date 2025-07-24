@@ -12,18 +12,43 @@ import * as Linking from 'expo-linking'
 WebBrowser.maybeCompleteAuthSession()
 
 const createSessionFromUrl = async (url: string) => {
+	console.log('Creating session from OAuth URL:', url)
+	
+	// Only process URLs that contain OAuth tokens
+	if (!url.includes('access_token') && !url.includes('error=')) {
+		console.log('URL does not contain OAuth parameters, skipping')
+		return
+	}
+	
 	const { params, errorCode } = QueryParams.getQueryParams(url)
 
-	if (errorCode) throw new Error(errorCode)
+	console.log('OAuth URL params:', params)
+	console.log('OAuth error code:', errorCode)
+
+	if (errorCode) {
+		console.error('OAuth error code:', errorCode)
+		throw new Error(errorCode)
+	}
+	
 	const { access_token, refresh_token } = params
 
-	if (!access_token) return
+	if (!access_token) {
+		console.error('No access token found in OAuth URL params')
+		return
+	}
 
+	console.log('Setting session with OAuth tokens...')
 	const { data, error } = await supabase.auth.setSession({
 		access_token,
 		refresh_token,
 	})
-	if (error) throw error
+	
+	if (error) {
+		console.error('Error setting OAuth session:', error)
+		throw error
+	}
+	
+	console.log('OAuth session created successfully:', data.user?.id)
 	return data.session
 }
 
@@ -47,8 +72,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		
 		// Handle deep linking for OAuth callback
 		const handleDeepLink = (url: string) => {
-			if (url) {
+			// Only process URLs that contain OAuth tokens
+			const isOAuthUrl = url && (url.includes('access_token') || url.includes('error='))
+			
+			if (isOAuthUrl) {
+				console.log('Processing OAuth deep link:', url)
 				createSessionFromUrl(url).catch(console.error)
+			} else if (url) {
+				console.log('Ignoring non-OAuth deep link:', url)
 			}
 		}
 
@@ -107,7 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		})
 
 		return () => {
-			authSubscription.unsubscribe()
+			authSubscription?.unsubscribe()
 			subscription?.remove()
 		}
 	}, [])
@@ -192,11 +223,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 	const signInWithGoogle = async (): Promise<void> => {
 		try {
-			// Use custom scheme for mobile redirect
-			const redirectTo = makeRedirectUri({
-				scheme: 'net.isitvegan.app',
-				path: 'auth/callback',
-			})
+			// OAuth requires development build - cannot work in Expo Go
+			const redirectTo = makeRedirectUri({ scheme: 'net.isitvegan.app' })
 			console.log('OAuth redirect URI:', redirectTo)
 
 			const { data, error } = await supabase.auth.signInWithOAuth({
@@ -208,17 +236,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			})
 
 			if (error) {
+				console.error('OAuth initiation error:', error)
 				handleAuthError(error)
 				return
 			}
 
+			console.log('Opening OAuth URL:', data?.url)
 			const res = await WebBrowser.openAuthSessionAsync(data?.url ?? '', redirectTo)
 
-			if (res.type === 'success') {
-				const { url } = res
-				await createSessionFromUrl(url)
+			console.log('OAuth session result:', res.type, res.type === 'success' ? res.url : 'No URL')
+
+			if (res.type === 'success' && res.url) {
+				await createSessionFromUrl(res.url)
+			} else if (res.type === 'cancel') {
+				console.log('User cancelled OAuth flow')
+			} else {
+				console.error('OAuth flow failed with type:', res.type)
 			}
 		} catch (error) {
+			console.error('Google sign-in error:', error)
 			handleAuthError(error as Error)
 		}
 	}
