@@ -7,6 +7,8 @@ import { makeRedirectUri } from 'expo-auth-session'
 import * as QueryParams from 'expo-auth-session/build/QueryParams'
 import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
+import { SubscriptionService } from '../services/subscriptionService'
+import deviceIdService from '../services/deviceIdService'
 
 // Required for web only
 WebBrowser.maybeCompleteAuthSession()
@@ -110,6 +112,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 					isLoading: false,
 					isInitialized: true,
 				})
+
+				// Update user_subscription table for initial session
+				if (session?.user) {
+					Promise.resolve().then(async () => {
+						try {
+							console.log('Getting device ID for initial session subscription update...')
+							const deviceId = await deviceIdService.getDeviceId()
+							console.log('Initial session - Device ID:', deviceId, 'User ID:', session.user.id)
+							await SubscriptionService.handleAuthStateChange(deviceId, session.user.id)
+							console.log('Initial session subscription update completed successfully')
+						} catch (subscriptionError) {
+							console.error('Failed to update subscription on initial session:', subscriptionError)
+							console.error('Initial session error details:', subscriptionError.message, subscriptionError.stack)
+						}
+					}).catch((error) => {
+						console.error('Promise rejection in initial session subscription update:', error)
+					})
+				}
 			} catch (error) {
 				console.error('Error in getInitialSession:', error)
 				setAuthState({
@@ -135,6 +155,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 				isLoading: false,
 				isInitialized: true,
 			})
+
+			// Update user_subscription table when auth state changes
+			// Only update for meaningful auth changes: sign in/out, or initial session with user
+			if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && session?.user)) {
+				Promise.resolve().then(async () => {
+					try {
+						console.log('Getting device ID for subscription update...')
+						const deviceId = await deviceIdService.getDeviceId()
+						console.log('Device ID obtained:', deviceId, 'User ID:', session?.user?.id)
+						await SubscriptionService.handleAuthStateChange(deviceId, session?.user?.id)
+						console.log('Subscription update completed successfully')
+					} catch (error) {
+						console.error('Failed to update subscription on auth change:', error)
+						console.error('Error details:', error.message, error.stack)
+					}
+				}).catch((error) => {
+					console.error('Promise rejection in subscription update:', error)
+				})
+			}
 		})
 
 		return () => {

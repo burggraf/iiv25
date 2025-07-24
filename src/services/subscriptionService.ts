@@ -118,7 +118,8 @@ export class SubscriptionService {
       if (success) {
         console.log('Successfully updated user subscription for auth change');
       } else {
-        console.error('Failed to update user subscription for auth change');
+        // Don't log as error - might just mean no change was needed
+        console.log('No subscription update needed (no changes detected)');
       }
     } catch (err) {
       console.error('Error handling auth state change:', err);
