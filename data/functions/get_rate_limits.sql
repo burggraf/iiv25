@@ -58,17 +58,43 @@ BEGIN
             us.user_id = current_user_id;
         user_subscription_level := 'free';
     END IF;
-    -- Set rate limits based on subscription level
-    CASE user_subscription_level
-    WHEN 'free' THEN
-        current_rate_limit := 1000;
-    WHEN 'basic' THEN
-        current_rate_limit := 1000;
-    WHEN 'premium' THEN
-        current_rate_limit := 10000;
+    -- Set rate limits based on subscription level and action type
+    -- Different limits for product lookups vs searches
+    IF action_type = 'product_lookup' THEN
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10; -- 10 product lookups per day for free users
+        WHEN 'basic' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        WHEN 'premium' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
+    ELSIF action_type = 'ingredient_search' THEN
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10; -- 10 searches per day for free users
+        WHEN 'basic' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        WHEN 'premium' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
     ELSE
-        current_rate_limit := 10; -- Default to free tier
-    END CASE;
+        -- Default rate limits for other action types
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10;
+        WHEN 'basic' THEN
+            current_rate_limit := 999999;
+        WHEN 'premium' THEN
+            current_rate_limit := 999999;
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
+    END IF;
     -- Count recent searches for the specified action type
     -- Optimized query that counts actions from either the current user OR the current device
     -- This prevents users from circumventing limits by switching accounts on the same device
@@ -79,7 +105,7 @@ BEGIN
         actionlog
     WHERE
         type = action_type
-        AND created_at > now() - interval '1 hour'
+        AND created_at > now() - interval '24 hours' -- Changed from 1 hour to 24 hours (daily limit)
         AND (
             userid = current_user_id
             OR (device_uuid IS NOT NULL AND deviceid = device_uuid)

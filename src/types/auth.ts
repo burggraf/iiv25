@@ -16,6 +16,7 @@ export interface AuthContextValue extends AuthState {
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   refreshSession: () => Promise<void>;
+  isAnonymous: boolean;
 }
 
 export interface SignInCredentials {

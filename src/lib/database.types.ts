@@ -201,30 +201,33 @@ export type Database = {
       user_subscription: {
         Row: {
           created_at: string | null
+          deviceid: string
           expires_at: string | null
           id: string
           is_active: boolean | null
           subscription_level: string
           updated_at: string | null
-          user_id: string
+          userid: string
         }
         Insert: {
           created_at?: string | null
+          deviceid: string
           expires_at?: string | null
           id?: string
           is_active?: boolean | null
           subscription_level: string
           updated_at?: string | null
-          user_id: string
+          userid: string
         }
         Update: {
           created_at?: string | null
+          deviceid?: string
           expires_at?: string | null
           id?: string
           is_active?: boolean | null
           subscription_level?: string
           updated_at?: string | null
-          user_id?: string
+          userid?: string
         }
         Relationships: []
       }
@@ -233,6 +236,184 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_actionlog_paginated: {
+        Args: { page_size?: number; page_offset?: number }
+        Returns: Json
+      }
+      admin_actionlog_recent: {
+        Args: { limit_count?: number }
+        Returns: {
+          id: string
+          type: string
+          input: string
+          userid: string
+          created_at: string
+          result: string
+          metadata: Json
+          deviceid: string
+        }[]
+      }
+      admin_check_user_access: {
+        Args: { user_email: string }
+        Returns: boolean
+      }
+      admin_classify_upc: {
+        Args: { upc_code: string }
+        Returns: boolean
+      }
+      admin_create_ingredient: {
+        Args: {
+          ingredient_title: string
+          ingredient_class?: string
+          ingredient_primary_class?: string
+        }
+        Returns: boolean
+      }
+      admin_delete_ingredient: {
+        Args: { ingredient_title: string }
+        Returns: boolean
+      }
+      admin_get_ingredient_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      admin_get_ingredients_for_upc: {
+        Args: { product_upc: string }
+        Returns: {
+          title: string
+          class: string
+        }[]
+      }
+      admin_get_product: {
+        Args: { product_upc: string }
+        Returns: Json
+      }
+      admin_get_product_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      admin_get_unclassified_ingredients: {
+        Args: { page_size?: number; page_offset?: number }
+        Returns: Json
+      }
+      admin_ingredient_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          stat_type: string
+          stat_value: string
+          count: number
+        }[]
+      }
+      admin_product_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          stat_type: string
+          stat_value: string
+          count: number
+        }[]
+      }
+      admin_search_ingredients: {
+        Args: { query: string; limit_count?: number }
+        Returns: {
+          title: string
+          class: string
+          primary_class: string
+          productcount: number
+          lastupdated: string
+          created: string
+        }[]
+      }
+      admin_search_ingredients_exact: {
+        Args: { query: string; search_type?: string; limit_count?: number }
+        Returns: {
+          title: string
+          class: string
+          primary_class: string
+          productcount: number
+          lastupdated: string
+          created: string
+        }[]
+      }
+      admin_search_ingredients_with_filters: {
+        Args: {
+          query: string
+          search_type?: string
+          filter_classes?: string[]
+          filter_primary_classes?: string[]
+          limit_count?: number
+        }
+        Returns: {
+          title: string
+          class: string
+          primary_class: string
+          productcount: number
+          lastupdated: string
+          created: string
+        }[]
+      }
+      admin_search_ingredients_with_filters_paginated: {
+        Args: {
+          query: string
+          search_type?: string
+          filter_classes?: string[]
+          filter_primary_classes?: string[]
+          page_size?: number
+          page_offset?: number
+        }
+        Returns: Json
+      }
+      admin_search_products: {
+        Args: { query: string; limit_count?: number }
+        Returns: {
+          product_name: string
+          brand: string
+          upc: string
+          ean13: string
+          ingredients: string
+          analysis: string
+          classification: string
+          lastupdated: string
+          created: string
+          mfg: string
+          imageurl: string
+          issues: string
+        }[]
+      }
+      admin_update_ingredient: {
+        Args: {
+          ingredient_title: string
+          new_class?: string
+          new_primary_class?: string
+        }
+        Returns: boolean
+      }
+      admin_update_product: {
+        Args: { product_upc: string; updates: Json }
+        Returns: boolean
+      }
+      admin_update_user_subscription: {
+        Args: { subscription_id: string; updates: Json }
+        Returns: boolean
+      }
+      admin_user_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          stat_type: string
+          count: number
+        }[]
+      }
+      admin_user_subscription_search: {
+        Args: { query?: string; limit_count?: number }
+        Returns: {
+          id: string
+          user_id: string
+          subscription_level: string
+          created_at: string
+          updated_at: string
+          expires_at: string
+          is_active: boolean
+        }[]
+      }
       classify_all_products: {
         Args: Record<PropertyKey, never>
         Returns: {

@@ -22,6 +22,930 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."admin_actionlog_paginated"("page_size" integer DEFAULT 20, "page_offset" integer DEFAULT 0) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  result JSONB;
+  activity_data JSONB;
+  total_count BIGINT;
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Get total count of activity logs
+  SELECT COUNT(*) INTO total_count FROM actionlog;
+
+  -- Get paginated activity logs with user email lookup
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'id', a.id,
+      'type', a.type,
+      'input', a.input,
+      'result', a.result,
+      'created_at', a.created_at,
+      'userid', a.userid,
+      'user_email', COALESCE(u.email, 'anonymous user'),
+      'metadata', a.metadata,
+      'deviceid', a.deviceid
+    )
+    ORDER BY a.created_at DESC
+  ) INTO activity_data
+  FROM (
+    SELECT 
+      al.id,
+      al.type,
+      al.input,
+      al.result,
+      al.created_at,
+      al.userid,
+      al.metadata,
+      al.deviceid
+    FROM actionlog al
+    ORDER BY al.created_at DESC
+    LIMIT page_size OFFSET page_offset
+  ) a
+  LEFT JOIN auth.users u ON a.userid = u.id;
+
+  -- Build final result with both activities and pagination info
+  result := jsonb_build_object(
+    'activities', COALESCE(activity_data, '[]'::jsonb),
+    'total_count', total_count,
+    'page_size', page_size,
+    'page_offset', page_offset,
+    'has_more', (page_offset + page_size) < total_count
+  );
+
+  RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_actionlog_paginated"("page_size" integer, "page_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_actionlog_recent"("limit_count" integer DEFAULT 100) RETURNS TABLE("id" "uuid", "type" "text", "input" "text", "userid" "uuid", "created_at" timestamp with time zone, "result" "text", "metadata" "jsonb", "deviceid" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  RETURN QUERY
+  SELECT a.id, a.type, a.input, a.userid, a.created_at, a.result, a.metadata, a.deviceid
+  FROM actionlog a
+  ORDER BY a.created_at DESC
+  LIMIT limit_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_actionlog_recent"("limit_count" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_check_user_access"("user_email" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Admin email whitelist - update with actual admin emails
+  RETURN user_email = ANY(ARRAY[
+    'markb@mantisbible.com',
+    'cburggraf@me.com'
+    -- Add more admin emails here
+  ]);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_check_user_access"("user_email" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_classify_upc"("upc_code" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Call the existing classify_upc function with elevated privileges
+  PERFORM classify_upc(upc_code);
+  
+  RETURN TRUE;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Log the error and re-raise it
+    RAISE NOTICE 'admin_classify_upc failed for UPC %: %', upc_code, SQLERRM;
+    RAISE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_classify_upc"("upc_code" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_create_ingredient"("ingredient_title" "text", "ingredient_class" "text" DEFAULT NULL::"text", "ingredient_primary_class" "text" DEFAULT NULL::"text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  INSERT INTO ingredients (title, class, primary_class, productcount, lastupdated, created)
+  VALUES (ingredient_title, ingredient_class, ingredient_primary_class, 0, NOW(), NOW());
+
+  RETURN TRUE;
+EXCEPTION
+  WHEN unique_violation THEN
+    RAISE EXCEPTION 'Ingredient with title "%" already exists', ingredient_title;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_create_ingredient"("ingredient_title" "text", "ingredient_class" "text", "ingredient_primary_class" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_delete_ingredient"("ingredient_title" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  DELETE FROM ingredients WHERE title = ingredient_title;
+  
+  RETURN FOUND;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_delete_ingredient"("ingredient_title" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_get_ingredient_stats"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  stats JSONB := '{}';
+  total_count BIGINT;
+  classified_count BIGINT;
+  unclassified_count BIGINT;
+  class_distribution JSONB;
+  primary_class_distribution JSONB;
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Get total ingredient count
+  SELECT COUNT(*) INTO total_count FROM ingredients;
+
+  -- Get classified count (has class OR primary_class)
+  SELECT COUNT(*) INTO classified_count 
+  FROM ingredients 
+  WHERE class IS NOT NULL OR primary_class IS NOT NULL;
+
+  -- Calculate unclassified
+  unclassified_count := total_count - classified_count;
+
+  -- Get class distribution
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'class', COALESCE(class, 'Unclassified'),
+      'count', count,
+      'percentage', ROUND((count::DECIMAL / total_count) * 100, 1)
+    )
+    ORDER BY count DESC
+  ) INTO class_distribution
+  FROM (
+    SELECT COALESCE(class, 'Unclassified') as class, COUNT(*) as count
+    FROM ingredients
+    GROUP BY class
+  ) class_stats;
+
+  -- Get primary class distribution  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'class', COALESCE(primary_class, 'Unclassified'),
+      'count', count,
+      'percentage', ROUND((count::DECIMAL / total_count) * 100, 1)
+    )
+    ORDER BY count DESC
+  ) INTO primary_class_distribution
+  FROM (
+    SELECT COALESCE(primary_class, 'Unclassified') as primary_class, COUNT(*) as count
+    FROM ingredients
+    GROUP BY primary_class
+  ) primary_class_stats;
+
+  -- Build final result
+  stats := jsonb_build_object(
+    'total_ingredients', total_count,
+    'with_classification', classified_count,
+    'without_classification', unclassified_count,
+    'class_distribution', COALESCE(class_distribution, '[]'::jsonb),
+    'primary_class_distribution', COALESCE(primary_class_distribution, '[]'::jsonb)
+  );
+
+  RETURN stats;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_get_ingredient_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_get_ingredients_for_upc"("product_upc" "text") RETURNS TABLE("title" "text", "class" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Return ingredients for the given UPC
+  RETURN QUERY
+  SELECT (get_ingredients_for_upc(product_upc)).title,
+         (get_ingredients_for_upc(product_upc)).class;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_get_ingredients_for_upc"("product_upc" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_get_product"("product_upc" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  product_data JSONB;
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Get product by UPC
+  SELECT to_jsonb(p.*) INTO product_data
+  FROM products p
+  WHERE p.upc = product_upc;
+
+  -- Return product data or null if not found
+  RETURN product_data;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_get_product"("product_upc" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_get_product_stats"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  stats JSONB := '{}';
+  total_count BIGINT;
+  classified_count BIGINT;
+  unclassified_count BIGINT;
+  vegan_count BIGINT;
+  vegetarian_count BIGINT;
+  classification_distribution JSONB;
+  brand_distribution JSONB;
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Get total product count
+  SELECT COUNT(*) INTO total_count FROM products;
+
+  -- Get classified count (has classification)
+  SELECT COUNT(*) INTO classified_count 
+  FROM products 
+  WHERE classification IS NOT NULL AND classification != '';
+
+  -- Calculate unclassified
+  unclassified_count := total_count - classified_count;
+
+  -- Get vegan count
+  SELECT COUNT(*) INTO vegan_count 
+  FROM products 
+  WHERE LOWER(classification) = 'vegan';
+
+  -- Get vegetarian count  
+  SELECT COUNT(*) INTO vegetarian_count 
+  FROM products 
+  WHERE LOWER(classification) = 'vegetarian';
+
+  -- Get classification distribution
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'classification', COALESCE(classification, 'Unclassified'),
+      'count', count,
+      'percentage', ROUND((count::DECIMAL / total_count) * 100, 1)
+    )
+    ORDER BY count DESC
+  ) INTO classification_distribution
+  FROM (
+    SELECT COALESCE(classification, 'Unclassified') as classification, COUNT(*) as count
+    FROM products
+    GROUP BY classification
+  ) class_stats;
+
+  -- Get brand distribution (top 15)
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'brand', COALESCE(brand, 'Unknown'),
+      'count', count,
+      'percentage', ROUND((count::DECIMAL / total_count) * 100, 1)
+    )
+    ORDER BY count DESC
+  ) INTO brand_distribution
+  FROM (
+    SELECT COALESCE(brand, 'Unknown') as brand, COUNT(*) as count
+    FROM products
+    GROUP BY brand
+    ORDER BY COUNT(*) DESC
+    LIMIT 15
+  ) brand_stats;
+
+  -- Build final result
+  stats := jsonb_build_object(
+    'total_products', total_count,
+    'classified_products', classified_count,
+    'unclassified_products', unclassified_count,
+    'vegan_products', vegan_count,
+    'vegetarian_products', vegetarian_count,
+    'classification_distribution', COALESCE(classification_distribution, '[]'::jsonb),
+    'brand_distribution', COALESCE(brand_distribution, '[]'::jsonb)
+  );
+
+  RETURN stats;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_get_product_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_get_unclassified_ingredients"("page_size" integer DEFAULT 20, "page_offset" integer DEFAULT 0) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  result JSONB;
+  ingredients_data JSONB;
+  total_count BIGINT;
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Get total count of unclassified ingredients
+  SELECT COUNT(*) INTO total_count
+  FROM ingredients
+  WHERE class IS NULL;
+
+  -- Get paginated unclassified ingredients ordered by product count descending
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'title', title,
+      'class', class,
+      'primary_class', primary_class,
+      'productcount', productcount,
+      'lastupdated', lastupdated,
+      'created', created
+    )
+    ORDER BY productcount DESC
+  ) INTO ingredients_data
+  FROM (
+    SELECT title, class, primary_class, productcount, lastupdated, created
+    FROM ingredients
+    WHERE class IS NULL
+    ORDER BY productcount DESC
+    LIMIT page_size OFFSET page_offset
+  ) paginated_ingredients;
+
+  -- Build result with both ingredients and pagination info
+  result := jsonb_build_object(
+    'ingredients', COALESCE(ingredients_data, '[]'::jsonb),
+    'total_count', total_count
+  );
+
+  RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_get_unclassified_ingredients"("page_size" integer, "page_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_ingredient_stats"() RETURNS TABLE("stat_type" "text", "stat_value" "text", "count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Return stats for classes
+  RETURN QUERY
+  SELECT 'class'::TEXT, COALESCE(i.class, 'NULL'), COUNT(*)
+  FROM ingredients i
+  GROUP BY i.class
+  ORDER BY COUNT(*) DESC;
+
+  -- Return stats for primary_classes
+  RETURN QUERY
+  SELECT 'primary_class'::TEXT, COALESCE(i.primary_class, 'NULL'), COUNT(*)
+  FROM ingredients i
+  GROUP BY i.primary_class
+  ORDER BY COUNT(*) DESC;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_ingredient_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_product_stats"() RETURNS TABLE("stat_type" "text", "stat_value" "text", "count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Classification stats
+  RETURN QUERY
+  SELECT 'classification'::TEXT, COALESCE(p.classification, 'NULL'), COUNT(*)
+  FROM products p
+  GROUP BY p.classification
+  ORDER BY COUNT(*) DESC;
+
+  -- Brand stats (top 20)
+  RETURN QUERY
+  SELECT 'brand'::TEXT, COALESCE(p.brand, 'NULL'), COUNT(*)
+  FROM products p
+  GROUP BY p.brand
+  ORDER BY COUNT(*) DESC
+  LIMIT 20;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_product_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_ingredients"("query" "text", "limit_count" integer DEFAULT 50) RETURNS TABLE("title" "text", "class" "text", "primary_class" "text", "productcount" integer, "lastupdated" timestamp with time zone, "created" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access first
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  RETURN QUERY
+  SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+  FROM ingredients i
+  WHERE i.title ILIKE '%' || query || '%'
+  ORDER BY i.productcount DESC, i.title ASC
+  LIMIT limit_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_ingredients"("query" "text", "limit_count" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_ingredients_exact"("query" "text", "search_type" "text" DEFAULT 'exact'::"text", "limit_count" integer DEFAULT 50) RETURNS TABLE("title" "text", "class" "text", "primary_class" "text", "productcount" integer, "lastupdated" timestamp with time zone, "created" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access first
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Execute different search based on search_type
+  IF search_type = 'exact' THEN
+    -- Exact match
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title = query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+    
+  ELSIF search_type = 'starts_with' THEN
+    -- Starts with pattern (query should end with %)
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title ILIKE query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+    
+  ELSIF search_type = 'ends_with' THEN
+    -- Ends with pattern (query should start with %)
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title ILIKE query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+    
+  ELSIF search_type = 'contains' THEN
+    -- Contains pattern (query should start and end with %)
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title ILIKE query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+    
+  ELSIF search_type = 'pattern' THEN
+    -- Custom pattern (query contains % in middle or other positions)
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title ILIKE query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+    
+  ELSE
+    -- Default to exact match for unknown search types
+    RETURN QUERY
+    SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created
+    FROM ingredients i
+    WHERE i.title = query
+    ORDER BY i.productcount DESC, i.title ASC
+    LIMIT limit_count;
+  END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_ingredients_exact"("query" "text", "search_type" "text", "limit_count" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_ingredients_with_filters"("query" "text", "search_type" "text" DEFAULT 'exact'::"text", "filter_classes" "text"[] DEFAULT NULL::"text"[], "filter_primary_classes" "text"[] DEFAULT NULL::"text"[], "limit_count" integer DEFAULT 50) RETURNS TABLE("title" "text", "class" "text", "primary_class" "text", "productcount" integer, "lastupdated" timestamp with time zone, "created" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  base_query TEXT;
+  where_conditions TEXT[] := ARRAY[]::TEXT[];
+  final_query TEXT;
+BEGIN
+  -- Check admin access first
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Build base query
+  base_query := 'SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created FROM ingredients i';
+
+  -- Add search condition based on search_type
+  IF search_type = 'exact' THEN
+    where_conditions := array_append(where_conditions, 'i.title = ' || quote_literal(query));
+  ELSIF search_type = 'starts_with' OR search_type = 'ends_with' OR search_type = 'contains' OR search_type = 'pattern' THEN
+    where_conditions := array_append(where_conditions, 'i.title ILIKE ' || quote_literal(query));
+  ELSE
+    -- Default to exact match for unknown search types
+    where_conditions := array_append(where_conditions, 'i.title = ' || quote_literal(query));
+  END IF;
+
+  -- Add class filter if provided
+  IF filter_classes IS NOT NULL AND array_length(filter_classes, 1) > 0 THEN
+    -- Handle null values in the filter
+    IF 'null' = ANY(filter_classes) THEN
+      -- Include both specified classes and null values
+      IF array_length(filter_classes, 1) > 1 THEN
+        where_conditions := array_append(where_conditions, 
+          '(i.class = ANY(' || quote_literal(filter_classes) || '::TEXT[]) OR i.class IS NULL)');
+      ELSE
+        -- Only null requested
+        where_conditions := array_append(where_conditions, 'i.class IS NULL');
+      END IF;
+    ELSE
+      -- No null values, just use IN clause
+      where_conditions := array_append(where_conditions, 
+        'i.class = ANY(' || quote_literal(filter_classes) || '::TEXT[])');
+    END IF;
+  END IF;
+
+  -- Add primary_class filter if provided
+  IF filter_primary_classes IS NOT NULL AND array_length(filter_primary_classes, 1) > 0 THEN
+    -- Handle null values in the filter
+    IF 'null' = ANY(filter_primary_classes) THEN
+      -- Include both specified primary_classes and null values
+      IF array_length(filter_primary_classes, 1) > 1 THEN
+        where_conditions := array_append(where_conditions, 
+          '(i.primary_class = ANY(' || quote_literal(filter_primary_classes) || '::TEXT[]) OR i.primary_class IS NULL)');
+      ELSE
+        -- Only null requested
+        where_conditions := array_append(where_conditions, 'i.primary_class IS NULL');
+      END IF;
+    ELSE
+      -- No null values, just use IN clause
+      where_conditions := array_append(where_conditions, 
+        'i.primary_class = ANY(' || quote_literal(filter_primary_classes) || '::TEXT[])');
+    END IF;
+  END IF;
+
+  -- Build final query
+  final_query := base_query;
+  IF array_length(where_conditions, 1) > 0 THEN
+    final_query := final_query || ' WHERE ' || array_to_string(where_conditions, ' AND ');
+  END IF;
+  final_query := final_query || ' ORDER BY i.productcount DESC, i.title ASC LIMIT ' || limit_count;
+
+  -- Execute and return
+  RETURN QUERY EXECUTE final_query;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_ingredients_with_filters"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "limit_count" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_ingredients_with_filters_paginated"("query" "text", "search_type" "text" DEFAULT 'exact'::"text", "filter_classes" "text"[] DEFAULT NULL::"text"[], "filter_primary_classes" "text"[] DEFAULT NULL::"text"[], "page_size" integer DEFAULT 50, "page_offset" integer DEFAULT 0) RETURNS json
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  base_query TEXT;
+  count_query TEXT;
+  where_conditions TEXT[] := ARRAY[]::TEXT[];
+  final_query TEXT;
+  total_count INT;
+  result_ingredients JSON;
+  has_more BOOLEAN;
+BEGIN
+  -- Check admin access first
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Build base query
+  base_query := 'SELECT i.title::TEXT, i.class::TEXT, i.primary_class, i.productcount, i.lastupdated, i.created FROM ingredients i';
+  count_query := 'SELECT COUNT(*) FROM ingredients i';
+
+  -- Add search condition based on search_type
+  IF search_type = 'exact' THEN
+    where_conditions := array_append(where_conditions, 'i.title = ' || quote_literal(query));
+  ELSIF search_type = 'starts_with' OR search_type = 'ends_with' OR search_type = 'contains' OR search_type = 'pattern' THEN
+    where_conditions := array_append(where_conditions, 'i.title ILIKE ' || quote_literal(query));
+  ELSE
+    -- Default to exact match for unknown search types
+    where_conditions := array_append(where_conditions, 'i.title = ' || quote_literal(query));
+  END IF;
+
+  -- Add class filter if provided
+  IF filter_classes IS NOT NULL AND array_length(filter_classes, 1) > 0 THEN
+    -- Handle null values in the filter
+    IF 'null' = ANY(filter_classes) THEN
+      -- Include both specified classes and null values
+      IF array_length(filter_classes, 1) > 1 THEN
+        where_conditions := array_append(where_conditions, 
+          '(i.class = ANY(' || quote_literal(filter_classes) || '::TEXT[]) OR i.class IS NULL)');
+      ELSE
+        -- Only null requested
+        where_conditions := array_append(where_conditions, 'i.class IS NULL');
+      END IF;
+    ELSE
+      -- No null values, just use IN clause
+      where_conditions := array_append(where_conditions, 
+        'i.class = ANY(' || quote_literal(filter_classes) || '::TEXT[])');
+    END IF;
+  END IF;
+
+  -- Add primary_class filter if provided
+  IF filter_primary_classes IS NOT NULL AND array_length(filter_primary_classes, 1) > 0 THEN
+    -- Handle null values in the filter
+    IF 'null' = ANY(filter_primary_classes) THEN
+      -- Include both specified primary_classes and null values
+      IF array_length(filter_primary_classes, 1) > 1 THEN
+        where_conditions := array_append(where_conditions, 
+          '(i.primary_class = ANY(' || quote_literal(filter_primary_classes) || '::TEXT[]) OR i.primary_class IS NULL)');
+      ELSE
+        -- Only null requested
+        where_conditions := array_append(where_conditions, 'i.primary_class IS NULL');
+      END IF;
+    ELSE
+      -- No null values, just use IN clause
+      where_conditions := array_append(where_conditions, 
+        'i.primary_class = ANY(' || quote_literal(filter_primary_classes) || '::TEXT[])');
+    END IF;
+  END IF;
+
+  -- Build WHERE clause
+  IF array_length(where_conditions, 1) > 0 THEN
+    base_query := base_query || ' WHERE ' || array_to_string(where_conditions, ' AND ');
+    count_query := count_query || ' WHERE ' || array_to_string(where_conditions, ' AND ');
+  END IF;
+
+  -- Get total count
+  EXECUTE count_query INTO total_count;
+
+  -- Build final query with pagination
+  final_query := base_query || ' ORDER BY i.productcount DESC, i.title ASC LIMIT ' || page_size || ' OFFSET ' || page_offset;
+
+  -- Execute and get results as JSON
+  EXECUTE 'SELECT json_agg(row_to_json(t)) FROM (' || final_query || ') t' INTO result_ingredients;
+
+  -- Determine if there are more results
+  has_more := (page_offset + page_size) < total_count;
+
+  -- Return structured response
+  RETURN json_build_object(
+    'ingredients', COALESCE(result_ingredients, '[]'::json),
+    'total_count', total_count,
+    'page_size', page_size,
+    'page_offset', page_offset,
+    'has_more', has_more
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_ingredients_with_filters_paginated"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "page_size" integer, "page_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_search_products"("query" "text", "limit_count" integer DEFAULT 50) RETURNS TABLE("product_name" "text", "brand" "text", "upc" "text", "ean13" "text", "ingredients" "text", "analysis" "text", "classification" "text", "lastupdated" timestamp with time zone, "created" timestamp with time zone, "mfg" "text", "imageurl" "text", "issues" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  RETURN QUERY
+  SELECT p.product_name::TEXT, p.brand::TEXT, p.upc::TEXT, p.ean13::TEXT, 
+         p.ingredients::TEXT, p.analysis::TEXT, p.classification, 
+         p.lastupdated, p.created, p.mfg::TEXT, p.imageurl, p.issues
+  FROM products p
+  WHERE p.product_name ILIKE '%' || query || '%' 
+     OR p.brand ILIKE '%' || query || '%'
+     OR p.upc = query
+  ORDER BY p.lastupdated DESC
+  LIMIT limit_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_search_products"("query" "text", "limit_count" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_update_ingredient"("ingredient_title" "text", "new_class" "text" DEFAULT NULL::"text", "new_primary_class" "text" DEFAULT NULL::"text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  UPDATE ingredients 
+  SET 
+    class = COALESCE(new_class, class),
+    primary_class = COALESCE(new_primary_class, primary_class),
+    lastupdated = NOW()
+  WHERE title = ingredient_title;
+
+  RETURN FOUND;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_update_ingredient"("ingredient_title" "text", "new_class" "text", "new_primary_class" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_update_product"("product_upc" "text", "updates" "jsonb") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  UPDATE products 
+  SET 
+    product_name = COALESCE((updates ->> 'product_name')::TEXT, product_name),
+    brand = COALESCE((updates ->> 'brand')::TEXT, brand),
+    upc = COALESCE((updates ->> 'upc')::TEXT, upc),
+    ingredients = COALESCE((updates ->> 'ingredients')::TEXT, ingredients),
+    analysis = COALESCE((updates ->> 'analysis')::TEXT, analysis),
+    classification = COALESCE((updates ->> 'classification')::TEXT, classification),
+    mfg = COALESCE((updates ->> 'mfg')::TEXT, mfg),
+    imageurl = COALESCE((updates ->> 'imageurl')::TEXT, imageurl),
+    issues = COALESCE((updates ->> 'issues')::TEXT, issues),
+    lastupdated = NOW()
+  WHERE upc = product_upc;
+
+  RETURN FOUND;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_update_product"("product_upc" "text", "updates" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_update_user_subscription"("subscription_id" "uuid", "updates" "jsonb") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  UPDATE user_subscription 
+  SET 
+    subscription_level = COALESCE((updates ->> 'subscription_level')::TEXT, subscription_level),
+    expires_at = COALESCE((updates ->> 'expires_at')::TIMESTAMPTZ, expires_at),
+    is_active = COALESCE((updates ->> 'is_active')::BOOLEAN, is_active),
+    updated_at = NOW()
+  WHERE id = subscription_id;
+
+  RETURN FOUND;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_update_user_subscription"("subscription_id" "uuid", "updates" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_user_stats"() RETURNS TABLE("stat_type" "text", "count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  -- Total users
+  RETURN QUERY
+  SELECT 'total_users'::TEXT, COUNT(*)
+  FROM auth.users;
+
+  -- Users by authentication method (if available in raw_user_meta_data)
+  RETURN QUERY
+  SELECT 'email_users'::TEXT, COUNT(*)
+  FROM auth.users
+  WHERE email IS NOT NULL;
+
+  -- Recent users (last 30 days)
+  RETURN QUERY
+  SELECT 'recent_users_30d'::TEXT, COUNT(*)
+  FROM auth.users
+  WHERE created_at >= NOW() - INTERVAL '30 days';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_user_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_user_subscription_search"("query" "text" DEFAULT ''::"text", "limit_count" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "user_id" "uuid", "subscription_level" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone, "expires_at" timestamp with time zone, "is_active" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check admin access
+  IF NOT admin_check_user_access(auth.jwt() ->> 'email') THEN
+    RAISE EXCEPTION 'Access denied: Admin privileges required';
+  END IF;
+
+  RETURN QUERY
+  SELECT us.id, us.user_id, us.subscription_level, us.created_at, us.updated_at, us.expires_at, us.is_active
+  FROM user_subscription us
+  WHERE query = '' OR us.user_id::TEXT ILIKE '%' || query || '%'
+  ORDER BY us.created_at DESC
+  LIMIT limit_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_user_subscription_search"("query" "text", "limit_count" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."classify_all_products"() RETURNS TABLE("upc_code" "text", "old_classification" "text", "new_classification" "text")
     LANGUAGE "sql"
     AS $$
@@ -1011,12 +1935,13 @@ COMMENT ON COLUMN "public"."products"."classification" IS 'primary classificatio
 
 CREATE TABLE IF NOT EXISTS "public"."user_subscription" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
+    "userid" "uuid" NOT NULL,
     "subscription_level" "text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "expires_at" timestamp with time zone,
     "is_active" boolean DEFAULT true,
+    "deviceid" "uuid" NOT NULL,
     CONSTRAINT "user_subscription_subscription_level_check" CHECK (("subscription_level" = ANY (ARRAY['free'::"text", 'standard'::"text", 'premium'::"text"])))
 );
 
@@ -1045,7 +1970,12 @@ ALTER TABLE ONLY "public"."products"
 
 
 ALTER TABLE ONLY "public"."user_subscription"
-    ADD CONSTRAINT "unique_user_subscription" UNIQUE ("user_id");
+    ADD CONSTRAINT "unique_user_subscription" UNIQUE ("userid");
+
+
+
+ALTER TABLE ONLY "public"."user_subscription"
+    ADD CONSTRAINT "user_subscription_deviceid_key" UNIQUE ("deviceid");
 
 
 
@@ -1086,7 +2016,7 @@ CREATE INDEX "idx_user_subscription_level" ON "public"."user_subscription" USING
 
 
 
-CREATE INDEX "idx_user_subscription_user_id" ON "public"."user_subscription" USING "btree" ("user_id");
+CREATE INDEX "idx_user_subscription_user_id" ON "public"."user_subscription" USING "btree" ("userid");
 
 
 
@@ -1155,6 +2085,144 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_actionlog_paginated"("page_size" integer, "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_actionlog_paginated"("page_size" integer, "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_actionlog_paginated"("page_size" integer, "page_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_actionlog_recent"("limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_actionlog_recent"("limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_actionlog_recent"("limit_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_check_user_access"("user_email" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_check_user_access"("user_email" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_check_user_access"("user_email" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_classify_upc"("upc_code" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_classify_upc"("upc_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_classify_upc"("upc_code" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_create_ingredient"("ingredient_title" "text", "ingredient_class" "text", "ingredient_primary_class" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_create_ingredient"("ingredient_title" "text", "ingredient_class" "text", "ingredient_primary_class" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_create_ingredient"("ingredient_title" "text", "ingredient_class" "text", "ingredient_primary_class" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_delete_ingredient"("ingredient_title" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_delete_ingredient"("ingredient_title" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_delete_ingredient"("ingredient_title" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_ingredient_stats"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_ingredient_stats"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_ingredient_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_ingredients_for_upc"("product_upc" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_ingredients_for_upc"("product_upc" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_ingredients_for_upc"("product_upc" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_product"("product_upc" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_product"("product_upc" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_product"("product_upc" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_product_stats"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_product_stats"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_product_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_unclassified_ingredients"("page_size" integer, "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_unclassified_ingredients"("page_size" integer, "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_unclassified_ingredients"("page_size" integer, "page_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_ingredient_stats"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_ingredient_stats"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_ingredient_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_product_stats"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_product_stats"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_product_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients"("query" "text", "limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients"("query" "text", "limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients"("query" "text", "limit_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_exact"("query" "text", "search_type" "text", "limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_exact"("query" "text", "search_type" "text", "limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_exact"("query" "text", "search_type" "text", "limit_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "limit_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters_paginated"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "page_size" integer, "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters_paginated"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "page_size" integer, "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_search_ingredients_with_filters_paginated"("query" "text", "search_type" "text", "filter_classes" "text"[], "filter_primary_classes" "text"[], "page_size" integer, "page_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_search_products"("query" "text", "limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_search_products"("query" "text", "limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_search_products"("query" "text", "limit_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_ingredient"("ingredient_title" "text", "new_class" "text", "new_primary_class" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_ingredient"("ingredient_title" "text", "new_class" "text", "new_primary_class" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_ingredient"("ingredient_title" "text", "new_class" "text", "new_primary_class" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_product"("product_upc" "text", "updates" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_product"("product_upc" "text", "updates" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_product"("product_upc" "text", "updates" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_user_subscription"("subscription_id" "uuid", "updates" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_user_subscription"("subscription_id" "uuid", "updates" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_user_subscription"("subscription_id" "uuid", "updates" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_user_stats"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_user_stats"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_user_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_user_subscription_search"("query" "text", "limit_count" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_user_subscription_search"("query" "text", "limit_count" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_user_subscription_search"("query" "text", "limit_count" integer) TO "service_role";
 
 
 

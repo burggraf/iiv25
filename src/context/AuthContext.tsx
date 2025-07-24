@@ -320,6 +320,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		resetPassword,
 		updatePassword,
 		refreshSession,
+		isAnonymous: authState.user?.is_anonymous ?? false,
 	}
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
