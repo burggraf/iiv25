@@ -252,7 +252,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			visible={visible}
 			onRequestClose={onClose}
 			presentationStyle="fullScreen">
-			<SafeAreaView style={styles.container}>
+			<SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
 				{/* Header with Close Button */}
 				<View style={styles.header}>
 					<TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
