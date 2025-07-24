@@ -10,7 +10,7 @@ import {
 	TouchableOpacity,
 	View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 
@@ -36,6 +36,7 @@ interface UserAccountModalProps {
 export default function UserAccountModal({ visible, onClose }: UserAccountModalProps) {
 	const { user, signOut, isAnonymous } = useAuth()
 	const { deviceId } = useApp()
+	const insets = useSafeAreaInsets()
 	const [isLoading, setIsLoading] = useState(false)
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
@@ -256,7 +257,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			visible={visible}
 			onRequestClose={onClose}
 			presentationStyle="fullScreen">
-			<SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+			<View style={[styles.container, { paddingTop: insets.top }]}>
 				{/* Header with Close Button */}
 				<View style={styles.header}>
 					<TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
@@ -514,7 +515,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 
 					<View style={styles.bottomPadding} />
 				</ScrollView>
-			</SafeAreaView>
+			</View>
 		</Modal>
 	)
 }
