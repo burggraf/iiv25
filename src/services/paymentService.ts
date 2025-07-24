@@ -484,19 +484,49 @@ export class PaymentService {
       const activeSubscriptions: string[] = [];
       let latestSubscription: { productId: string; expiresAt?: Date } | null = null;
       
-      // Process each purchase
+      // Process each purchase and find the one with the latest expiration date
       for (const purchase of purchases) {
         const subscriptionInfo = this.getSubscriptionInfo(purchase.productId);
         
         if (subscriptionInfo) {
           activeSubscriptions.push(purchase.productId);
           
-          // For lifetime subscriptions or active subscriptions, update the database
+          // For lifetime subscriptions or active subscriptions, check if this is the latest
           if (subscriptionInfo.duration === -1 || this.isSubscriptionActive(purchase)) {
-            latestSubscription = {
-              productId: purchase.productId,
-              expiresAt: this.calculateExpirationDate(purchase, subscriptionInfo.duration),
-            };
+            const expiresAt = this.calculateExpirationDate(purchase, subscriptionInfo.duration);
+            
+            console.log(`PaymentService: Evaluating purchase ${purchase.productId}:`, {
+              duration: subscriptionInfo.duration,
+              expiresAt: expiresAt?.toISOString(),
+              currentLatest: latestSubscription?.expiresAt?.toISOString(),
+            });
+            
+            // Always prefer lifetime subscriptions (no expiration date)
+            if (subscriptionInfo.duration === -1) {
+              console.log('PaymentService: Found lifetime subscription, selecting it');
+              latestSubscription = {
+                productId: purchase.productId,
+                expiresAt: undefined, // Lifetime = no expiration
+              };
+            }
+            // For regular subscriptions, keep the one with the latest expiration date
+            else if (!latestSubscription || 
+                     (latestSubscription.expiresAt && expiresAt && 
+                      expiresAt.getTime() > latestSubscription.expiresAt.getTime())) {
+              console.log(`PaymentService: Selecting ${purchase.productId} as latest subscription`);
+              latestSubscription = {
+                productId: purchase.productId,
+                expiresAt: expiresAt,
+              };
+            }
+            // If current latest is lifetime, don't replace it with a regular subscription
+            else if (!latestSubscription.expiresAt) {
+              console.log('PaymentService: Keeping lifetime subscription, skipping regular subscription');
+              continue;
+            }
+            else {
+              console.log(`PaymentService: Keeping current latest ${latestSubscription.productId}, skipping ${purchase.productId}`);
+            }
           }
         }
       }
@@ -517,6 +547,10 @@ export class PaymentService {
       console.log('PaymentService: Restore completed:', {
         restoredCount: purchases.length,
         activeSubscriptions,
+        selectedSubscription: latestSubscription ? {
+          productId: latestSubscription.productId,
+          expiresAt: latestSubscription.expiresAt?.toISOString(),
+        } : null,
       });
       
       return {
