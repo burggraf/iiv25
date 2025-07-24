@@ -40,7 +40,7 @@ BEGIN
         subscription_level,
         expires_at
     FROM public.user_subscription us
-    WHERE us.user_id = current_user_id
+    WHERE us.userid = current_user_id
     AND us.is_active = TRUE;
     
     -- If no subscription record found, return 'free'
@@ -53,7 +53,7 @@ BEGIN
         -- Update subscription to inactive
         UPDATE public.user_subscription 
         SET is_active = FALSE 
-        WHERE user_id = current_user_id;
+        WHERE userid = current_user_id;
         
         RETURN 'free';
     END IF;

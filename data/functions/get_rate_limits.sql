@@ -41,7 +41,7 @@ BEGIN
     FROM
         public.user_subscription us
     WHERE
-        us.user_id = current_user_id
+        us.userid = current_user_id
         AND us.is_active = TRUE;
     -- If no subscription record found, default to 'free'
     IF user_subscription_level IS NULL THEN
@@ -51,11 +51,11 @@ BEGIN
     IF user_subscription_expires_at IS NOT NULL AND user_subscription_expires_at < now() THEN
         -- Auto-deactivate expired subscription
         UPDATE
-            public.user_subscription us
+            public.user_subscription
         SET
             is_active = FALSE
         WHERE
-            us.user_id = current_user_id;
+            userid = current_user_id;
         user_subscription_level := 'free';
     END IF;
     -- Set rate limits based on subscription level and action type
@@ -64,7 +64,7 @@ BEGIN
         CASE user_subscription_level
         WHEN 'free' THEN
             current_rate_limit := 10; -- 10 product lookups per day for free users
-        WHEN 'basic' THEN
+        WHEN 'standard' THEN
             current_rate_limit := 999999; -- Unlimited for premium users
         WHEN 'premium' THEN
             current_rate_limit := 999999; -- Unlimited for premium users
@@ -75,7 +75,7 @@ BEGIN
         CASE user_subscription_level
         WHEN 'free' THEN
             current_rate_limit := 10; -- 10 searches per day for free users
-        WHEN 'basic' THEN
+        WHEN 'standard' THEN
             current_rate_limit := 999999; -- Unlimited for premium users
         WHEN 'premium' THEN
             current_rate_limit := 999999; -- Unlimited for premium users
@@ -87,7 +87,7 @@ BEGIN
         CASE user_subscription_level
         WHEN 'free' THEN
             current_rate_limit := 10;
-        WHEN 'basic' THEN
+        WHEN 'standard' THEN
             current_rate_limit := 999999;
         WHEN 'premium' THEN
             current_rate_limit := 999999;
