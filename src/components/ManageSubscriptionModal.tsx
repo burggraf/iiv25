@@ -269,24 +269,54 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 		}
 	}
 
-	const handleManageSubscription = () => {
-		PaymentService.showSubscriptionManagement()
-	}
+	// const handleManageSubscription = () => {
+	// 	PaymentService.showSubscriptionManagement()
+	// }
 
 	const isPremium =
 		subscriptionStatus?.subscription_level === 'standard' ||
 		subscriptionStatus?.subscription_level === 'premium'
 
 	const currentProductId = getCurrentProductId()
+	
+	// Sort products by price from highest to lowest
+	const sortedProducts = [...availableProducts].sort((a, b) => {
+		// Extract numeric price from localizedPrice (e.g., "$9.99" -> 9.99)
+		const priceA = parseFloat(a.localizedPrice.replace(/[^0-9.]/g, '')) || 0
+		const priceB = parseFloat(b.localizedPrice.replace(/[^0-9.]/g, '')) || 0
+		
+		// Sort descending (highest to lowest)
+		return priceB - priceA
+	})
 
 	function getCurrentProductId(): string | null {
-		// This would typically come from the subscription status or be stored
-		// For now, we'll determine based on subscription level and duration
 		if (!isPremium) return null
 		
-		// This is a simplified approach - in a real app you'd store the actual product ID
-		// that was purchased or derive it from the subscription details
-		return SUBSCRIPTION_PRODUCT_IDS.MONTHLY // Default assumption
+		// For lifetime subscriptions (no expiration date)
+		if (!subscriptionStatus?.expires_at) {
+			return SUBSCRIPTION_PRODUCT_IDS.LIFETIME
+		}
+		
+		// Calculate remaining time to make best guess about subscription type
+		const now = new Date()
+		const expiresAt = new Date(subscriptionStatus.expires_at)
+		const remainingMs = expiresAt.getTime() - now.getTime()
+		const remainingDays = Math.round(remainingMs / (1000 * 60 * 60 * 24))
+		
+		// Use remaining days to infer the subscription type
+		// This is approximate since we don't know exactly when it was purchased
+		if (remainingDays > 300) return SUBSCRIPTION_PRODUCT_IDS.ANNUAL      // Annual subscription
+		if (remainingDays > 150) return SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL  // 6-month subscription  
+		if (remainingDays > 60)  return SUBSCRIPTION_PRODUCT_IDS.QUARTERLY   // 3-month subscription
+		if (remainingDays > 0)   return SUBSCRIPTION_PRODUCT_IDS.MONTHLY     // Monthly subscription
+		
+		// If expired, still try to determine what it was based on how recently it expired
+		const expiredDaysAgo = Math.abs(remainingDays)
+		if (expiredDaysAgo < 40)  return SUBSCRIPTION_PRODUCT_IDS.MONTHLY     // Recently expired monthly
+		if (expiredDaysAgo < 100) return SUBSCRIPTION_PRODUCT_IDS.QUARTERLY   // Recently expired quarterly
+		if (expiredDaysAgo < 200) return SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL  // Recently expired 6-month
+		
+		return SUBSCRIPTION_PRODUCT_IDS.ANNUAL // Default to annual for old expired subs
 	}
 
 	return (
@@ -407,7 +437,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 								}
 							</Text>
 
-							{availableProducts.map((product) => {
+							{sortedProducts.map((product) => {
 								const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME
 								const isCurrentPlan = product.productId === currentProductId
 								return (
