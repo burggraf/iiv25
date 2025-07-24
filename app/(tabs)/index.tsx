@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { router, useLocalSearchParams } from 'expo-router'
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -29,7 +29,6 @@ export default function HomeScreen() {
 			router.setParams({ openSubscription: undefined })
 		}
 	}, [openSubscription])
-
 
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
@@ -108,8 +107,10 @@ export default function HomeScreen() {
 				<View style={styles.infoSection}>
 					<Text style={styles.infoTitle}>How It Works</Text>
 					<Text style={styles.infoText}>
-						Our app analyzes product ingredients using the Open Food Facts database to determine if
-						products are vegan, vegetarian, or contain animal-derived ingredients.
+						Simply scan the barcode on the package of any food or beverage product, and you
+						instantly see whether the product is vegan, vegetarian, or neither. Click the product
+						card to show all the product&apos;s information, including a categorized list of any
+						non-vegan ingredients, and the original list of ingredients for the product.
 					</Text>
 					<View style={styles.statusIndicators}>
 						<View style={styles.statusItem}>
@@ -126,13 +127,35 @@ export default function HomeScreen() {
 						</View>
 					</View>
 				</View>
+
+				{/* More Information Section */}
+				<View style={styles.infoBox}>
+					<Text style={styles.infoBoxTitle}>More Information:</Text>
+					<Text style={styles.infoBoxText}>
+						After putting each ingredient into a category, Is It Vegan then decides whether the product is suitable for a vegan or vegetarian diet. Our database has information on hundreds of thousands of food and beverage products and verifies each of them using a master list containing thousands of classified ingredients.
+					</Text>
+					<Text style={styles.infoBoxText}>
+						If a product is not yet in our app, you will be prompted to take a photo of the packaging, and/or one of the ingredients list. Is It Vegan will then categorize the ingredients, and automatically add it to our database for any future scans.
+					</Text>
+					<Text style={styles.infoBoxText}>
+						Is It Vegan now works on food labels in over 100 languages with our built-in ingredient translator.
+					</Text>
+				</View>
+
+				{/* Disclaimer Section */}
+				<View style={styles.disclaimerBox}>
+					<Text style={styles.disclaimerTitle}>Disclaimer:</Text>
+					<Text style={styles.disclaimerText}>
+						This app is designed for educational and entertainment purposes only. This app is designed to provide accurate information regarding the subject matter covered. It is not intended as a substitute for medical advice from a qualified physician. This app does not identify allergens or other health-related issues related to food, but rather is a guideline for individuals who, for various reasons, wish to eliminate animal-derived products from their diet. You should consult your medical doctor or a competent professional before making any dietary changes.
+					</Text>
+					<Text style={styles.disclaimerText}>
+						The developers of this app disclaim all responsibility for any liability, loss, or risk, personal or otherwise, from the use and application of any of the contents of this app or any related web site or other documentation (either printed or electronic).
+					</Text>
+				</View>
 			</ScrollView>
 
 			{/* User Account Modal */}
-			<UserAccountModal
-				visible={showUserModal}
-				onClose={() => setShowUserModal(false)}
-			/>
+			<UserAccountModal visible={showUserModal} onClose={() => setShowUserModal(false)} />
 		</SafeAreaView>
 	)
 }
@@ -292,5 +315,59 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		color: '#666',
 		fontWeight: '500',
+	},
+	infoBox: {
+		backgroundColor: 'white',
+		borderRadius: 16,
+		padding: 24,
+		marginTop: 20,
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 2,
+		},
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	infoBoxTitle: {
+		fontSize: 18,
+		fontWeight: '600',
+		color: '#333',
+		marginBottom: 12,
+	},
+	infoBoxText: {
+		fontSize: 14,
+		color: '#666',
+		lineHeight: 20,
+		marginBottom: 12,
+	},
+	disclaimerBox: {
+		backgroundColor: '#fff8dc',
+		borderRadius: 16,
+		padding: 24,
+		marginTop: 20,
+		borderWidth: 1,
+		borderColor: '#f0c040',
+		shadowColor: '#000',
+		shadowOffset: {
+			width: 0,
+			height: 2,
+		},
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	disclaimerTitle: {
+		fontSize: 18,
+		fontWeight: '600',
+		color: '#d2691e',
+		marginBottom: 12,
+	},
+	disclaimerText: {
+		fontSize: 12,
+		color: '#8b6914',
+		lineHeight: 18,
+		marginBottom: 10,
 	},
 })
