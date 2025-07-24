@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -8,7 +8,7 @@ import NumericKeypad from '../components/NumericKeypad';
 import ProductResult from '../components/ProductResult';
 import { ProductLookupService } from '../services/productLookupService';
 import { useApp } from '../context/AppContext';
-import { Product, VeganStatus, ActionType } from '../types';
+import { Product } from '../types';
 
 export default function ManualEntryScreen() {
   const { addToHistory } = useApp();
@@ -16,6 +16,7 @@ export default function ManualEntryScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRateLimitModal, setShowRateLimitModal] = useState(false);
 
   const handleNumberPress = (number: string) => {
     if (upcCode.length < 13) { // Max length for EAN-13
@@ -82,7 +83,7 @@ export default function ManualEntryScreen() {
       const result = await ProductLookupService.lookupProductByBarcode(upcCode, { context: 'Manual Entry' });
 
       if (result.isRateLimited) {
-        setError(result.error!);
+        setShowRateLimitModal(true);
         return;
       }
 
@@ -109,6 +110,17 @@ export default function ManualEntryScreen() {
   const handleProductUpdated = (updatedProduct: Product) => {
     // Update the product state to reflect changes
     setProduct(updatedProduct);
+  };
+
+  const handleRateLimitClose = () => {
+    setShowRateLimitModal(false);
+    setIsLoading(false);
+  };
+
+  const handleSubscribe = () => {
+    setShowRateLimitModal(false);
+    // Navigate to subscription/user tab
+    router.push('/(tabs)/user');
   };
 
   // Show loading screen
@@ -211,6 +223,33 @@ export default function ManualEntryScreen() {
           <Text style={styles.pasteButtonLabel}>Paste from clipboard</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Rate Limit Modal */}
+      {showRateLimitModal && (
+        <View style={styles.rateLimitModal}>
+          <View style={styles.rateLimitModalContent}>
+            <View style={styles.rateLimitModalHeader}>
+              <Text style={styles.rateLimitIcon}>⏰</Text>
+              <Text style={styles.rateLimitTitle}>Rate Limit Exceeded</Text>
+              <Text style={styles.rateLimitSubtitle}>
+                You can search 10 products per day on the free plan. Upgrade to unlock unlimited searches.
+              </Text>
+            </View>
+            <View style={styles.rateLimitButtons}>
+              <TouchableOpacity
+                style={styles.rateLimitCloseButton}
+                onPress={handleRateLimitClose}>
+                <Text style={styles.rateLimitCloseText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.rateLimitUpgradeButton}
+                onPress={handleSubscribe}>
+                <Text style={styles.rateLimitUpgradeText}>Upgrade Plan</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -365,5 +404,77 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     fontWeight: 'bold',
+  },
+  rateLimitModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  rateLimitModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 32,
+    margin: 20,
+    alignItems: 'center',
+    maxWidth: 350,
+    width: '90%',
+  },
+  rateLimitModalHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  rateLimitIcon: {
+    fontSize: 32,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  rateLimitTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  rateLimitSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  rateLimitButtons: {
+    flexDirection: 'row',
+    gap: 16,
+    width: '100%',
+  },
+  rateLimitCloseButton: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  rateLimitCloseText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  rateLimitUpgradeButton: {
+    flex: 1,
+    backgroundColor: '#FF6B35',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  rateLimitUpgradeText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

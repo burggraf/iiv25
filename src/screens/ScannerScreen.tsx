@@ -55,6 +55,7 @@ export default function ScannerScreen() {
 	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
 	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
 	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
+	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -154,8 +155,7 @@ export default function ScannerScreen() {
 			const result = await ProductLookupService.lookupProductByBarcode(data, { context: 'Scanner' })
 
 			if (result.isRateLimited) {
-				setError(result.error!)
-				showErrorOverlay()
+				setShowRateLimitModal(true)
 				return
 			}
 
@@ -462,6 +462,19 @@ export default function ScannerScreen() {
 
 	const handleProductPhotoCancel = () => {
 		setProductPhotoError(null);
+	}
+
+	const handleRateLimitClose = () => {
+		setShowRateLimitModal(false);
+		// Clear processing state to allow new scans
+		processingBarcodeRef.current = null;
+		setIsLoading(false);
+	}
+
+	const handleSubscribe = () => {
+		setShowRateLimitModal(false);
+		// Navigate to subscription/user tab
+		router.push('/(tabs)/user');
 	}
 
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
@@ -1120,6 +1133,33 @@ export default function ScannerScreen() {
 								) : (
 									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
 								)}
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			)}
+
+			{/* Rate Limit Modal */}
+			{showRateLimitModal && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>⏰</Text>
+							<Text style={styles.createProductModalTitle}>Rate Limit Exceeded</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								You can search 10 products per day on the free plan. Upgrade to unlock unlimited searches.
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleRateLimitClose}>
+								<Text style={styles.createProductModalCancelText}>Close</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleSubscribe}>
+								<Text style={styles.createProductModalConfirmText}>Upgrade Plan</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
