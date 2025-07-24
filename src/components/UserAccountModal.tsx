@@ -45,7 +45,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 	const [isRestoring, setIsRestoring] = useState(false)
 
 	useEffect(() => {
-		if (visible) {
+		if (visible && user && deviceId) {
 			loadSubscriptionStatus()
 			loadUsageStats()
 			initializePaymentService()
@@ -54,8 +54,8 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 
 	// Handle auth state changes to update user_subscription table
 	useEffect(() => {
-		if (visible && deviceId) {
-			SubscriptionService.handleAuthStateChange(deviceId, user?.id).catch((error) => {
+		if (visible && deviceId && user) {
+			SubscriptionService.handleAuthStateChange(deviceId, user.id).catch((error) => {
 				console.error('Failed to update user subscription for auth change:', error)
 			})
 		}
@@ -72,8 +72,8 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 
 	const loadSubscriptionStatus = async () => {
 		try {
-			if (!deviceId) {
-				console.log('Device ID not available yet, skipping subscription status load')
+			if (!deviceId || !user) {
+				console.log('Device ID or user not available, skipping subscription status load')
 				return
 			}
 
@@ -92,8 +92,8 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 
 	const loadUsageStats = async () => {
 		try {
-			if (!deviceId) {
-				console.log('Device ID not available yet, skipping usage stats load')
+			if (!deviceId || !user) {
+				console.log('Device ID or user not available, skipping usage stats load')
 				return
 			}
 
@@ -129,6 +129,10 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 	const handleSignOut = async () => {
 		try {
 			setIsLoading(true)
+			// Clear state before signing out to prevent stale data
+			setSubscriptionStatus(null)
+			setUsageStats(null)
+			setAvailableProducts([])
 			await signOut()
 			onClose()
 			router.replace('/auth/login')
