@@ -57,3 +57,11 @@ google-services.json
 *-service-account*.json
 
 app-example
+
+# Fastlane/Ruby
+.bundle/
+vendor/
+*.ipa
+
+# Build artifacts
+build.ipa
