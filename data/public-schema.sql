@@ -2023,36 +2023,6 @@ COMMENT ON COLUMN "public"."actionlog"."deviceid" IS 'UUID identifying the devic
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."ingr" (
-    "title" "text",
-    "class" "text",
-    "count" integer
-);
-
-
-ALTER TABLE "public"."ingr" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."ingr1" (
-    "title" "text" NOT NULL,
-    "class" "text" NOT NULL,
-    "productcount" numeric
-);
-
-
-ALTER TABLE "public"."ingr1" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."ingr2025_07_16" (
-    "title" "text" NOT NULL,
-    "class" "text",
-    "count" integer
-);
-
-
-ALTER TABLE "public"."ingr2025_07_16" OWNER TO "postgres";
-
-
 CREATE TABLE IF NOT EXISTS "public"."ingredients" (
     "title" character varying(255) NOT NULL,
     "class" character varying(255),
@@ -2095,7 +2065,7 @@ COMMENT ON COLUMN "public"."products"."classification" IS 'primary classificatio
 
 CREATE TABLE IF NOT EXISTS "public"."user_subscription" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "userid" "uuid" NOT NULL,
+    "userid" "uuid",
     "subscription_level" "text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
@@ -2111,11 +2081,6 @@ ALTER TABLE "public"."user_subscription" OWNER TO "postgres";
 
 ALTER TABLE ONLY "public"."actionlog"
     ADD CONSTRAINT "actionlog_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."ingr2025_07_16"
-    ADD CONSTRAINT "ingr2025_07_16_pkey" PRIMARY KEY ("title");
 
 
 
@@ -2175,15 +2140,7 @@ CREATE INDEX "idx_user_subscription_user_id" ON "public"."user_subscription" USI
 
 
 
-CREATE INDEX "ingr_title_idx" ON "public"."ingr" USING "btree" ("title");
-
-
-
 CREATE INDEX "ingredients_class_idx" ON "public"."ingredients" USING "btree" ("class");
-
-
-
-CREATE INDEX "ix_ingr" ON "public"."ingr1" USING "btree" ("title");
 
 
 
@@ -2216,15 +2173,6 @@ CREATE OR REPLACE TRIGGER "trigger_user_subscription_updated_at" BEFORE UPDATE O
 
 
 ALTER TABLE "public"."actionlog" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."ingr" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."ingr1" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."ingr2025_07_16" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."ingredients" ENABLE ROW LEVEL SECURITY;
@@ -2459,24 +2407,6 @@ GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_para
 GRANT ALL ON TABLE "public"."actionlog" TO "anon";
 GRANT ALL ON TABLE "public"."actionlog" TO "authenticated";
 GRANT ALL ON TABLE "public"."actionlog" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."ingr" TO "anon";
-GRANT ALL ON TABLE "public"."ingr" TO "authenticated";
-GRANT ALL ON TABLE "public"."ingr" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."ingr1" TO "anon";
-GRANT ALL ON TABLE "public"."ingr1" TO "authenticated";
-GRANT ALL ON TABLE "public"."ingr1" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."ingr2025_07_16" TO "anon";
-GRANT ALL ON TABLE "public"."ingr2025_07_16" TO "authenticated";
-GRANT ALL ON TABLE "public"."ingr2025_07_16" TO "service_role";
 
 
 

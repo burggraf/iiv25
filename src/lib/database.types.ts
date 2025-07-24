@@ -72,60 +72,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ingr: {
-        Row: {
-          class: string | null
-          count: number | null
-          title: string | null
-        }
-        Insert: {
-          class?: string | null
-          count?: number | null
-          title?: string | null
-        }
-        Update: {
-          class?: string | null
-          count?: number | null
-          title?: string | null
-        }
-        Relationships: []
-      }
-      ingr1: {
-        Row: {
-          class: string
-          productcount: number | null
-          title: string
-        }
-        Insert: {
-          class: string
-          productcount?: number | null
-          title: string
-        }
-        Update: {
-          class?: string
-          productcount?: number | null
-          title?: string
-        }
-        Relationships: []
-      }
-      ingr2025_07_16: {
-        Row: {
-          class: string | null
-          count: number | null
-          title: string
-        }
-        Insert: {
-          class?: string | null
-          count?: number | null
-          title: string
-        }
-        Update: {
-          class?: string | null
-          count?: number | null
-          title?: string
-        }
-        Relationships: []
-      }
       ingredients: {
         Row: {
           class: string | null
@@ -207,7 +153,7 @@ export type Database = {
           is_active: boolean | null
           subscription_level: string
           updated_at: string | null
-          userid: string
+          userid: string | null
         }
         Insert: {
           created_at?: string | null
@@ -217,7 +163,7 @@ export type Database = {
           is_active?: boolean | null
           subscription_level: string
           updated_at?: string | null
-          userid: string
+          userid?: string | null
         }
         Update: {
           created_at?: string | null
@@ -227,7 +173,7 @@ export type Database = {
           is_active?: boolean | null
           subscription_level?: string
           updated_at?: string | null
-          userid?: string
+          userid?: string | null
         }
         Relationships: []
       }
