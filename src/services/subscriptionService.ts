@@ -28,7 +28,7 @@ export class SubscriptionService {
       const { data, error } = await supabase.rpc('get_subscription_status', {
         device_id_param: deviceId
       });
-      
+
       if (error) {
         console.error('Error getting subscription status:', error);
         return null;
@@ -65,7 +65,7 @@ export class SubscriptionService {
       const { data, error } = await supabase.rpc('get_usage_stats', {
         device_id_param: deviceId
       });
-      
+
       if (error) {
         console.error('Error getting usage stats:', error);
         return null;
@@ -92,7 +92,7 @@ export class SubscriptionService {
         device_id_param: deviceId,
         new_user_id: userId || null,
       });
-      
+
       if (error) {
         console.error('Error updating user subscription userid:', error);
         return false;
@@ -112,9 +112,9 @@ export class SubscriptionService {
   static async handleAuthStateChange(deviceId: string, userId?: string): Promise<void> {
     try {
       console.log('Handling auth state change for device:', deviceId, 'user:', userId);
-      
+
       const success = await this.updateUserSubscriptionUserId(deviceId, userId);
-      
+
       if (success) {
         console.log('Successfully updated user subscription for auth change');
       } else {
@@ -141,7 +141,7 @@ export class SubscriptionService {
         expires_at_param: expiresAt?.toISOString() || null,
         is_active_param: isActive,
       });
-      
+
       if (error) {
         console.error('Error updating subscription:', error);
         return false;
@@ -159,7 +159,7 @@ export class SubscriptionService {
    */
   static async isPremiumUser(deviceId: string): Promise<boolean> {
     const status = await this.getSubscriptionStatus(deviceId);
-    return status?.subscription_level === 'basic' || status?.subscription_level === 'standard' || status?.subscription_level === 'premium';
+    return status?.subscription_level === 'standard' || status?.subscription_level === 'premium';
   }
 
   /**
@@ -168,7 +168,6 @@ export class SubscriptionService {
   static getSubscriptionDisplayName(level: string): string {
     switch (level) {
       case 'free': return 'Free';
-      case 'basic': return 'Premium';
       case 'standard': return 'Standard';
       case 'premium': return 'Premium';
       default: return 'Free';
@@ -180,7 +179,7 @@ export class SubscriptionService {
    */
   static formatExpirationDate(expiresAt?: string): string | undefined {
     if (!expiresAt) return undefined;
-    
+
     try {
       const date = new Date(expiresAt);
       if (isNaN(date.getTime())) return undefined;

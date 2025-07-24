@@ -1,4 +1,4 @@
-import { SubscriptionService, SubscriptionStatus, UsageStats } from '../subscriptionService';
+import { SubscriptionService } from '../subscriptionService';
 import { supabase } from '../supabaseClient';
 
 // Mock supabase client
@@ -34,7 +34,7 @@ describe('SubscriptionService', () => {
         device_id: deviceId,
       };
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse([mockStatus]));
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(mockStatus));
 
       const result = await SubscriptionService.getSubscriptionStatus(deviceId);
 
@@ -47,7 +47,7 @@ describe('SubscriptionService', () => {
     it('should return default free status when no data found', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse([]));
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null));
 
       const result = await SubscriptionService.getSubscriptionStatus(deviceId);
 
@@ -62,11 +62,11 @@ describe('SubscriptionService', () => {
     it('should handle database errors gracefully', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, { 
-        message: 'Database error', 
-        details: '', 
-        hint: '', 
-        code: '500' 
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, {
+        message: 'Database error',
+        details: '',
+        hint: '',
+        code: '500'
       }));
 
       const result = await SubscriptionService.getSubscriptionStatus(deviceId);
@@ -132,11 +132,11 @@ describe('SubscriptionService', () => {
     it('should handle database errors', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, { 
-        message: 'Database error', 
-        details: '', 
-        hint: '', 
-        code: '500' 
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, {
+        message: 'Database error',
+        details: '',
+        hint: '',
+        code: '500'
       }));
 
       const result = await SubscriptionService.getUsageStats(deviceId);
@@ -179,11 +179,11 @@ describe('SubscriptionService', () => {
       const deviceId = 'test-device-id';
       const userId = 'test-user-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, { 
-        message: 'Database error', 
-        details: '', 
-        hint: '', 
-        code: '500' 
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, {
+        message: 'Database error',
+        details: '',
+        hint: '',
+        code: '500'
       }));
 
       const result = await SubscriptionService.updateUserSubscriptionUserId(deviceId, userId);
@@ -271,11 +271,11 @@ describe('SubscriptionService', () => {
       const deviceId = 'test-device-id';
       const subscriptionLevel = 'premium';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, { 
-        message: 'Database error', 
-        details: '', 
-        hint: '', 
-        code: '500' 
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, {
+        message: 'Database error',
+        details: '',
+        hint: '',
+        code: '500'
       }));
 
       const result = await SubscriptionService.updateSubscription(deviceId, subscriptionLevel);
@@ -325,13 +325,13 @@ describe('SubscriptionService', () => {
   });
 
   describe('isPremiumUser', () => {
-    it('should return true for basic subscription', async () => {
+    it('should return true for standard subscription', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse([{
-        subscription_level: 'basic',
+      mockSupabase.rpc.mockResolvedValue(createMockResponse({
+        subscription_level: 'standard',
         is_active: true,
-      }]));
+      }));
 
       const result = await SubscriptionService.isPremiumUser(deviceId);
 
@@ -341,10 +341,10 @@ describe('SubscriptionService', () => {
     it('should return true for premium subscription', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse([{
+      mockSupabase.rpc.mockResolvedValue(createMockResponse({
         subscription_level: 'premium',
         is_active: true,
-      }]));
+      }));
 
       const result = await SubscriptionService.isPremiumUser(deviceId);
 
@@ -354,10 +354,10 @@ describe('SubscriptionService', () => {
     it('should return false for free subscription', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse([{
+      mockSupabase.rpc.mockResolvedValue(createMockResponse({
         subscription_level: 'free',
         is_active: true,
-      }]));
+      }));
 
       const result = await SubscriptionService.isPremiumUser(deviceId);
 
@@ -367,11 +367,11 @@ describe('SubscriptionService', () => {
     it('should return false when subscription status is null', async () => {
       const deviceId = 'test-device-id';
 
-      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, { 
-        message: 'Database error', 
-        details: '', 
-        hint: '', 
-        code: '500' 
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(null, {
+        message: 'Database error',
+        details: '',
+        hint: '',
+        code: '500'
       }));
 
       const result = await SubscriptionService.isPremiumUser(deviceId);
@@ -383,8 +383,8 @@ describe('SubscriptionService', () => {
   describe('getSubscriptionDisplayName', () => {
     it('should return correct display names', () => {
       expect(SubscriptionService.getSubscriptionDisplayName('free')).toBe('Free');
-      expect(SubscriptionService.getSubscriptionDisplayName('basic')).toBe('Premium');
       expect(SubscriptionService.getSubscriptionDisplayName('premium')).toBe('Premium');
+      expect(SubscriptionService.getSubscriptionDisplayName('standard')).toBe('Standard');
       expect(SubscriptionService.getSubscriptionDisplayName('unknown')).toBe('Free');
     });
   });
@@ -393,7 +393,7 @@ describe('SubscriptionService', () => {
     it('should format date correctly', () => {
       const dateString = '2024-12-31T23:59:59Z';
       const result = SubscriptionService.formatExpirationDate(dateString);
-      
+
       // Result depends on locale, just check it's a string
       expect(typeof result).toBe('string');
       expect(result).toContain('2024');
@@ -401,13 +401,13 @@ describe('SubscriptionService', () => {
 
     it('should return undefined for invalid date', () => {
       const result = SubscriptionService.formatExpirationDate('invalid-date');
-      
+
       expect(result).toBeUndefined();
     });
 
     it('should return undefined for undefined input', () => {
       const result = SubscriptionService.formatExpirationDate(undefined);
-      
+
       expect(result).toBeUndefined();
     });
   });
