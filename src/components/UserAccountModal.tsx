@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { router } from 'expo-router'
 
 import Logo from './Logo'
 import { useApp } from '../context/AppContext'
@@ -130,6 +131,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			setIsLoading(true)
 			await signOut()
 			onClose()
+			router.replace('/auth/login')
 		} catch (error) {
 			Alert.alert('Error', 'Failed to sign out. Please try again.')
 		} finally {
