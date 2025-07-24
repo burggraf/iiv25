@@ -236,19 +236,11 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 
 					{/* Subscription Management */}
 					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Subscription</Text>
-						<Text style={styles.sectionSubtitle}>
-							{isPremium 
-								? 'Manage your subscription, change plans, or cancel'
-								: 'Upgrade to premium for unlimited scans and searches'
-							}
-						</Text>
-
 						<TouchableOpacity 
 							style={styles.actionButton} 
 							onPress={() => setShowManageSubscription(true)}>
 							<Text style={styles.actionButtonText}>
-								{isPremium ? 'Manage Subscription' : 'View Subscription Options'}
+								Manage Subscription
 							</Text>
 						</TouchableOpacity>
 					</View>
