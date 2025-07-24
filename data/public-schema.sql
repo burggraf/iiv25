@@ -934,9 +934,9 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  SELECT us.id, us.user_id, us.subscription_level, us.created_at, us.updated_at, us.expires_at, us.is_active
+  SELECT us.id, us.userid as user_id, us.subscription_level, us.created_at, us.updated_at, us.expires_at, us.is_active
   FROM user_subscription us
-  WHERE query = '' OR us.user_id::TEXT ILIKE '%' || query || '%'
+  WHERE query = '' OR us.userid::TEXT ILIKE '%' || query || '%'
   ORDER BY us.created_at DESC
   LIMIT limit_count;
 END;
@@ -1131,90 +1131,6 @@ $$;
 ALTER FUNCTION "public"."get_primary_classes_for_upc"("input_upc" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_rate_limits"("action_type" "text") RETURNS TABLE("subscription_level" "text", "rate_limit" integer, "recent_searches" integer, "is_rate_limited" boolean, "searches_remaining" integer)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-DECLARE
-    current_user_id uuid;
-    user_subscription_level text;
-    user_subscription_expires_at timestamptz;
-    current_rate_limit integer;
-    search_count integer;
-    rate_limited boolean;
-    remaining_searches integer;
-BEGIN
-    -- Get the current user ID
-    current_user_id := auth.uid();
-    -- Check if user is authenticated
-    IF current_user_id IS NULL THEN
-        RAISE EXCEPTION 'You must be logged in to use this service';
-    END IF;
-    -- Get user subscription details
-    SELECT
-        us.subscription_level,
-        us.expires_at 
-    INTO 
-        user_subscription_level,
-        user_subscription_expires_at
-    FROM
-        public.user_subscription us
-    WHERE
-        us.user_id = current_user_id
-        AND us.is_active = TRUE;
-    -- If no subscription record found, default to 'free'
-    IF user_subscription_level IS NULL THEN
-        user_subscription_level := 'free';
-    END IF;
-    -- Handle expired subscriptions
-    IF user_subscription_expires_at IS NOT NULL AND user_subscription_expires_at < now() THEN
-        -- Auto-deactivate expired subscription
-        UPDATE
-            public.user_subscription us
-        SET
-            is_active = FALSE
-        WHERE
-            us.user_id = current_user_id;
-        user_subscription_level := 'free';
-    END IF;
-    -- Set rate limits based on subscription level
-    CASE user_subscription_level
-    WHEN 'free' THEN
-        current_rate_limit := 1000;
-    WHEN 'basic' THEN
-        current_rate_limit := 1000;
-    WHEN 'premium' THEN
-        current_rate_limit := 10000;
-    ELSE
-        current_rate_limit := 10; -- Default to free tier
-    END CASE;
-    -- Count recent searches for the specified action type
-    SELECT
-        count(*) INTO search_count
-    FROM
-        actionlog al
-    WHERE
-        al.userid = current_user_id
-        AND al.type = action_type
-        AND al.created_at > now() - interval '1 hour';
-        -- Determine if rate limited
-        rate_limited := search_count >= current_rate_limit;
-        -- Calculate remaining searches
-        remaining_searches := greatest(0, current_rate_limit - search_count);
-        -- Return the rate limit information
-        RETURN query
-        SELECT
-            coalesce(user_subscription_level, 'free')::text AS subscription_level,
-            current_rate_limit AS rate_limit,
-            search_count AS recent_searches,
-            rate_limited AS is_rate_limited,
-            remaining_searches AS searches_remaining;
-    END;
-$$;
-
-
-ALTER FUNCTION "public"."get_rate_limits"("action_type" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text" DEFAULT NULL::"text") RETURNS TABLE("subscription_level" "text", "rate_limit" integer, "recent_searches" integer, "is_rate_limited" boolean, "searches_remaining" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1251,7 +1167,7 @@ BEGIN
     FROM
         public.user_subscription us
     WHERE
-        us.user_id = current_user_id
+        us.userid = current_user_id
         AND us.is_active = TRUE;
     -- If no subscription record found, default to 'free'
     IF user_subscription_level IS NULL THEN
@@ -1261,24 +1177,50 @@ BEGIN
     IF user_subscription_expires_at IS NOT NULL AND user_subscription_expires_at < now() THEN
         -- Auto-deactivate expired subscription
         UPDATE
-            public.user_subscription us
+            public.user_subscription
         SET
             is_active = FALSE
         WHERE
-            us.user_id = current_user_id;
+            userid = current_user_id;
         user_subscription_level := 'free';
     END IF;
-    -- Set rate limits based on subscription level
-    CASE user_subscription_level
-    WHEN 'free' THEN
-        current_rate_limit := 1000;
-    WHEN 'basic' THEN
-        current_rate_limit := 1000;
-    WHEN 'premium' THEN
-        current_rate_limit := 10000;
+    -- Set rate limits based on subscription level and action type
+    -- Different limits for product lookups vs searches
+    IF action_type = 'product_lookup' THEN
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10; -- 10 product lookups per day for free users
+        WHEN 'standard' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        WHEN 'premium' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
+    ELSIF action_type = 'ingredient_search' THEN
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10; -- 10 searches per day for free users
+        WHEN 'standard' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        WHEN 'premium' THEN
+            current_rate_limit := 999999; -- Unlimited for premium users
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
     ELSE
-        current_rate_limit := 10; -- Default to free tier
-    END CASE;
+        -- Default rate limits for other action types
+        CASE user_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10;
+        WHEN 'standard' THEN
+            current_rate_limit := 999999;
+        WHEN 'premium' THEN
+            current_rate_limit := 999999;
+        ELSE
+            current_rate_limit := 10; -- Default to free tier
+        END CASE;
+    END IF;
     -- Count recent searches for the specified action type
     -- Optimized query that counts actions from either the current user OR the current device
     -- This prevents users from circumventing limits by switching accounts on the same device
@@ -1289,7 +1231,7 @@ BEGIN
         actionlog
     WHERE
         type = action_type
-        AND created_at > now() - interval '1 hour'
+        AND created_at > now() - interval '24 hours' -- Changed from 1 hour to 24 hours (daily limit)
         AND (
             userid = current_user_id
             OR (device_uuid IS NOT NULL AND deviceid = device_uuid)
@@ -1313,55 +1255,161 @@ $$;
 ALTER FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_subscription_status"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."get_subscription_status"("device_id_param" "text") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    current_user_id UUID;
-    subscription_level TEXT;
-    expires_at TIMESTAMP WITH TIME ZONE;
+    device_uuid UUID;
+    subscription_record RECORD;
 BEGIN
-    -- Check if user is authenticated
-    current_user_id := auth.uid();
+    -- Convert device_id_param to UUID
+    BEGIN
+        device_uuid := device_id_param::UUID;
+    EXCEPTION
+        WHEN invalid_text_representation THEN
+            RAISE LOG 'Invalid device ID format: %', device_id_param;
+            RETURN json_build_object(
+                'subscription_level', 'free',
+                'is_active', true,
+                'device_id', device_id_param,
+                'expires_at', null
+            );
+    END;
     
-    IF current_user_id IS NULL THEN
-        RAISE EXCEPTION 'not logged in';
-    END IF;
-    
-    -- Look up user's subscription
+    -- Look up subscription by device ID
     SELECT 
         us.subscription_level,
-        us.expires_at
+        us.expires_at,
+        us.is_active,
+        us.deviceid,
+        us.userid
     INTO 
-        subscription_level,
-        expires_at
+        subscription_record
     FROM public.user_subscription us
-    WHERE us.user_id = current_user_id
-    AND us.is_active = TRUE;
+    WHERE us.deviceid = device_uuid;
     
     -- If no subscription record found, return 'free'
-    IF subscription_level IS NULL THEN
-        RETURN 'free';
+    IF subscription_record IS NULL THEN
+        RETURN json_build_object(
+            'subscription_level', 'free',
+            'is_active', true,
+            'device_id', device_id_param,
+            'expires_at', null
+        );
     END IF;
     
     -- Check if subscription has expired
-    IF expires_at IS NOT NULL AND expires_at < NOW() THEN
+    IF subscription_record.expires_at IS NOT NULL AND subscription_record.expires_at < NOW() THEN
         -- Update subscription to inactive
         UPDATE public.user_subscription 
-        SET is_active = FALSE 
-        WHERE user_id = current_user_id;
+        SET is_active = FALSE,
+            updated_at = NOW()
+        WHERE deviceid = device_uuid;
         
-        RETURN 'free';
+        RETURN json_build_object(
+            'subscription_level', 'free',
+            'is_active', false,
+            'device_id', device_id_param,
+            'expires_at', subscription_record.expires_at
+        );
     END IF;
     
-    -- Return the current subscription level
-    RETURN subscription_level;
+    -- Return the current subscription status
+    RETURN json_build_object(
+        'subscription_level', subscription_record.subscription_level,
+        'is_active', subscription_record.is_active,
+        'device_id', device_id_param,
+        'expires_at', subscription_record.expires_at
+    );
 END;
 $$;
 
 
-ALTER FUNCTION "public"."get_subscription_status"() OWNER TO "postgres";
+ALTER FUNCTION "public"."get_subscription_status"("device_id_param" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_usage_stats"("device_id_param" "text") RETURNS TABLE("product_lookups_today" integer, "product_lookups_limit" integer, "searches_today" integer, "searches_limit" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    current_user_id uuid;
+    device_uuid uuid;
+    user_subscription_level text;
+    product_lookup_count integer;
+    search_count integer;
+    product_limit integer;
+    search_limit integer;
+BEGIN
+    -- Get the current user ID for security validation
+    current_user_id := auth.uid();
+    
+    -- Check if user is authenticated
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'You must be logged in to use this service';
+    END IF;
+
+    -- Validate and parse device_id parameter
+    IF device_id_param IS NULL OR trim(device_id_param) = '' THEN
+        RAISE EXCEPTION 'device_id parameter is required';
+    END IF;
+
+    BEGIN
+        device_uuid := device_id_param::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
+
+    -- Get subscription level for this device
+    SELECT subscription_level 
+    INTO user_subscription_level
+    FROM public.user_subscription 
+    WHERE deviceid = device_uuid  -- Now both sides are UUID
+      AND is_active = TRUE
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    -- Default to free if no subscription found
+    IF user_subscription_level IS NULL THEN
+        user_subscription_level := 'free';
+    END IF;
+
+    -- Set limits based on subscription level
+    IF user_subscription_level = 'free' THEN
+        product_limit := 10;
+        search_limit := 10;
+    ELSE
+        -- Premium users get unlimited (represented as high number)
+        product_limit := 999999;
+        search_limit := 999999;
+    END IF;
+
+    -- Count product lookups in the last 24 hours for this device
+    SELECT COUNT(*)
+    INTO product_lookup_count
+    FROM actionlog
+    WHERE deviceid = device_uuid  -- Both sides are UUID
+      AND type = 'product_lookup'
+      AND created_at > now() - interval '24 hours';
+
+    -- Count searches in the last 24 hours for this device
+    SELECT COUNT(*)
+    INTO search_count
+    FROM actionlog
+    WHERE deviceid = device_uuid  -- Both sides are UUID
+      AND type = 'ingredient_search'
+      AND created_at > now() - interval '24 hours';
+
+    RETURN QUERY SELECT
+        product_lookup_count::integer,
+        product_limit::integer,
+        search_count::integer,
+        search_limit::integer;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_usage_stats"("device_id_param" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."lookup_product"("barcode" "text", "device_id" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
@@ -1827,6 +1875,69 @@ $$;
 ALTER FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone DEFAULT NULL::timestamp with time zone, "is_active_param" boolean DEFAULT true) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    current_user_id uuid;
+    device_uuid uuid;
+BEGIN
+    -- Get the current user ID
+    current_user_id := auth.uid();
+    
+    -- Check if user is authenticated
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'You must be logged in to use this service';
+    END IF;
+
+    -- Validate and convert device_id to UUID
+    IF device_id_param IS NULL OR trim(device_id_param) = '' THEN
+        RAISE EXCEPTION 'device_id parameter is required';
+    END IF;
+
+    BEGIN
+        device_uuid := device_id_param::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
+
+    -- Insert or update subscription record
+    INSERT INTO public.user_subscription (
+        userid,
+        deviceid,
+        subscription_level,
+        is_active,
+        expires_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        current_user_id,
+        device_uuid,  -- Now UUID
+        subscription_level_param,
+        is_active_param,
+        expires_at_param,
+        now(),
+        now()
+    )
+    ON CONFLICT (deviceid) 
+    DO UPDATE SET
+        userid = EXCLUDED.userid,
+        subscription_level = EXCLUDED.subscription_level,
+        is_active = EXCLUDED.is_active,
+        expires_at = EXCLUDED.expires_at,
+        updated_at = now();
+
+    RETURN TRUE;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN FALSE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_user_subscription_updated_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -1838,6 +1949,55 @@ $$;
 
 
 ALTER FUNCTION "public"."update_user_subscription_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  updated_count INTEGER;
+  device_uuid UUID;
+BEGIN
+  -- Convert device_id_param to UUID
+  BEGIN
+    device_uuid := device_id_param::UUID;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE LOG 'Invalid device ID format: %', device_id_param;
+      RETURN false;
+  END;
+
+  -- Log the update attempt
+  RAISE LOG 'Updating user_subscription userid for device: % with user: %', device_uuid, new_user_id;
+
+  -- Update or insert user_subscription record
+  INSERT INTO user_subscription (deviceid, userid, subscription_level, is_active, created_at, updated_at)
+  VALUES (device_uuid, new_user_id, 'free', true, NOW(), NOW())
+  ON CONFLICT (deviceid) 
+  DO UPDATE SET 
+    userid = new_user_id,
+    updated_at = NOW();
+
+  -- Get count of affected rows
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+
+  -- Log success
+  RAISE LOG 'Successfully updated % rows for device: %', updated_count, device_uuid;
+
+  -- Return success if any rows were affected
+  RETURN updated_count > 0;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Log the error
+    RAISE LOG 'Error updating user_subscription userid for device %: %', device_id_param, SQLERRM;
+    -- Return false on error
+    RETURN false;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") OWNER TO "postgres";
 
 SET default_tablespace = '';
 
@@ -1966,11 +2126,6 @@ ALTER TABLE ONLY "public"."ingredients"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_pkey" PRIMARY KEY ("ean13");
-
-
-
-ALTER TABLE ONLY "public"."user_subscription"
-    ADD CONSTRAINT "unique_user_subscription" UNIQUE ("userid");
 
 
 
@@ -2247,19 +2402,21 @@ GRANT ALL ON FUNCTION "public"."get_primary_classes_for_upc"("input_upc" "text")
 
 
 
-GRANT ALL ON FUNCTION "public"."get_rate_limits"("action_type" "text") TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text") TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_subscription_status"() TO "anon";
-GRANT ALL ON FUNCTION "public"."get_subscription_status"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_subscription_status"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_subscription_status"("device_id_param" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_subscription_status"("device_id_param" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_subscription_status"("device_id_param" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_usage_stats"("device_id_param" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_usage_stats"("device_id_param" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_usage_stats"("device_id_param" "text") TO "service_role";
 
 
 
@@ -2281,9 +2438,21 @@ GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text", "devic
 
 
 
+GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_user_subscription_updated_at"() TO "anon";
 GRANT ALL ON FUNCTION "public"."update_user_subscription_updated_at"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_user_subscription_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "service_role";
 
 
 

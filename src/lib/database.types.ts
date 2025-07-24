@@ -446,9 +446,7 @@ export type Database = {
         }[]
       }
       get_rate_limits: {
-        Args:
-          | { action_type: string }
-          | { action_type: string; device_id?: string }
+        Args: { action_type: string; device_id?: string }
         Returns: {
           subscription_level: string
           rate_limit: number
@@ -458,8 +456,17 @@ export type Database = {
         }[]
       }
       get_subscription_status: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+        Args: { device_id_param: string }
+        Returns: Json
+      }
+      get_usage_stats: {
+        Args: { device_id_param: string }
+        Returns: {
+          product_lookups_today: number
+          product_lookups_limit: number
+          searches_today: number
+          searches_limit: number
+        }[]
       }
       lookup_product: {
         Args: { barcode: string; device_id: string }
@@ -487,6 +494,19 @@ export type Database = {
           lastupdated: string
           created: string
         }[]
+      }
+      update_subscription: {
+        Args: {
+          device_id_param: string
+          subscription_level_param: string
+          expires_at_param?: string
+          is_active_param?: boolean
+        }
+        Returns: boolean
+      }
+      update_user_subscription_userid: {
+        Args: { device_id_param: string; new_user_id?: string }
+        Returns: boolean
       }
     }
     Enums: {
