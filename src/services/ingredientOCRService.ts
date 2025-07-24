@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient';
+
 export interface ParseIngredientsResponse {
   ingredients: string[];
   confidence: number;
@@ -10,8 +12,6 @@ export interface ParseIngredientsResponse {
     totalCost: string;
   };
 }
-
-import { supabase } from './supabaseClient';
 
 export class IngredientOCRService {
   static async parseIngredientsFromImage(imageBase64: string, upc: string, openFoodFactsData?: any): Promise<ParseIngredientsResponse> {

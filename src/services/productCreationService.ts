@@ -1,3 +1,6 @@
+import { supabase } from './supabaseClient';
+import { ProductImageUploadService } from './productImageUploadService';
+
 export interface CreateProductResponse {
   product?: any;
   productName?: string;
@@ -12,9 +15,6 @@ export interface CreateProductResponse {
     totalCost: string;
   };
 }
-
-import { supabase } from './supabaseClient';
-import { ProductImageUploadService } from './productImageUploadService';
 
 export class ProductCreationService {
   static async createProductFromPhoto(imageBase64: string, upc: string, imageUri?: string): Promise<CreateProductResponse> {

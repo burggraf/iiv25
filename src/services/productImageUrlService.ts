@@ -138,7 +138,7 @@ export class ProductImageUrlService {
    * @param sources - Array of potential image sources with their UPCs
    * @returns First available resolved image URL
    */
-  static resolveFirstAvailableImage(sources: Array<{ imageUrl: string | null | undefined, upc?: string }>): string | null {
+  static resolveFirstAvailableImage(sources: { imageUrl: string | null | undefined, upc?: string }[]): string | null {
     for (const source of sources) {
       const resolved = this.resolveImageUrl(source.imageUrl, source.upc);
       if (resolved) {
