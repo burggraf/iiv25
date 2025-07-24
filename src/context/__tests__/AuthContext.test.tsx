@@ -1,0 +1,490 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { Text, TouchableOpacity } from 'react-native';
+import { AuthProvider, useAuth } from '../AuthContext';
+import { supabase } from '../../services/supabaseClient';
+
+// Mock Supabase
+const mockSupabase = {
+  auth: {
+    getSession: jest.fn(),
+    onAuthStateChange: jest.fn(),
+    signUp: jest.fn(),
+    signInWithPassword: jest.fn(),
+    signOut: jest.fn(),
+    resetPasswordForEmail: jest.fn(),
+    updateUser: jest.fn(),
+    signInAnonymously: jest.fn(),
+  },
+};
+
+jest.mock('../../services/supabaseClient', () => ({
+  supabase: mockSupabase,
+}));
+
+// Test component that uses the auth context
+const TestComponent: React.FC = () => {
+  const {
+    user,
+    isLoading,
+    signUp,
+    signIn,
+    signOut,
+    resetPassword,
+    updateProfile,
+    signInAnonymously,
+  } = useAuth();
+
+  return (
+    <>
+      <Text testID="loading-status">{isLoading ? 'loading' : 'not-loading'}</Text>
+      <Text testID="user-status">{user ? 'authenticated' : 'not-authenticated'}</Text>
+      {user && <Text testID="user-email">{user.email || 'anonymous'}</Text>}
+      
+      <TouchableOpacity
+        testID="sign-up-button"
+        onPress={() => signUp('test@example.com', 'password123')}
+      >
+        <Text>Sign Up</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        testID="sign-in-button"
+        onPress={() => signIn('test@example.com', 'password123')}
+      >
+        <Text>Sign In</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        testID="sign-out-button"
+        onPress={() => signOut()}
+      >
+        <Text>Sign Out</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        testID="reset-password-button"
+        onPress={() => resetPassword('test@example.com')}
+      >
+        <Text>Reset Password</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        testID="update-profile-button"
+        onPress={() => updateProfile({ display_name: 'Test User' })}
+      >
+        <Text>Update Profile</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        testID="sign-in-anonymously-button"
+        onPress={() => signInAnonymously()}
+      >
+        <Text>Sign In Anonymously</Text>
+      </TouchableOpacity>
+    </>
+  );
+};
+
+describe('AuthContext', () => {
+  const mockUser = {
+    id: 'user-123',
+    email: 'test@example.com',
+    user_metadata: { display_name: 'Test User' },
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    aud: 'authenticated',
+    role: 'authenticated',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Default mocks
+    mockSupabase.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    
+    mockSupabase.auth.onAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: jest.fn() } },
+    } as any);
+  });
+
+  describe('Provider initialization', () => {
+    it('should initialize with loading state', async () => {
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      expect(screen.getByTestId('loading-status')).toHaveTextContent('loading');
+      expect(screen.getByTestId('user-status')).toHaveTextContent('not-authenticated');
+    });
+
+    it('should load existing session on mount', async () => {
+      mockSupabase.auth.getSession.mockResolvedValue({
+        data: { session: { user: mockUser } },
+        error: null,
+      });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('loading-status')).toHaveTextContent('not-loading');
+        expect(screen.getByTestId('user-status')).toHaveTextContent('authenticated');
+        expect(screen.getByTestId('user-email')).toHaveTextContent('test@example.com');
+      });
+    });
+
+    it('should handle session loading errors', async () => {
+      mockSupabase.auth.getSession.mockResolvedValue({
+        data: { session: null },
+        error: { message: 'Session error' },
+      });
+
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('loading-status')).toHaveTextContent('not-loading');
+        expect(screen.getByTestId('user-status')).toHaveTextContent('not-authenticated');
+      });
+
+      expect(console.error).toHaveBeenCalledWith(
+        'Error loading session:',
+        { message: 'Session error' }
+      );
+
+      jest.restoreAllMocks();
+    });
+  });
+
+  describe('Authentication methods', () => {
+    beforeEach(async () => {
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('loading-status')).toHaveTextContent('not-loading');
+      });
+    });
+
+    describe('signUp', () => {
+      it('should successfully sign up a new user', async () => {
+        mockSupabase.auth.signUp.mockResolvedValue({
+          data: { user: mockUser, session: { user: mockUser } },
+          error: null,
+        });
+
+        const signUpButton = screen.getByTestId('sign-up-button');
+        fireEvent.press(signUpButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.signUp).toHaveBeenCalledWith({
+            email: 'test@example.com',
+            password: 'password123',
+          });
+        });
+      });
+
+      it('should handle sign up errors', async () => {
+        mockSupabase.auth.signUp.mockResolvedValue({
+          data: { user: null, session: null },
+          error: { message: 'Email already exists' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const signUpButton = screen.getByTestId('sign-up-button');
+        fireEvent.press(signUpButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Sign up error:',
+            { message: 'Email already exists' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+
+    describe('signIn', () => {
+      it('should successfully sign in a user', async () => {
+        mockSupabase.auth.signInWithPassword.mockResolvedValue({
+          data: { user: mockUser, session: { user: mockUser } },
+          error: null,
+        });
+
+        const signInButton = screen.getByTestId('sign-in-button');
+        fireEvent.press(signInButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
+            email: 'test@example.com',
+            password: 'password123',
+          });
+        });
+      });
+
+      it('should handle sign in errors', async () => {
+        mockSupabase.auth.signInWithPassword.mockResolvedValue({
+          data: { user: null, session: null },
+          error: { message: 'Invalid credentials' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const signInButton = screen.getByTestId('sign-in-button');
+        fireEvent.press(signInButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Sign in error:',
+            { message: 'Invalid credentials' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+
+    describe('signOut', () => {
+      it('should successfully sign out a user', async () => {
+        mockSupabase.auth.signOut.mockResolvedValue({
+          error: null,
+        });
+
+        const signOutButton = screen.getByTestId('sign-out-button');
+        fireEvent.press(signOutButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.signOut).toHaveBeenCalled();
+        });
+      });
+
+      it('should handle sign out errors', async () => {
+        mockSupabase.auth.signOut.mockResolvedValue({
+          error: { message: 'Sign out failed' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const signOutButton = screen.getByTestId('sign-out-button');
+        fireEvent.press(signOutButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Sign out error:',
+            { message: 'Sign out failed' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+
+    describe('resetPassword', () => {
+      it('should successfully send password reset email', async () => {
+        mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
+          data: {},
+          error: null,
+        });
+
+        const resetButton = screen.getByTestId('reset-password-button');
+        fireEvent.press(resetButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+            'test@example.com'
+          );
+        });
+      });
+
+      it('should handle password reset errors', async () => {
+        mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
+          data: {},
+          error: { message: 'Email not found' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const resetButton = screen.getByTestId('reset-password-button');
+        fireEvent.press(resetButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Password reset error:',
+            { message: 'Email not found' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+
+    describe('updateProfile', () => {
+      it('should successfully update user profile', async () => {
+        mockSupabase.auth.updateUser.mockResolvedValue({
+          data: { user: { ...mockUser, user_metadata: { display_name: 'Updated User' } } },
+          error: null,
+        });
+
+        const updateButton = screen.getByTestId('update-profile-button');
+        fireEvent.press(updateButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
+            data: { display_name: 'Test User' },
+          });
+        });
+      });
+
+      it('should handle profile update errors', async () => {
+        mockSupabase.auth.updateUser.mockResolvedValue({
+          data: { user: null },
+          error: { message: 'Update failed' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const updateButton = screen.getByTestId('update-profile-button');
+        fireEvent.press(updateButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Profile update error:',
+            { message: 'Update failed' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+
+    describe('signInAnonymously', () => {
+      it('should successfully sign in anonymously', async () => {
+        const anonymousUser = { ...mockUser, id: 'anon-123', email: null };
+        mockSupabase.auth.signInAnonymously.mockResolvedValue({
+          data: { user: anonymousUser, session: { user: anonymousUser } },
+          error: null,
+        });
+
+        const anonButton = screen.getByTestId('sign-in-anonymously-button');
+        fireEvent.press(anonButton);
+
+        await waitFor(() => {
+          expect(mockSupabase.auth.signInAnonymously).toHaveBeenCalled();
+        });
+      });
+
+      it('should handle anonymous sign in errors', async () => {
+        mockSupabase.auth.signInAnonymously.mockResolvedValue({
+          data: { user: null, session: null },
+          error: { message: 'Anonymous sign in failed' },
+        });
+
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const anonButton = screen.getByTestId('sign-in-anonymously-button');
+        fireEvent.press(anonButton);
+
+        await waitFor(() => {
+          expect(console.error).toHaveBeenCalledWith(
+            'Anonymous sign in error:',
+            { message: 'Anonymous sign in failed' }
+          );
+        });
+
+        jest.restoreAllMocks();
+      });
+    });
+  });
+
+  describe('Auth state changes', () => {
+    it('should handle auth state changes via listener', async () => {
+      let authStateCallback: (event: string, session: any) => void;
+      
+      mockSupabase.auth.onAuthStateChange.mockImplementation((callback) => {
+        authStateCallback = callback;
+        return {
+          data: { subscription: { unsubscribe: jest.fn() } },
+        } as any;
+      });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('user-status')).toHaveTextContent('not-authenticated');
+      });
+
+      // Simulate auth state change
+      authStateCallback!('SIGNED_IN', { user: mockUser });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('user-status')).toHaveTextContent('authenticated');
+        expect(screen.getByTestId('user-email')).toHaveTextContent('test@example.com');
+      });
+
+      // Simulate sign out
+      authStateCallback!('SIGNED_OUT', null);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('user-status')).toHaveTextContent('not-authenticated');
+      });
+    });
+  });
+
+  describe('Hook usage outside provider', () => {
+    it('should throw error when used outside AuthProvider', () => {
+      // Suppress console.error for this test
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        render(<TestComponent />);
+      }).toThrow('useAuth must be used within an AuthProvider');
+
+      jest.restoreAllMocks();
+    });
+  });
+
+  describe('Anonymous user handling', () => {
+    it('should handle anonymous users correctly', async () => {
+      const anonymousUser = { ...mockUser, id: 'anon-123', email: null };
+      
+      mockSupabase.auth.getSession.mockResolvedValue({
+        data: { session: { user: anonymousUser } },
+        error: null,
+      });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('user-status')).toHaveTextContent('authenticated');
+        expect(screen.getByTestId('user-email')).toHaveTextContent('anonymous');
+      });
+    });
+  });
+});
