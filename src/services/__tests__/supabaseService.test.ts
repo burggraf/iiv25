@@ -1,12 +1,11 @@
-import { SupabaseService } from '../supabaseService';
-import { createClient } from '@supabase/supabase-js';
-import { VeganStatus, Product } from '../../types';
+import { SupabaseService, SupabaseProduct, SupabaseIngredient } from '../supabaseService';
+import { VeganStatus } from '../../types';
 
 // Mock Supabase client
-jest.mock('@supabase/supabase-js');
 jest.mock('../supabaseClient', () => ({
   supabase: {
     from: jest.fn(),
+    rpc: jest.fn(),
     auth: {
       getUser: jest.fn(),
       signInAnonymously: jest.fn(),
@@ -14,304 +13,259 @@ jest.mock('../supabaseClient', () => ({
   },
 }));
 
-const mockSupabase = {
-  from: jest.fn(),
-  auth: {
-    getUser: jest.fn(),
-    signInAnonymously: jest.fn(),
+jest.mock('../deviceIdService', () => ({
+  __esModule: true,
+  default: {
+    getDeviceId: jest.fn().mockResolvedValue('test-device-id'),
   },
-};
+}));
+
+const mockSupabase = require('../supabaseClient').supabase;
 
 describe('SupabaseService', () => {
   const mockBarcode = '1234567890123';
-  const mockProduct: Product = {
-    id: mockBarcode,
-    barcode: mockBarcode,
-    name: 'Test Product',
-    brand: 'Test Brand',
-    veganStatus: VeganStatus.VEGAN,
-    ingredients: ['water', 'salt'],
-    lastScanned: new Date(),
-  };
-
+  
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  describe('searchProductByBarcode', () => {
-    it('should return product when found in database', async () => {
-      const mockDbResult = {
-        data: [{
-          upc: mockBarcode,
-          ean13: mockBarcode,
-          product_name: 'Test Product',
-          brand_name: 'Test Brand',
-          vegan_status: 'vegan',
-          ingredients: 'water, salt',
-          last_scanned: '2024-01-01T00:00:00Z',
-          image_url: 'https://example.com/image.jpg',
-        }],
-        error: null,
-      };
-
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          or: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
-        }),
-      });
-
-      const result = await SupabaseService.searchProductByBarcode(mockBarcode);
-
-      expect(result).toBeDefined();
-      expect(result?.barcode).toBe(mockBarcode);
-      expect(result?.name).toBe('Test Product');
-      expect(result?.brand).toBe('Test Brand');
-      expect(result?.veganStatus).toBe(VeganStatus.VEGAN);
+  describe('mapClassificationToVeganStatus', () => {
+    it('should map vegan classification correctly', () => {
+      expect(SupabaseService.mapClassificationToVeganStatus('vegan')).toBe(VeganStatus.VEGAN);
+      expect(SupabaseService.mapClassificationToVeganStatus('VEGAN')).toBe(VeganStatus.VEGAN);
     });
 
-    it('should return null when product not found', async () => {
-      const mockDbResult = {
-        data: [],
-        error: null,
-      };
-
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          or: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
-        }),
-      });
-
-      const result = await SupabaseService.searchProductByBarcode(mockBarcode);
-
-      expect(result).toBeNull();
+    it('should map vegetarian classification correctly', () => {
+      expect(SupabaseService.mapClassificationToVeganStatus('vegetarian')).toBe(VeganStatus.VEGETARIAN);
+      expect(SupabaseService.mapClassificationToVeganStatus('VEGETARIAN')).toBe(VeganStatus.VEGETARIAN);
     });
 
-    it('should return null when database error occurs', async () => {
-      const mockDbResult = {
-        data: null,
-        error: { message: 'Database error' },
-      };
-
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          or: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
-        }),
-      });
-
-      const result = await SupabaseService.searchProductByBarcode(mockBarcode);
-
-      expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith(
-        'Error searching for product in Supabase:',
-        { message: 'Database error' }
-      );
+    it('should map non-vegetarian classification correctly', () => {
+      expect(SupabaseService.mapClassificationToVeganStatus('non-vegetarian')).toBe(VeganStatus.NOT_VEGETARIAN);
+      expect(SupabaseService.mapClassificationToVeganStatus('NON-VEGETARIAN')).toBe(VeganStatus.NOT_VEGETARIAN);
     });
 
-    it('should handle different vegan status values', async () => {
-      const testCases = [
-        { db_status: 'vegan', expected: VeganStatus.VEGAN },
-        { db_status: 'vegetarian', expected: VeganStatus.VEGETARIAN },
-        { db_status: 'not_vegetarian', expected: VeganStatus.NOT_VEGETARIAN },
-        { db_status: 'unknown', expected: VeganStatus.UNKNOWN },
-        { db_status: null, expected: VeganStatus.UNKNOWN },
+    it('should map undetermined and unknown classifications to UNKNOWN', () => {
+      expect(SupabaseService.mapClassificationToVeganStatus('undetermined')).toBe(VeganStatus.UNKNOWN);
+      expect(SupabaseService.mapClassificationToVeganStatus('unknown')).toBe(VeganStatus.UNKNOWN);
+      expect(SupabaseService.mapClassificationToVeganStatus('')).toBe(VeganStatus.UNKNOWN);
+      expect(SupabaseService.mapClassificationToVeganStatus(null)).toBe(VeganStatus.UNKNOWN);
+      expect(SupabaseService.mapClassificationToVeganStatus(undefined)).toBe(VeganStatus.UNKNOWN);
+    });
+  });
+
+  describe('isValidClassification', () => {
+    it('should return true for valid classifications', () => {
+      expect(SupabaseService.isValidClassification('vegan')).toBe(true);
+      expect(SupabaseService.isValidClassification('vegetarian')).toBe(true);
+      expect(SupabaseService.isValidClassification('non-vegetarian')).toBe(true);
+      expect(SupabaseService.isValidClassification('VEGAN')).toBe(true);
+    });
+
+    it('should return false for invalid classifications', () => {
+      expect(SupabaseService.isValidClassification('undetermined')).toBe(false);
+      expect(SupabaseService.isValidClassification('unknown')).toBe(false);
+      expect(SupabaseService.isValidClassification('')).toBe(false);
+      expect(SupabaseService.isValidClassification(null)).toBe(false);
+      expect(SupabaseService.isValidClassification(undefined)).toBe(false);
+    });
+  });
+
+  describe('getProductVeganStatus', () => {
+    it('should return correct status for valid classification', () => {
+      const product: SupabaseProduct = {
+        ean13: '123',
+        classification: 'vegan',
+      };
+      expect(SupabaseService.getProductVeganStatus(product)).toBe(VeganStatus.VEGAN);
+    });
+
+    it('should return UNKNOWN for invalid classification', () => {
+      const product: SupabaseProduct = {
+        ean13: '123',
+        classification: 'undetermined',
+      };
+      expect(SupabaseService.getProductVeganStatus(product)).toBe(VeganStatus.UNKNOWN);
+    });
+
+    it('should return UNKNOWN for missing classification', () => {
+      const product: SupabaseProduct = {
+        ean13: '123',
+      };
+      expect(SupabaseService.getProductVeganStatus(product)).toBe(VeganStatus.UNKNOWN);
+    });
+  });
+
+  describe('searchIngredientsByTitle', () => {
+    it('should search ingredients successfully', async () => {
+      const mockIngredients: SupabaseIngredient[] = [
+        { title: 'milk', class: 'vegetarian' },
+        { title: 'almond milk', class: 'vegan' },
       ];
 
-      for (const testCase of testCases) {
-        const mockDbResult = {
-          data: [{
-            upc: mockBarcode,
-            ean13: mockBarcode,
-            product_name: 'Test Product',
-            brand_name: 'Test Brand',
-            vegan_status: testCase.db_status,
-            ingredients: 'water, salt',
-            last_scanned: '2024-01-01T00:00:00Z',
-          }],
-          error: null,
-        };
-
-        mockSupabase.from.mockReturnValue({
-          select: jest.fn().mockReturnValue({
-            or: jest.fn().mockReturnValue({
-              limit: jest.fn().mockReturnValue(mockDbResult),
-            }),
-          }),
-        });
-
-        const result = await SupabaseService.searchProductByBarcode(mockBarcode);
-
-        expect(result?.veganStatus).toBe(testCase.expected);
-      }
-    });
-  });
-
-  describe('saveProductToDatabase', () => {
-    it('should successfully save product to database', async () => {
-      const mockDbResult = {
-        data: { id: 1 },
-        error: null,
-      };
-
-      mockSupabase.from.mockReturnValue({
-        upsert: jest.fn().mockReturnValue(mockDbResult),
-      });
-
-      mockSupabase.auth.getUser.mockResolvedValue({
-        data: { user: { id: 'user-123' } },
+      mockSupabase.rpc.mockResolvedValue({
+        data: mockIngredients,
         error: null,
       });
 
-      const result = await SupabaseService.saveProductToDatabase(mockProduct, 'device-123');
+      const results = await SupabaseService.searchIngredientsByTitle('milk');
 
-      expect(result).toBe(true);
-      expect(mockSupabase.from).toHaveBeenCalledWith('products');
+      expect(results).toEqual(mockIngredients);
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_ingredients', {
+        search_term: 'milk',
+        device_id: 'test-device-id',
+      });
     });
 
-    it('should handle database save errors', async () => {
-      const mockDbResult = {
+    it('should return empty array for empty search term', async () => {
+      const results = await SupabaseService.searchIngredientsByTitle('');
+      expect(results).toEqual([]);
+      expect(mockSupabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it('should handle authentication errors', async () => {
+      mockSupabase.rpc.mockResolvedValue({
         data: null,
-        error: { message: 'Save error' },
-      };
-
-      mockSupabase.from.mockReturnValue({
-        upsert: jest.fn().mockReturnValue(mockDbResult),
+        error: { message: 'not logged in' },
       });
 
-      mockSupabase.auth.getUser.mockResolvedValue({
-        data: { user: { id: 'user-123' } },
-        error: null,
-      });
-
-      const result = await SupabaseService.saveProductToDatabase(mockProduct, 'device-123');
-
-      expect(result).toBe(false);
-      expect(console.error).toHaveBeenCalledWith(
-        'Error saving product to Supabase:',
-        { message: 'Save error' }
-      );
+      await expect(SupabaseService.searchIngredientsByTitle('milk')).rejects.toThrow('not logged in');
     });
 
-    it('should sign in anonymously if no user exists', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: null,
+    it('should handle other RPC errors', async () => {
+      const mockError = { message: 'RPC error' };
+      mockSupabase.rpc.mockResolvedValue({
+        data: null,
+        error: mockError,
       });
 
-      mockSupabase.auth.signInAnonymously.mockResolvedValue({
-        data: { user: { id: 'anon-user-123' } },
-        error: null,
-      });
+      await expect(SupabaseService.searchIngredientsByTitle('milk')).rejects.toEqual(mockError);
+      expect(console.error).toHaveBeenCalledWith('Error searching ingredients:', mockError);
+    });
 
-      const mockDbResult = {
-        data: { id: 1 },
-        error: null,
-      };
+    it('should handle thrown exceptions', async () => {
+      const mockError = new Error('Network error');
+      mockSupabase.rpc.mockRejectedValue(mockError);
 
-      mockSupabase.from.mockReturnValue({
-        upsert: jest.fn().mockReturnValue(mockDbResult),
-      });
-
-      const result = await SupabaseService.saveProductToDatabase(mockProduct, 'device-123');
-
-      expect(mockSupabase.auth.signInAnonymously).toHaveBeenCalled();
-      expect(result).toBe(true);
+      await expect(SupabaseService.searchIngredientsByTitle('milk')).rejects.toThrow('Network error');
+      expect(console.error).toHaveBeenCalledWith('Failed to search ingredients:', mockError);
     });
   });
 
-  describe('searchProductsByName', () => {
-    it('should search products by name and return results', async () => {
-      const mockDbResult = {
-        data: [
-          {
-            upc: '123',
-            ean13: '123',
-            product_name: 'Test Product 1',
-            brand_name: 'Brand A',
-            vegan_status: 'vegan',
-            ingredients: 'water',
-            last_scanned: '2024-01-01T00:00:00Z',
-          },
-          {
-            upc: '456',
-            ean13: '456',
-            product_name: 'Test Product 2',
-            brand_name: 'Brand B',
-            vegan_status: 'vegetarian',
-            ingredients: 'milk',
-            last_scanned: '2024-01-01T00:00:00Z',
-          },
-        ],
-        error: null,
+  describe('getIngredientByTitle', () => {
+    it('should get ingredient by exact title', async () => {
+      const mockIngredient: SupabaseIngredient = {
+        title: 'milk',
+        class: 'vegetarian',
       };
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          ilike: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
+      const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockIngredient,
+          error: null,
         }),
-      });
+      };
 
-      const results = await SupabaseService.searchProductsByName('test');
+      mockSupabase.from.mockReturnValue(mockQuery);
 
-      expect(results).toHaveLength(2);
-      expect(results[0].name).toBe('Test Product 1');
-      expect(results[0].veganStatus).toBe(VeganStatus.VEGAN);
-      expect(results[1].name).toBe('Test Product 2');
-      expect(results[1].veganStatus).toBe(VeganStatus.VEGETARIAN);
+      const result = await SupabaseService.getIngredientByTitle('milk');
+
+      expect(result).toEqual(mockIngredient);
+      expect(mockSupabase.from).toHaveBeenCalledWith('ingredients');
+      expect(mockQuery.select).toHaveBeenCalledWith('*');
+      expect(mockQuery.eq).toHaveBeenCalledWith('title', 'milk');
+      expect(mockQuery.in).toHaveBeenCalledWith('class', [
+        'may be non-vegetarian',
+        'non-vegetarian',
+        'typically non-vegan',
+        'typically non-vegetarian',
+        'typically vegan',
+        'typically vegetarian',
+        'vegan',
+        'vegetarian'
+      ]);
     });
 
-    it('should return empty array when no products found', async () => {
-      const mockDbResult = {
+    it('should return null when ingredient not found', async () => {
+      const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'PGRST116' }, // No rows returned
+        }),
+      };
+
+      mockSupabase.from.mockReturnValue(mockQuery);
+
+      const result = await SupabaseService.getIngredientByTitle('nonexistent');
+
+      expect(result).toBeNull();
+    });
+
+    it('should handle database errors', async () => {
+      const mockError = { message: 'Database error', code: 'OTHER' };
+      const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: mockError,
+        }),
+      };
+
+      mockSupabase.from.mockReturnValue(mockQuery);
+
+      const result = await SupabaseService.getIngredientByTitle('milk');
+
+      expect(result).toBeNull();
+      expect(console.error).toHaveBeenCalledWith('Error getting ingredient by title:', mockError);
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    it('should handle network failures gracefully', async () => {
+      mockSupabase.rpc.mockRejectedValue(new Error('Network timeout'));
+
+      await expect(SupabaseService.searchIngredientsByTitle('test')).rejects.toThrow('Network timeout');
+    });
+
+    it('should trim whitespace from search terms', async () => {
+      mockSupabase.rpc.mockResolvedValue({
         data: [],
         error: null,
-      };
-
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          ilike: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
-        }),
       });
 
-      const results = await SupabaseService.searchProductsByName('nonexistent');
+      await SupabaseService.searchIngredientsByTitle('  milk  ');
 
-      expect(results).toEqual([]);
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_ingredients', {
+        search_term: 'milk',
+        device_id: 'test-device-id',
+      });
     });
 
-    it('should handle search errors gracefully', async () => {
-      const mockDbResult = {
-        data: null,
-        error: { message: 'Search error' },
-      };
+    it('should handle classification case sensitivity consistently', () => {
+      const testCases = [
+        { input: 'Vegan', expected: VeganStatus.VEGAN },
+        { input: 'VEGETARIAN', expected: VeganStatus.VEGETARIAN },
+        { input: 'Non-Vegetarian', expected: VeganStatus.NOT_VEGETARIAN },
+        { input: 'UNDETERMINED', expected: VeganStatus.UNKNOWN },
+      ];
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          ilike: jest.fn().mockReturnValue({
-            limit: jest.fn().mockReturnValue(mockDbResult),
-          }),
-        }),
+      testCases.forEach(({ input, expected }) => {
+        expect(SupabaseService.mapClassificationToVeganStatus(input)).toBe(expected);
       });
-
-      const results = await SupabaseService.searchProductsByName('test');
-
-      expect(results).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith(
-        'Error searching products by name in Supabase:',
-        { message: 'Search error' }
-      );
     });
   });
 });

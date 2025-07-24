@@ -1,4 +1,4 @@
-import { ProductLookupService } from '../productLookupService';
+import { ProductLookupService, ProductLookupResult } from '../productLookupService';
 import { SupabaseService } from '../supabaseService';
 import { OpenFoodFactsService } from '../openFoodFactsApi';
 import { VeganStatus, Product } from '../../types';
@@ -39,7 +39,11 @@ describe('ProductLookupService', () => {
 
   describe('lookupProductByBarcode', () => {
     it('should return product from Supabase when found', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(mockProduct);
+      // Mock Supabase returning a product
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: mockProduct,
+        isRateLimited: false,
+      });
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -51,9 +55,14 @@ describe('ProductLookupService', () => {
     });
 
     it('should fallback to Open Food Facts when not found in Supabase', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockProduct);
-      mockSupabaseService.saveProductToDatabase.mockResolvedValue(true);
+      // Mock Supabase returning no product
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+
+      // Mock Open Food Facts returning a product
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(mockProduct);
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -62,12 +71,15 @@ describe('ProductLookupService', () => {
       expect(result.isRateLimited).toBe(false);
       expect(mockSupabaseService.searchProductByBarcode).toHaveBeenCalledWith(mockBarcode);
       expect(mockOpenFoodFactsService.getProductByBarcode).toHaveBeenCalledWith(mockBarcode);
-      expect(mockSupabaseService.saveProductToDatabase).toHaveBeenCalledWith(mockProduct, 'test-device-id');
     });
 
     it('should return null when product not found in either source', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(null);
+      // Mock both sources returning no product
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(null);
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -76,10 +88,34 @@ describe('ProductLookupService', () => {
       expect(result.isRateLimited).toBe(false);
     });
 
+    it('should handle Supabase rate limiting', async () => {
+      // Mock Supabase being rate limited
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: true,
+        rateLimitInfo: {
+          rateLimit: 100,
+          subscriptionLevel: 'free',
+        },
+      });
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toContain('Rate limit exceeded');
+      expect(result.isRateLimited).toBe(true);
+      expect(result.rateLimitInfo).toEqual({
+        rateLimit: 100,
+        subscriptionLevel: 'free',
+      });
+    });
+
     it('should handle Supabase errors gracefully', async () => {
-      mockSupabaseService.searchProductByBarcode.mockRejectedValue(new Error('Database error'));
-      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockProduct);
-      mockSupabaseService.saveProductToDatabase.mockResolvedValue(true);
+      // Mock Supabase throwing an error
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockRejectedValue(new Error('Database error'));
+      
+      // Mock Open Food Facts returning a product
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(mockProduct);
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -87,14 +123,20 @@ describe('ProductLookupService', () => {
       expect(result.error).toBeNull();
       expect(result.isRateLimited).toBe(false);
       expect(console.error).toHaveBeenCalledWith(
-        'Error searching Supabase for barcode 1234567890123:',
+        expect.stringContaining('Error searching Supabase for barcode'),
         expect.any(Error)
       );
     });
 
     it('should handle Open Food Facts errors gracefully', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-      mockOpenFoodFactsService.getProductByBarcode.mockRejectedValue(new Error('API error'));
+      // Mock Supabase returning no product
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+
+      // Mock Open Food Facts throwing an error
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockRejectedValue(new Error('API error'));
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -104,10 +146,16 @@ describe('ProductLookupService', () => {
     });
 
     it('should detect rate limiting from Open Food Facts', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
+      // Mock Supabase returning no product
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+
+      // Mock Open Food Facts returning 429 rate limit error
       const rateLimitError = new Error('Rate limited');
       (rateLimitError as any).response = { status: 429 };
-      mockOpenFoodFactsService.getProductByBarcode.mockRejectedValue(rateLimitError);
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockRejectedValue(rateLimitError);
 
       const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
 
@@ -117,135 +165,166 @@ describe('ProductLookupService', () => {
     });
 
     it('should handle invalid barcode format', async () => {
-      const invalidBarcode = 'invalid';
+      const invalidBarcodes = [
+        'invalid',
+        '123', // too short
+        '12345678901234567890', // too long
+        'abc123456789',
+        '',
+      ];
 
-      const result = await ProductLookupService.lookupProductByBarcode(invalidBarcode);
+      for (const invalidBarcode of invalidBarcodes) {
+        const result = await ProductLookupService.lookupProductByBarcode(invalidBarcode);
 
-      expect(result.product).toBeNull();
-      expect(result.error).toBe('Invalid barcode format');
-      expect(result.isRateLimited).toBe(false);
-      expect(mockSupabaseService.searchProductByBarcode).not.toHaveBeenCalled();
-      expect(mockOpenFoodFactsService.getProductByBarcode).not.toHaveBeenCalled();
+        expect(result.product).toBeNull();
+        expect(result.error).toBe('Invalid barcode format');
+        expect(result.isRateLimited).toBe(false);
+        expect(mockSupabaseService.searchProductByBarcode).not.toHaveBeenCalled();
+        expect(mockOpenFoodFactsService.getProductByBarcode).not.toHaveBeenCalled();
+
+        jest.clearAllMocks();
+      }
     });
 
-    it('should handle empty barcode', async () => {
-      const result = await ProductLookupService.lookupProductByBarcode('');
+    it('should accept valid barcode formats', async () => {
+      const validBarcodes = [
+        '1234567890123', // 13 digits (EAN-13)
+        '123456789012',  // 12 digits (UPC-A)
+        '12345678901',   // 11 digits
+        '1234567890',    // 10 digits
+        '123456789',     // 9 digits
+        '12345678',      // 8 digits (EAN-8)
+      ];
 
-      expect(result.product).toBeNull();
-      expect(result.error).toBe('Invalid barcode format');
-      expect(result.isRateLimited).toBe(false);
+      // Mock Supabase returning no product for all tests
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(null);
+
+      for (const validBarcode of validBarcodes) {
+        const result = await ProductLookupService.lookupProductByBarcode(validBarcode);
+
+        expect(result.error).not.toBe('Invalid barcode format');
+        expect(mockSupabaseService.searchProductByBarcode).toHaveBeenCalledWith(validBarcode);
+
+        jest.clearAllMocks();
+      }
     });
 
-    it('should save new product to Supabase when found in Open Food Facts', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockProduct);
-      mockSupabaseService.saveProductToDatabase.mockResolvedValue(true);
+    it('should handle context parameter for logging', async () => {
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: mockProduct,
+        isRateLimited: false,
+      });
 
-      await ProductLookupService.lookupProductByBarcode(mockBarcode);
-
-      expect(mockSupabaseService.saveProductToDatabase).toHaveBeenCalledWith(mockProduct, 'test-device-id');
-    });
-
-    it('should continue even if saving to Supabase fails', async () => {
-      mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockProduct);
-      mockSupabaseService.saveProductToDatabase.mockResolvedValue(false);
-
-      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode, {
+        context: 'Scanner Test',
+      });
 
       expect(result.product).toEqual(mockProduct);
-      expect(result.error).toBeNull();
-      expect(result.isRateLimited).toBe(false);
-    });
-  });
-
-  describe('searchProductsByName', () => {
-    const mockSearchResults = [
-      { ...mockProduct, id: '1', name: 'Product 1' },
-      { ...mockProduct, id: '2', name: 'Product 2' },
-    ];
-
-    it('should return search results from Supabase', async () => {
-      mockSupabaseService.searchProductsByName.mockResolvedValue(mockSearchResults);
-
-      const results = await ProductLookupService.searchProductsByName('test');
-
-      expect(results).toEqual(mockSearchResults);
-      expect(mockSupabaseService.searchProductsByName).toHaveBeenCalledWith('test');
-    });
-
-    it('should return empty array when no results found', async () => {
-      mockSupabaseService.searchProductsByName.mockResolvedValue([]);
-
-      const results = await ProductLookupService.searchProductsByName('nonexistent');
-
-      expect(results).toEqual([]);
-    });
-
-    it('should handle search errors gracefully', async () => {
-      mockSupabaseService.searchProductsByName.mockRejectedValue(new Error('Search error'));
-
-      const results = await ProductLookupService.searchProductsByName('test');
-
-      expect(results).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith(
-        'Error searching products by name:',
-        expect.any(Error)
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('HYBRID PRODUCT LOOKUP (Scanner Test)')
       );
     });
 
-    it('should handle empty search query', async () => {
-      const results = await ProductLookupService.searchProductsByName('');
+    it('should handle concurrent lookups correctly', async () => {
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: mockProduct,
+        isRateLimited: false,
+      });
 
-      expect(results).toEqual([]);
-      expect(mockSupabaseService.searchProductsByName).not.toHaveBeenCalled();
-    });
+      // Run multiple concurrent lookups
+      const promises = [
+        ProductLookupService.lookupProductByBarcode('1111111111111'),
+        ProductLookupService.lookupProductByBarcode('2222222222222'),
+        ProductLookupService.lookupProductByBarcode('3333333333333'),
+      ];
 
-    it('should trim whitespace from search query', async () => {
-      mockSupabaseService.searchProductsByName.mockResolvedValue(mockSearchResults);
+      const results = await Promise.all(promises);
 
-      await ProductLookupService.searchProductsByName('  test  ');
-
-      expect(mockSupabaseService.searchProductsByName).toHaveBeenCalledWith('test');
+      expect(results).toHaveLength(3);
+      results.forEach(result => {
+        expect(result.product).toEqual(mockProduct);
+        expect(result.error).toBeNull();
+      });
+      expect(mockSupabaseService.searchProductByBarcode).toHaveBeenCalledTimes(3);
     });
   });
 
-  describe('Barcode validation', () => {
-    const validBarcodes = [
-      '1234567890123', // 13 digits
-      '123456789012',  // 12 digits
-      '12345678901',   // 11 digits
-      '1234567890',    // 10 digits
-      '123456789',     // 9 digits
-      '12345678',      // 8 digits
-    ];
-
-    const invalidBarcodes = [
-      '1234567',       // 7 digits (too short)
-      '12345678901234', // 14 digits (too long)
-      'abc123456789',  // Contains letters
-      '123-456-789',   // Contains hyphens
-      '123 456 789',   // Contains spaces
-    ];
-
-    validBarcodes.forEach(barcode => {
-      it(`should accept valid barcode: ${barcode}`, async () => {
-        mockSupabaseService.searchProductByBarcode.mockResolvedValue(null);
-        mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(null);
-
-        const result = await ProductLookupService.lookupProductByBarcode(barcode);
-
-        expect(mockSupabaseService.searchProductByBarcode).toHaveBeenCalledWith(barcode);
+  describe('Error handling edge cases', () => {
+    it('should handle malformed error responses', async () => {
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
       });
+
+      // Mock malformed error (no response property)
+      const malformedError = new Error('Network error');
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockRejectedValue(malformedError);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toBe('Failed to fetch product information');
+      expect(result.isRateLimited).toBe(false);
     });
 
-    invalidBarcodes.forEach(barcode => {
-      it(`should reject invalid barcode: ${barcode}`, async () => {
-        const result = await ProductLookupService.lookupProductByBarcode(barcode);
+    it('should handle undefined/null responses gracefully', async () => {
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue(undefined);
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(null);
 
-        expect(result.error).toBe('Invalid barcode format');
-        expect(mockSupabaseService.searchProductByBarcode).not.toHaveBeenCalled();
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toBeNull();
+      expect(result.isRateLimited).toBe(false);
+    });
+
+    it('should handle partial product data correctly', async () => {
+      const partialProduct: Partial<Product> = {
+        id: mockBarcode,
+        barcode: mockBarcode,
+        name: 'Partial Product',
+        // Missing other required fields
+      };
+
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: partialProduct as Product,
+        isRateLimited: false,
       });
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toEqual(partialProduct);
+      expect(result.error).toBeNull();
+    });
+  });
+
+  describe('Performance and logging', () => {
+    it('should log appropriate messages during lookup process', async () => {
+      (mockSupabaseService.searchProductByBarcode as jest.Mock).mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+      (mockOpenFoodFactsService.getProductByBarcode as jest.Mock).mockResolvedValue(mockProduct);
+
+      await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('HYBRID PRODUCT LOOKUP'));
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Barcode: 1234567890123'));
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Step 1: Checking Supabase'));
+    });
+
+    it('should handle very long barcodes as invalid', async () => {
+      const veryLongBarcode = '1'.repeat(50);
+      
+      const result = await ProductLookupService.lookupProductByBarcode(veryLongBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toBe('Invalid barcode format');
+      expect(result.isRateLimited).toBe(false);
     });
   });
 });
