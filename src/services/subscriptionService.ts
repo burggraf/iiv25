@@ -34,8 +34,9 @@ export class SubscriptionService {
         return null;
       }
 
-      if (data && data.length > 0) {
-        return data[0];
+      // The function now returns JSON directly, not an array
+      if (data) {
+        return data;
       }
 
       // Default to free tier if no data
@@ -158,7 +159,7 @@ export class SubscriptionService {
    */
   static async isPremiumUser(deviceId: string): Promise<boolean> {
     const status = await this.getSubscriptionStatus(deviceId);
-    return status?.subscription_level === 'basic' || status?.subscription_level === 'premium';
+    return status?.subscription_level === 'basic' || status?.subscription_level === 'standard' || status?.subscription_level === 'premium';
   }
 
   /**
@@ -168,6 +169,7 @@ export class SubscriptionService {
     switch (level) {
       case 'free': return 'Free';
       case 'basic': return 'Premium';
+      case 'standard': return 'Standard';
       case 'premium': return 'Premium';
       default: return 'Free';
     }
@@ -181,6 +183,7 @@ export class SubscriptionService {
     
     try {
       const date = new Date(expiresAt);
+      if (isNaN(date.getTime())) return undefined;
       return date.toLocaleDateString();
     } catch (err) {
       console.error('Error formatting expiration date:', err);

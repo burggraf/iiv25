@@ -14,52 +14,8 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useApp } from '../../src/context/AppContext';
 import Logo from '../../src/components/Logo';
 import { SubscriptionService, SubscriptionStatus, UsageStats } from '../../src/services/subscriptionService';
+import { PaymentService, PaymentProduct, SUBSCRIPTION_PRODUCT_IDS } from '../../src/services/paymentService';
 
-interface SubscriptionTier {
-  id: string;
-  name: string;
-  price: string;
-  duration: string;
-  features: string[];
-}
-
-const subscriptionTiers: SubscriptionTier[] = [
-  {
-    id: 'monthly',
-    name: 'Monthly',
-    price: '$1.99',
-    duration: 'per month',
-    features: ['Unlimited product scans', 'Unlimited ingredient searches', 'No advertisements'],
-  },
-  {
-    id: 'quarterly',
-    name: '3-Month',
-    price: '$4.99',
-    duration: 'per 3 months',
-    features: ['Unlimited product scans', 'Unlimited ingredient searches', 'No advertisements', 'Save 17%'],
-  },
-  {
-    id: 'semiannual',
-    name: '6-Month',
-    price: '$6.99',
-    duration: 'per 6 months',
-    features: ['Unlimited product scans', 'Unlimited ingredient searches', 'No advertisements', 'Save 42%'],
-  },
-  {
-    id: 'annual',
-    name: 'Annual',
-    price: '$9.99',
-    duration: 'per year',
-    features: ['Unlimited product scans', 'Unlimited ingredient searches', 'No advertisements', 'Save 58%'],
-  },
-  {
-    id: 'lifetime',
-    name: 'Lifetime',
-    price: '$19.99',
-    duration: 'one-time payment',
-    features: ['Unlimited product scans', 'Unlimited ingredient searches', 'No advertisements', 'Best value - pay once, use forever'],
-  },
-];
 
 export default function UserScreen() {
   const { user, signOut, isAnonymous } = useAuth();
@@ -67,18 +23,34 @@ export default function UserScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [availableProducts, setAvailableProducts] = useState<PaymentProduct[]>([]);
+  const [isPaymentInitialized, setIsPaymentInitialized] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     loadSubscriptionStatus();
     loadUsageStats();
+    initializePaymentService();
   }, [user, deviceId]);
 
   // Handle auth state changes to update user_subscription table
   useEffect(() => {
     if (deviceId) {
-      SubscriptionService.handleAuthStateChange(deviceId, user?.id);
+      SubscriptionService.handleAuthStateChange(deviceId, user?.id).catch(error => {
+        console.error('Failed to update user subscription for auth change:', error);
+      });
     }
   }, [user, deviceId]);
+
+  // Cleanup payment service on unmount
+  useEffect(() => {
+    return () => {
+      if (isPaymentInitialized) {
+        PaymentService.cleanup();
+      }
+    };
+  }, [isPaymentInitialized]);
 
   const loadSubscriptionStatus = async () => {
     try {
@@ -114,6 +86,28 @@ export default function UserScreen() {
     }
   };
 
+  const initializePaymentService = async () => {
+    try {
+      console.log('Initializing payment service...');
+      const initialized = await PaymentService.initialize();
+      setIsPaymentInitialized(initialized);
+      
+      if (initialized) {
+        const products = await PaymentService.getAvailableProducts();
+        setAvailableProducts(products);
+        console.log('Payment service initialized with products:', products.length);
+      } else {
+        console.warn('Payment service failed to initialize');
+        // Set empty products array to show appropriate UI message
+        setAvailableProducts([]);
+      }
+    } catch (error) {
+      console.error('Failed to initialize payment service:', error);
+      setIsPaymentInitialized(false);
+      setAvailableProducts([]);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       setIsLoading(true);
@@ -125,35 +119,109 @@ export default function UserScreen() {
     }
   };
 
-  const handleUpgrade = (tierId: string) => {
+  const handleUpgrade = async (productId: string) => {
+    if (!deviceId || !isPaymentInitialized) {
+      Alert.alert('Error', 'Payment system not available. Please try again later.');
+      return;
+    }
+
+    const product = availableProducts.find(p => p.productId === productId);
+    if (!product) {
+      Alert.alert('Error', 'Product not found. Please try again.');
+      return;
+    }
+
     Alert.alert(
-      'Subscription',
-      `Would you like to upgrade to ${subscriptionTiers.find(t => t.id === tierId)?.name}?`,
+      'Confirm Purchase',
+      `Would you like to purchase ${product.title} for ${product.localizedPrice}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Upgrade', onPress: () => {
-          // TODO: Implement subscription purchase flow
-          Alert.alert('Coming Soon', 'Subscription management will be available soon!');
-        }},
+        { 
+          text: 'Purchase', 
+          onPress: () => processPurchase(productId)
+        },
       ]
     );
   };
 
-  const handleRestorePurchases = () => {
-    Alert.alert(
-      'Restore Purchases',
-      'Looking for previous purchases...',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: () => {
-          // TODO: Implement purchase restoration
-          Alert.alert('Coming Soon', 'Purchase restoration will be available soon!');
-        }},
-      ]
-    );
+  const processPurchase = async (productId: string) => {
+    if (!deviceId) return;
+    
+    try {
+      setIsPurchasing(true);
+      console.log('Starting purchase for:', productId);
+      
+      const result = await PaymentService.purchaseSubscription(productId as any, deviceId);
+      
+      if (result.success) {
+        Alert.alert(
+          'Purchase Initiated',
+          'Your purchase is being processed. You will receive a confirmation shortly.',
+          [{ text: 'OK' }]
+        );
+        
+        // Refresh subscription status after a short delay
+        setTimeout(() => {
+          loadSubscriptionStatus();
+          loadUsageStats();
+        }, 2000);
+      } else {
+        Alert.alert('Purchase Failed', result.error || 'Unable to complete purchase.');
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      Alert.alert('Purchase Failed', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsPurchasing(false);
+    }
   };
 
-  const isPremium = subscriptionStatus?.subscription_level === 'basic' || subscriptionStatus?.subscription_level === 'premium';
+  const handleRestorePurchases = async () => {
+    if (!deviceId || !isPaymentInitialized) {
+      Alert.alert('Error', 'Payment system not available. Please try again later.');
+      return;
+    }
+
+    try {
+      setIsRestoring(true);
+      console.log('Restoring purchases...');
+      
+      const result = await PaymentService.restorePurchases(deviceId);
+      
+      if (result.success) {
+        if (result.restoredCount > 0) {
+          Alert.alert(
+            'Purchases Restored',
+            `Successfully restored ${result.restoredCount} purchase(s).`,
+            [{ text: 'OK' }]
+          );
+          
+          // Refresh subscription status
+          loadSubscriptionStatus();
+          loadUsageStats();
+        } else {
+          Alert.alert(
+            'No Purchases Found',
+            'No previous purchases were found for this Apple ID / Google account.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        Alert.alert('Restore Failed', result.error || 'Unable to restore purchases.');
+      }
+    } catch (error) {
+      console.error('Restore error:', error);
+      Alert.alert('Restore Failed', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleManageSubscription = () => {
+    PaymentService.showSubscriptionManagement();
+  };
+
+  const isPremium = subscriptionStatus?.subscription_level === 'basic' || subscriptionStatus?.subscription_level === 'standard' || subscriptionStatus?.subscription_level === 'premium';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -242,34 +310,79 @@ export default function UserScreen() {
               Unlock unlimited scans and searches with a premium subscription
             </Text>
             
-            {subscriptionTiers.map((tier) => (
-              <TouchableOpacity
-                key={tier.id}
-                style={[styles.tierCard, tier.id === 'lifetime' && styles.tierCardHighlight]}
-                onPress={() => handleUpgrade(tier.id)}
-              >
-                <View style={styles.tierHeader}>
-                  <Text style={[styles.tierName, tier.id === 'lifetime' && styles.tierNameHighlight]}>
-                    {tier.name}
-                  </Text>
-                  <View style={styles.tierPrice}>
-                    <Text style={[styles.tierPriceAmount, tier.id === 'lifetime' && styles.tierPriceHighlight]}>
-                      {tier.price}
+            {!isPaymentInitialized && (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>Loading subscription options...</Text>
+              </View>
+            )}
+            
+            {isPaymentInitialized && availableProducts.length === 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>Subscription options not available at this time.</Text>
+              </View>
+            )}
+            
+            {availableProducts.map((product) => {
+              const isLifetime = product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME;
+              return (
+                <TouchableOpacity
+                  key={product.productId}
+                  style={[styles.tierCard, isLifetime && styles.tierCardHighlight]}
+                  onPress={() => handleUpgrade(product.productId)}
+                  disabled={isPurchasing}
+                >
+                  <View style={styles.tierHeader}>
+                    <Text style={[styles.tierName, isLifetime && styles.tierNameHighlight]}>
+                      {product.title}
                     </Text>
-                    <Text style={[styles.tierPriceDuration, tier.id === 'lifetime' && styles.tierPriceHighlight]}>
-                      {tier.duration}
-                    </Text>
+                    <View style={styles.tierPrice}>
+                      <Text style={[styles.tierPriceAmount, isLifetime && styles.tierPriceHighlight]}>
+                        {product.localizedPrice}
+                      </Text>
+                      <Text style={[styles.tierPriceDuration, isLifetime && styles.tierPriceHighlight]}>
+                        {product.duration}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.tierFeatures}>
-                  {tier.features.map((feature, index) => (
-                    <Text key={index} style={[styles.tierFeature, tier.id === 'lifetime' && styles.tierFeatureHighlight]}>
-                      • {feature}
+                  <View style={styles.tierFeatures}>
+                    <Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+                      • Unlimited product scans
                     </Text>
-                  ))}
-                </View>
-              </TouchableOpacity>
-            ))}
+                    <Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+                      • Unlimited ingredient searches
+                    </Text>
+                    <Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+                      • No advertisements
+                    </Text>
+                    {product.savings && (
+                      <Text style={[styles.tierFeature, isLifetime && styles.tierFeatureHighlight]}>
+                        • {product.savings}
+                      </Text>
+                    )}
+                  </View>
+                  {isPurchasing && (
+                    <View style={styles.purchasingOverlay}>
+                      <ActivityIndicator size="small" color="white" />
+                      <Text style={styles.purchasingText}>Processing...</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Premium User Management */}
+        {isPremium && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Subscription Management</Text>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>You have an active premium subscription!</Text>
+            </View>
+            
+            <TouchableOpacity style={styles.actionButton} onPress={handleManageSubscription}>
+              <Text style={styles.actionButtonText}>Manage Subscription</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -286,8 +399,16 @@ export default function UserScreen() {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleRestorePurchases}>
-            <Text style={styles.actionButtonText}>Restore Purchases</Text>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={handleRestorePurchases}
+            disabled={!isPaymentInitialized || isRestoring}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.actionButtonText}>Restore Purchases</Text>
+            )}
           </TouchableOpacity>
 
           {user && (
@@ -470,5 +591,23 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 32,
+  },
+  purchasingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    flexDirection: 'row',
+  },
+  purchasingText: {
+    color: 'white',
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
