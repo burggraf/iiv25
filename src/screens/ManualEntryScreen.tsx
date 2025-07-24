@@ -119,8 +119,8 @@ export default function ManualEntryScreen() {
 
   const handleSubscribe = () => {
     setShowRateLimitModal(false);
-    // Navigate to home tab where user can access account
-    router.push('/(tabs)/');
+    // Navigate to home tab and automatically open subscription management
+    router.push('/(tabs)/?openSubscription=true');
   };
 
   // Show loading screen

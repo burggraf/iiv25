@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
-import { router } from 'expo-router'
-import React, { useState } from 'react'
+import { router, useLocalSearchParams } from 'expo-router'
+import React, { useState, useEffect } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -14,11 +14,21 @@ import { useAuth } from '../../src/context/AuthContext'
 
 export default function HomeScreen() {
 	const { user } = useAuth()
+	const { openSubscription } = useLocalSearchParams<{ openSubscription?: string }>()
 	const [showUserModal, setShowUserModal] = useState(false)
 
 	const navigateToTab = (tabName: string) => {
 		router.push(`/(tabs)/${tabName}` as any)
 	}
+
+	// Auto-open UserAccountModal when openSubscription parameter is present
+	useEffect(() => {
+		if (openSubscription === 'true') {
+			setShowUserModal(true)
+			// Clear the parameter after opening the modal
+			router.setParams({ openSubscription: undefined })
+		}
+	}, [openSubscription])
 
 
 	return (
