@@ -1,3 +1,4 @@
+-- Simplified fix that forces profiles to always override
 CREATE OR REPLACE FUNCTION get_rate_limits(action_type text, device_id text DEFAULT NULL)
     RETURNS TABLE(
         subscription_level text,
@@ -11,8 +12,10 @@ CREATE OR REPLACE FUNCTION get_rate_limits(action_type text, device_id text DEFA
 DECLARE
     current_user_id uuid;
     device_uuid uuid;
+    profile_subscription_level text;
+    profile_expires_at timestamptz;
     user_subscription_level text;
-    user_subscription_expires_at timestamptz;
+    final_subscription_level text;
     current_rate_limit integer;
     search_count integer;
     rate_limited boolean;
@@ -20,12 +23,11 @@ DECLARE
 BEGIN
     -- Get the current user ID
     current_user_id := auth.uid();
-    -- Check if user is authenticated
     IF current_user_id IS NULL THEN
         RAISE EXCEPTION 'You must be logged in to use this service';
     END IF;
     
-    -- Parse and validate device_id if provided
+    -- Parse device_id if provided
     IF device_id IS NOT NULL AND trim(device_id) != '' THEN
         BEGIN
             device_uuid := device_id::UUID;
@@ -33,95 +35,63 @@ BEGIN
             RAISE EXCEPTION 'device_id must be a valid UUID if provided';
         END;
     END IF;
-    -- Get user subscription details
-    SELECT
-        us.subscription_level,
-        us.expires_at INTO user_subscription_level,
-        user_subscription_expires_at
-    FROM
-        public.user_subscription us
-    WHERE
-        us.userid = current_user_id
-        AND us.is_active = TRUE;
-    -- If no subscription record found, default to 'free'
-    IF user_subscription_level IS NULL THEN
-        user_subscription_level := 'free';
-    END IF;
-    -- Handle expired subscriptions
-    IF user_subscription_expires_at IS NOT NULL AND user_subscription_expires_at < now() THEN
-        -- Auto-deactivate expired subscription
-        UPDATE
-            public.user_subscription
-        SET
-            is_active = FALSE
-        WHERE
-            userid = current_user_id;
-        user_subscription_level := 'free';
-    END IF;
-    -- Set rate limits based on subscription level and action type
-    -- Different limits for product lookups vs searches
-    IF action_type = 'product_lookup' THEN
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10; -- 10 product lookups per day for free users
-        WHEN 'standard' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        WHEN 'premium' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
-    ELSIF action_type = 'ingredient_search' THEN
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10; -- 10 searches per day for free users
-        WHEN 'standard' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        WHEN 'premium' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
-    ELSE
-        -- Default rate limits for other action types
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10;
-        WHEN 'standard' THEN
-            current_rate_limit := 999999;
-        WHEN 'premium' THEN
-            current_rate_limit := 999999;
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
-    END IF;
-    -- Count recent searches for the specified action type
-    -- Optimized query that counts actions from either the current user OR the current device
-    -- This prevents users from circumventing limits by switching accounts on the same device
-    -- or by switching devices with the same account
-    SELECT
-        count(*) INTO search_count
-    FROM
-        actionlog
-    WHERE
-        type = action_type
-        AND created_at > now() - interval '24 hours' -- Changed from 1 hour to 24 hours (daily limit)
-        AND (
-            userid = current_user_id
-            OR (device_uuid IS NOT NULL AND deviceid = device_uuid)
-        );
-        -- Determine if rate limited
-        rate_limited := search_count >= current_rate_limit;
-        -- Calculate remaining searches
-        remaining_searches := greatest(0, current_rate_limit - search_count);
-        -- Return the rate limit information
-        RETURN query
-        SELECT
-            coalesce(user_subscription_level, 'free')::text AS subscription_level,
-            current_rate_limit AS rate_limit,
-            search_count AS recent_searches,
-            rate_limited AS is_rate_limited,
-            remaining_searches AS searches_remaining;
-    END;
-$$;
 
+    -- ALWAYS check profiles table first - this is the definitive source
+    SELECT p.subscription_level, p.expires_at
+    INTO profile_subscription_level, profile_expires_at
+    FROM public.profiles p
+    WHERE p.id = current_user_id;
+    
+    -- If profiles has a subscription and it's not expired, use it
+    IF profile_subscription_level IS NOT NULL AND 
+       (profile_expires_at IS NULL OR profile_expires_at > NOW()) THEN
+        final_subscription_level := profile_subscription_level;
+    ELSE
+        -- Fallback to user_subscription table
+        -- Try device-based lookup first
+        IF device_uuid IS NOT NULL THEN
+            SELECT us.subscription_level INTO user_subscription_level
+            FROM public.user_subscription us
+            WHERE us.deviceid = device_uuid AND us.is_active = TRUE;
+        END IF;
+        
+        -- If no device subscription, try user-based lookup
+        IF user_subscription_level IS NULL THEN
+            SELECT us.subscription_level INTO user_subscription_level
+            FROM public.user_subscription us
+            WHERE us.userid = current_user_id AND us.is_active = TRUE;
+        END IF;
+        
+        -- Use user subscription or default to free
+        final_subscription_level := coalesce(user_subscription_level, 'free');
+    END IF;
+
+    -- Set rate limits - simplified logic
+    CASE final_subscription_level
+    WHEN 'standard', 'premium' THEN
+        current_rate_limit := 999999; -- Unlimited for paid tiers
+    ELSE
+        current_rate_limit := 10; -- 10 for free tier
+    END CASE;
+
+    -- Count recent searches
+    SELECT count(*) INTO search_count
+    FROM actionlog
+    WHERE type = action_type
+    AND created_at > now() - interval '24 hours'
+    AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+
+    -- Determine if rate limited
+    rate_limited := search_count >= current_rate_limit;
+    remaining_searches := greatest(0, current_rate_limit - search_count);
+
+    -- Return results
+    RETURN QUERY
+    SELECT
+        coalesce(final_subscription_level, 'free')::text AS subscription_level,
+        current_rate_limit AS rate_limit,
+        search_count AS recent_searches,
+        rate_limited AS is_rate_limited,
+        remaining_searches AS searches_remaining;
+END;
+$$;

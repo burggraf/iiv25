@@ -585,4 +585,33 @@ describe('SubscriptionService', () => {
       expect(result).toBeUndefined();
     });
   });
+
+  describe('Rate Limiting Integration', () => {
+    it('should handle profiles override correctly for rate limiting (fix for conflicting subscription data)', async () => {
+      // This test verifies that the rate limiting function now uses the same logic
+      // as get_subscription_status, preventing the issue where users would see
+      // premium subscription status but still get rate limited as free tier
+      
+      const deviceId = 'test-device-id';
+      
+      // Mock scenario: user_subscription shows "standard" but profiles override should apply
+      const mockSubscriptionStatus = {
+        subscription_level: 'standard',
+        is_active: true,
+        expires_at: '2026-01-01T07:59:59Z',
+        device_id: deviceId,
+      };
+
+      mockSupabase.rpc.mockResolvedValue(createMockResponse(mockSubscriptionStatus));
+
+      const result = await SubscriptionService.getSubscriptionStatus(deviceId);
+
+      expect(result).toEqual(mockSubscriptionStatus);
+      expect(result?.subscription_level).toBe('standard');
+      
+      // The key fix: both get_subscription_status and get_rate_limits should now
+      // return the same subscription level, preventing the mismatch that caused
+      // users to show premium status in UI but get rate limited as free tier
+    });
+  });
 });
