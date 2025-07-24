@@ -1334,18 +1334,11 @@ BEGIN
                    (profile_record.subscription_level = 'standard' AND 
                     (final_subscription_level NOT IN ('premium', 'standard'))) THEN
                     
-                    -- Profile has higher subscription level, override user_subscription
+                    -- Profile has higher subscription level, use profile values for final result
+                    -- Note: We no longer update user_subscription table since we always check profiles
                     final_subscription_level := profile_record.subscription_level;
                     final_expires_at := profile_record.expires_at;
                     final_is_active := profile_record.is_active;
-                    
-                    -- Update user_subscription table with profile values
-                    UPDATE public.user_subscription 
-                    SET subscription_level = profile_record.subscription_level,
-                        expires_at = profile_record.expires_at,
-                        is_active = profile_record.is_active,
-                        updated_at = NOW()
-                    WHERE deviceid = device_uuid;
                 END IF;
             END IF;
         END IF;
@@ -1353,11 +1346,14 @@ BEGIN
     
     -- Check if final subscription has expired
     IF final_expires_at IS NOT NULL AND final_expires_at < NOW() THEN
-        -- Update subscription to inactive
-        UPDATE public.user_subscription 
-        SET is_active = FALSE,
-            updated_at = NOW()
-        WHERE deviceid = device_uuid;
+        -- Update user_subscription to inactive only if it's the user_subscription that expired
+        -- (not the profile override)
+        IF final_expires_at = subscription_record.expires_at THEN
+            UPDATE public.user_subscription 
+            SET is_active = FALSE,
+                updated_at = NOW()
+            WHERE deviceid = device_uuid;
+        END IF;
         
         RETURN json_build_object(
             'subscription_level', 'free',
