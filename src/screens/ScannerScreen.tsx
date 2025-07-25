@@ -3,7 +3,7 @@ import { isDevice } from 'expo-device'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
 import { useIsFocused } from '@react-navigation/native'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
@@ -29,13 +29,14 @@ import { IngredientOCRService } from '../services/ingredientOCRService'
 import { ProductCreationService } from '../services/productCreationService'
 import { ProductLookupService } from '../services/productLookupService'
 import { ProductImageUploadService } from '../services/productImageUploadService'
+import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services/subscriptionService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 
 
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
-	const { addToHistory } = useApp()
+	const { addToHistory, deviceId } = useApp()
 	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
@@ -56,6 +57,8 @@ export default function ScannerScreen() {
 	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
 	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
 	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
+	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
+	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -91,6 +94,45 @@ export default function ScannerScreen() {
 		}
 	}, [])
 
+	// Load subscription data when deviceId becomes available
+	useEffect(() => {
+		if (deviceId) {
+			loadSubscriptionData()
+		}
+	}, [deviceId, loadSubscriptionData])
+
+	const loadSubscriptionData = useCallback(async () => {
+		try {
+			if (!deviceId) {
+				console.log('Device ID not available, skipping subscription data load')
+				return
+			}
+
+			// Load subscription status and usage stats in parallel
+			const [status, stats] = await Promise.all([
+				SubscriptionService.getSubscriptionStatus(deviceId),
+				SubscriptionService.getUsageStats(deviceId)
+			])
+
+			setSubscriptionStatus(status)
+			setUsageStats(stats)
+			
+		} catch (error) {
+			console.error('Failed to load subscription data:', error)
+		}
+	}, [deviceId])
+
+	const refreshUsageStats = async () => {
+		try {
+			if (!deviceId) return
+
+			const stats = await SubscriptionService.getUsageStats(deviceId)
+			setUsageStats(stats)
+			
+		} catch (error) {
+			console.error('Failed to refresh usage stats:', error)
+		}
+	}
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
 		// Only process barcodes when screen is focused and no modal is shown
@@ -146,6 +188,8 @@ export default function ScannerScreen() {
 			return
 		}
 
+		// Let server handle rate limiting - the phantom entry issue needs to be fixed server-side
+
 		// Set processing flag
 		processingBarcodeRef.current = data
 		setIsLoading(true)
@@ -166,6 +210,9 @@ export default function ScannerScreen() {
 				setScannedProduct(result.product)
 				addToHistory(result.product)
 				showOverlay()
+				
+				// Refresh usage stats after successful scan
+				refreshUsageStats()
 			} else {
 				setError(result.error!)
 				showErrorOverlay()
@@ -984,6 +1031,16 @@ export default function ScannerScreen() {
 
 			{/* Bottom Instructions */}
 			<View style={styles.bottomInstructions}>
+				{/* Free Plan Scan Counter */}
+				{subscriptionStatus?.subscription_level === 'free' && usageStats && (() => {
+					// Calculate remaining scans out of the full limit
+					const scansRemaining = Math.max(0, usageStats.product_lookups_limit - usageStats.product_lookups_today)
+					return (
+						<Text style={styles.scanCounterText}>
+							Free Plan: {scansRemaining} of {usageStats.product_lookups_limit} scans remaining today
+						</Text>
+					)
+				})()}
 				<Text style={styles.tipText}>💡 Scan continuously{'\n'}Tap product card to view details</Text>
 			</View>
 
@@ -1557,6 +1614,12 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#666',
 		fontStyle: 'italic',
+	},
+	scanCounterText: {
+		fontSize: 12,
+		textAlign: 'center',
+		color: '#888',
+		marginBottom: 8,
 	},
 	createProductModal: {
 		position: 'absolute',
