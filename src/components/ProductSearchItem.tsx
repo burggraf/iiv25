@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Product } from '../types';
+import { Product, VeganStatus } from '../types';
+import LogoWhite from './LogoWhite';
 
 interface ProductSearchItemProps {
   product: Product;
@@ -8,6 +9,51 @@ interface ProductSearchItemProps {
 }
 
 export default function ProductSearchItem({ product, onPress }: ProductSearchItemProps) {
+  const getStatusColor = (status: VeganStatus): string => {
+    switch (status) {
+      case VeganStatus.VEGAN:
+        return '#4CAF50';
+      case VeganStatus.VEGETARIAN:
+        return '#FF9800';
+      case VeganStatus.NOT_VEGETARIAN:
+        return '#F44336';
+      case VeganStatus.UNKNOWN:
+        return '#9E9E9E';
+      default:
+        return '#9E9E9E';
+    }
+  };
+
+  const getStatusIcon = (status: VeganStatus) => {
+    switch (status) {
+      case VeganStatus.VEGAN:
+        return <LogoWhite size={28} />;
+      case VeganStatus.VEGETARIAN:
+        return <Text style={styles.statusIconText}>🥛</Text>;
+      case VeganStatus.NOT_VEGETARIAN:
+        return <Text style={styles.statusIconText}>🥩</Text>;
+      case VeganStatus.UNKNOWN:
+        return <Text style={styles.unknownIconText}>?</Text>;
+      default:
+        return <Text style={styles.unknownIconText}>?</Text>;
+    }
+  };
+
+  const getStatusText = (status: VeganStatus): string => {
+    switch (status) {
+      case VeganStatus.VEGAN:
+        return 'VEGAN';
+      case VeganStatus.VEGETARIAN:
+        return 'VEGETARIAN';
+      case VeganStatus.NOT_VEGETARIAN:
+        return 'NOT VEGETARIAN';
+      case VeganStatus.UNKNOWN:
+        return 'UNKNOWN';
+      default:
+        return 'UNKNOWN';
+    }
+  };
+
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.content}>
@@ -33,9 +79,12 @@ export default function ProductSearchItem({ product, onPress }: ProductSearchIte
           <Text style={styles.barcode}>UPC: {product.barcode}</Text>
         </View>
 
-        {/* Arrow */}
-        <View style={styles.arrowContainer}>
-          <Text style={styles.arrow}>→</Text>
+        {/* Status Badge */}
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(product.veganStatus) }]}>
+            <View style={styles.statusIconContainer}>{getStatusIcon(product.veganStatus)}</View>
+            <Text style={styles.statusText}>{getStatusText(product.veganStatus)}</Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -100,12 +149,35 @@ const styles = StyleSheet.create({
     color: '#999',
     fontFamily: 'monospace',
   },
-  arrowContainer: {
-    padding: 8,
+  statusContainer: {
+    alignItems: 'center',
   },
-  arrow: {
-    fontSize: 18,
-    color: '#007AFF',
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    width: 110,
+    height: 50,
+    justifyContent: 'center',
+  },
+  statusIconContainer: {
+    marginBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconText: {
+    fontSize: 16,
+  },
+  unknownIconText: {
+    fontSize: 20,
+    color: 'white',
     fontWeight: 'bold',
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
   },
 });

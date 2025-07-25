@@ -314,6 +314,7 @@ export default function SearchScreen() {
         <ProductResult 
           product={selectedProduct} 
           onBack={handleBackToSearch}
+          hideHeaderBackButton={true}
           onProductUpdated={handleProductUpdated}
         />
         <View style={styles.buttonContainer}>
