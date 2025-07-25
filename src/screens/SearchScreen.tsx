@@ -6,7 +6,6 @@ import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector
 import ProductSearchItem from '../components/ProductSearchItem';
 import IngredientResult from '../components/IngredientResult';
 import ProductResult from '../components/ProductResult';
-import { OpenFoodFactsService } from '../services/openFoodFactsApi';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
 import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
 import { useApp } from '../context/AppContext';
@@ -50,23 +49,64 @@ export default function SearchScreen() {
 
   const searchProducts = async (query: string, page: number) => {
     try {
-      const result = await OpenFoodFactsService.searchProducts(query, page);
+      // Calculate page offset (20 products per page)
+      const pageOffset = (page - 1) * 20;
+      
+      const supabaseProducts = await SupabaseService.searchProductsByName(query, pageOffset);
+      
+      // Convert SupabaseProduct to Product format
+      const products: Product[] = supabaseProducts.map(supabaseProduct => ({
+        id: supabaseProduct.ean13 || supabaseProduct.upc || '',
+        barcode: supabaseProduct.ean13 || supabaseProduct.upc || '',
+        name: supabaseProduct.product_name || 'Unknown Product',
+        brand: supabaseProduct.brand,
+        ingredients: supabaseProduct.ingredients ? 
+          supabaseProduct.ingredients.split(',').map(ing => ing.trim()) : [],
+        veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
+        imageUrl: supabaseProduct.imageurl,
+        issues: supabaseProduct.issues,
+        lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
+        classificationMethod: 'product-level' as const
+      }));
       
       if (page === 1) {
-        setProductResults(result.products);
+        setProductResults(products);
+        setCurrentPage(1);
+        // Since we get fixed 20 results, assume there might be more if we got exactly 20
+        setHasNextPage(products.length === 20);
+        setTotalResults(products.length); // We don't get total count from the function
       } else {
-        setProductResults(prev => [...prev, ...result.products]);
+        setProductResults(prev => [...prev, ...products]);
+        setCurrentPage(page);
+        setHasNextPage(products.length === 20);
+        setTotalResults(prev => prev + products.length);
       }
       
-      setCurrentPage(result.currentPage);
-      setHasNextPage(result.hasNextPage);
-      setTotalResults(result.totalCount);
-      
-      if (result.products.length === 0 && page === 1) {
+      if (products.length === 0 && page === 1) {
         Alert.alert('No Results', `No products found for "${query}". Try a different search term.`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Search error:', err);
+      
+      // Handle rate limit errors
+      if (err.isRateLimit) {
+        const subscriptionLevel = err.subscriptionLevel;
+        const rateLimit = err.rateLimit;
+        
+        let upgradeMessage = '';
+        if (subscriptionLevel === 'free') {
+          upgradeMessage = '\n\nUpgrade to Standard (20/hour) or Premium (250/hour) for more searches.';
+        } else if (subscriptionLevel === 'standard') {
+          upgradeMessage = '\n\nUpgrade to Premium (250/hour) for more searches.';
+        }
+        
+        const alertTitle = 'Search Limit Reached';
+        const alertMessage = `You've reached your hourly search limit.\n\nRate limit exceeded: ${subscriptionLevel} tier allows ${rateLimit} searches per hour.${upgradeMessage}`;
+        
+        Alert.alert(alertTitle, alertMessage);
+        return;
+      }
+      
       Alert.alert('Search Error', 'Failed to search products. Please try again.');
     }
   };
@@ -198,19 +238,14 @@ export default function SearchScreen() {
   };
 
   const handleProductSelect = async (product: Product) => {
-    // Get full product details
+    // Since the product already has all the details from Supabase, just use it directly
     setIsLoading(true);
     try {
-      const fullProduct = await OpenFoodFactsService.getProductByBarcode(product.barcode);
-      if (fullProduct) {
-        setSelectedProduct(fullProduct);
-        addToHistory(fullProduct);
-      } else {
-        Alert.alert('Error', 'Could not load product details.');
-      }
+      setSelectedProduct(product);
+      addToHistory(product);
     } catch (err) {
-      console.error('Product details error:', err);
-      Alert.alert('Error', 'Failed to load product details.');
+      console.error('Product selection error:', err);
+      Alert.alert('Error', 'Failed to select product.');
     }
     setIsLoading(false);
   };

@@ -248,24 +248,27 @@ export class SupabaseService {
   }
 
   /**
-   * Search for products by name
+   * Search for products by name using PostgreSQL function
    * @param name - The product name to search for
+   * @param pageOffset - Pagination offset (default: 0)
    * @returns Promise with matching products
    */
-  static async searchProductsByName(name: string): Promise<SupabaseProduct[]> {
+  static async searchProductsByName(name: string, pageOffset: number = 0): Promise<SupabaseProduct[]> {
     try {
+      // Testing simplified function without rate limiting - removed unused vars
+      // Use final optimized function with auth and pagination
       const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .ilike('product_name', `%${name}%`)
-        .order('product_name')
-        .limit(50);
-
+        .rpc('search_products_final', {
+          search_term: name,
+          page_offset: pageOffset
+        });
+      
       if (error) {
         console.error('Error searching products:', error);
         throw error;
       }
-
+      
+      // Direct query - return as-is
       return data || [];
     } catch (error) {
       console.error('Failed to search products:', error);
