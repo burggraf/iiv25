@@ -76,14 +76,10 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
         <View style={styles.centerHeader}>
           <Logo size={32} />
           <Text style={styles.appTitle}>Is It Vegan?</Text>
         </View>
-        <View style={styles.rightSpacer} />
       </View>
 
       <ScrollView style={styles.scrollView}>
@@ -125,6 +121,13 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
           </Text>
         </View>
       </ScrollView>
+
+      {/* Bottom Back Button */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity onPress={onBack}>
+          <Text style={styles.backButton}>← Back to Search Results</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -137,27 +140,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
   },
   centerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
   appTitle: {
     fontSize: 18,
@@ -165,8 +158,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: '#333',
   },
-  rightSpacer: {
-    width: 60,
+  buttonContainer: {
+    padding: 20,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  backButton: {
+    fontSize: 18,
+    color: '#007AFF',
+    textAlign: 'center',
+    padding: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
