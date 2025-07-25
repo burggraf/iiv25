@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import Logo from '../components/Logo';
 import NumericKeypad from '../components/NumericKeypad';
-import ProductResult from '../components/ProductResult';
+import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import { ProductLookupService } from '../services/productLookupService';
 import { useApp } from '../context/AppContext';
 import { Product } from '../types';
@@ -137,20 +137,13 @@ export default function ManualEntryScreen() {
   // Show product result
   if (product) {
     return (
-      <View style={styles.container}>
-        <ProductResult 
-          product={product} 
-          onBack={handleNewSearch}
-          onProductUpdated={handleProductUpdated}
-        />
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity onPress={handleNewSearch}>
-            <Text style={styles.newSearchButton}>
-              🔢 Enter Another UPC
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ProductDisplayContainer
+        product={product}
+        onBack={handleNewSearch}
+        backButtonText="🔢 Enter Another UPC"
+        onProductUpdated={handleProductUpdated}
+        useAbsolutePositioning={false}
+      />
     );
   }
 
@@ -391,19 +384,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
-  },
-  buttonContainer: {
-    padding: 20,
-    backgroundColor: 'white',
-  },
-  newSearchButton: {
-    fontSize: 18,
-    color: '#007AFF',
-    textAlign: 'center',
-    padding: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    fontWeight: 'bold',
   },
   rateLimitModal: {
     position: 'absolute',

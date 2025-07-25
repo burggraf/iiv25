@@ -200,10 +200,18 @@ export class SupabaseService {
     };
   }> {
     try {
-      const searchBarcode = barcode.trim();
+      let searchBarcode = barcode.trim();
       
       if (!searchBarcode) {
         return { product: null, isRateLimited: false };
+      }
+
+      // Normalize barcode format: prefer UPC (without leading zero)
+      // Convert EAN13 with leading zero to UPC format for consistent lookup
+      if (searchBarcode.length === 13 && searchBarcode.startsWith('0')) {
+        const upcFormat = searchBarcode.substring(1); // Remove leading zero
+        console.log(`🔄 Normalizing EAN13 ${searchBarcode} to UPC ${upcFormat} for database lookup`);
+        searchBarcode = upcFormat;
       }
 
       // Get device ID for logging

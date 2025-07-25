@@ -65,7 +65,7 @@ export class ProductLookupService {
 
 					// Create product from database data
 					finalProduct = {
-						id: supabaseResult.product.ean13 || barcode,
+						id: barcode, // Use the actual scanned/entered barcode
 						barcode: barcode,
 						name: supabaseResult.product.product_name || 'Unknown Product',
 						brand: supabaseResult.product.brand || undefined,

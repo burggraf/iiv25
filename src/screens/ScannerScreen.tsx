@@ -21,7 +21,7 @@ import BarcodeIcon from '../components/icons/BarcodeIcon'
 import BellIcon from '../components/icons/BellIcon'
 import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
-import ProductResult from '../components/ProductResult'
+import ProductDisplayContainer from '../components/ProductDisplayContainer'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
 import TakePhotoButton from '../components/TakePhotoButton'
 import { useApp } from '../context/AppContext'
@@ -1195,21 +1195,12 @@ export default function ScannerScreen() {
 
 			{/* Product Detail Overlay */}
 			{showProductDetail && scannedProduct && (
-				<View style={styles.productDetailOverlay}>
-					<ProductResult 
-						product={scannedProduct} 
-						onBack={handleBackFromDetail} 
-						hideHeaderBackButton={true}
-						onProductUpdated={handleProductUpdated} 
-					/>
-					<View style={styles.buttonContainer}>
-						<TouchableOpacity onPress={handleBackFromDetail}>
-							<Text style={styles.backToScannerButton}>
-								← Back to Scanner
-							</Text>
-						</TouchableOpacity>
-					</View>
-				</View>
+				<ProductDisplayContainer
+					product={scannedProduct}
+					onBack={handleBackFromDetail}
+					backButtonText="← Back to Scanner"
+					onProductUpdated={handleProductUpdated}
+				/>
 			)}
 		</SafeAreaView>
 	)
@@ -1566,30 +1557,6 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#666',
 		fontStyle: 'italic',
-	},
-	productDetailOverlay: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: 'white',
-		zIndex: 1000,
-	},
-	buttonContainer: {
-		padding: 20,
-		backgroundColor: 'white',
-		borderTopWidth: 1,
-		borderTopColor: '#eee',
-	},
-	backToScannerButton: {
-		fontSize: 18,
-		color: '#007AFF',
-		textAlign: 'center',
-		padding: 16,
-		backgroundColor: '#f0f0f0',
-		borderRadius: 8,
-		fontWeight: 'bold',
 	},
 	createProductModal: {
 		position: 'absolute',

@@ -6,7 +6,7 @@ import LogoWhite from '../components/LogoWhite';
 import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector';
 import ProductSearchItem from '../components/ProductSearchItem';
 import IngredientResult from '../components/IngredientResult';
-import ProductResult from '../components/ProductResult';
+import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
 import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
 import { useApp } from '../context/AppContext';
@@ -56,9 +56,10 @@ export default function SearchScreen() {
       const supabaseProducts = await SupabaseService.searchProductsByName(query, pageOffset);
       
       // Convert SupabaseProduct to Product format
-      const products: Product[] = supabaseProducts.map(supabaseProduct => ({
-        id: supabaseProduct.ean13 || supabaseProduct.upc || '',
-        barcode: supabaseProduct.ean13 || supabaseProduct.upc || '',
+      const allProducts: Product[] = supabaseProducts.map(supabaseProduct => ({
+        // Prefer UPC over EAN13 for better compatibility
+        id: supabaseProduct.upc || supabaseProduct.ean13 || '',
+        barcode: supabaseProduct.upc || supabaseProduct.ean13 || '',
         name: supabaseProduct.product_name || 'Unknown Product',
         brand: supabaseProduct.brand,
         ingredients: supabaseProduct.ingredients ? 
@@ -69,9 +70,20 @@ export default function SearchScreen() {
         lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
         classificationMethod: 'product-level' as const
       }));
+
+      // Deduplicate products based on name and brand
+      // This handles cases where the same product exists with both UPC and EAN13
+      const productMap = new Map<string, Product>();
+      allProducts.forEach(product => {
+        const key = `${product.name?.toLowerCase() || ''}_${product.brand?.toLowerCase() || ''}`;
+        if (!productMap.has(key)) {
+          productMap.set(key, product);
+        }
+      });
+      const products = Array.from(productMap.values());
       
-      // Get total count from the first result (all results have the same total_count)
-      const totalCount = supabaseProducts.length > 0 ? (supabaseProducts[0].total_count || 0) : 0;
+      // Get total count - use actual deduplicated count for accuracy
+      const totalCount = products.length;
       
       if (page === 1) {
         setProductResults(products);
@@ -316,19 +328,13 @@ export default function SearchScreen() {
   // Show selected product details
   if (selectedProduct) {
     return (
-      <View style={styles.container}>
-        <ProductResult 
-          product={selectedProduct} 
-          onBack={handleBackToSearch}
-          hideHeaderBackButton={true}
-          onProductUpdated={handleProductUpdated}
-        />
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity onPress={handleBackToSearch}>
-            <Text style={styles.backButton}>← Back to Search Results</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ProductDisplayContainer
+        product={selectedProduct}
+        onBack={handleBackToSearch}
+        backButtonText="← Back to Search Results"
+        onProductUpdated={handleProductUpdated}
+        useAbsolutePositioning={false}
+      />
     );
   }
 

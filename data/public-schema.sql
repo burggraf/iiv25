@@ -1267,20 +1267,39 @@ $$;
 ALTER FUNCTION "public"."get_classes_for_upc"("input_upc" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") RETURNS TABLE("title" "text", "class" "text")
-    LANGUAGE "sql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") RETURNS TABLE("title" character varying, "class" character varying)
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-  SELECT i.title, i.class
-  FROM ingredients i
-  WHERE i.title = ANY(
-    STRING_TO_ARRAY(
-      RTRIM(
-        (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
-        '~'
-      ),
-      '~'
-    )
-  );
+DECLARE
+    normalized_upc TEXT;
+BEGIN
+    -- Normalize barcode format: prefer UPC (without leading zero)
+    -- Convert EAN13 with leading zero to UPC format for consistent lookup
+    normalized_upc := TRIM(input_upc);
+    
+    IF LENGTH(normalized_upc) = 13 AND LEFT(normalized_upc, 1) = '0' THEN
+        normalized_upc := SUBSTRING(normalized_upc, 2); -- Remove leading zero
+    END IF;
+    
+    RETURN QUERY
+    SELECT i.title, i.class
+    FROM ingredients i
+    WHERE i.title = ANY(
+        STRING_TO_ARRAY(
+            RTRIM(
+                (SELECT p.analysis 
+                 FROM products p 
+                 WHERE p.upc = normalized_upc 
+                    OR p.ean13 = input_upc 
+                    OR p.upc = input_upc 
+                    OR p.ean13 = normalized_upc
+                 LIMIT 1),
+                '~'
+            ),
+            '~'
+        )
+    );
+END;
 $$;
 
 
@@ -3142,8 +3161,9 @@ GRANT ALL ON FUNCTION "public"."get_classes_for_upc"("input_upc" "text") TO "ser
 
 
 
-GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") TO "service_role";
 
 
 

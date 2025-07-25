@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import Logo from '../components/Logo';
 import HistoryItem from '../components/HistoryItem';
-import ProductResult from '../components/ProductResult';
+import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import { Product } from '../types';
 
 export default function HistoryScreen() {
@@ -45,21 +45,13 @@ export default function HistoryScreen() {
   // Show selected product details
   if (selectedProduct) {
     return (
-      <View style={styles.container}>
-        <ProductResult 
-          product={selectedProduct} 
-          onBack={handleBackToHistory} 
-          hideHeaderBackButton={true}
-          onProductUpdated={handleProductUpdated} 
-        />
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity onPress={handleBackToHistory}>
-            <Text style={styles.backToHistoryButton}>
-              ← Back to History
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ProductDisplayContainer
+        product={selectedProduct}
+        onBack={handleBackToHistory}
+        backButtonText="← Back to History"
+        onProductUpdated={handleProductUpdated}
+        useAbsolutePositioning={false}
+      />
     );
   }
 
@@ -183,20 +175,5 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
-  },
-  buttonContainer: {
-    padding: 20,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  backToHistoryButton: {
-    fontSize: 18,
-    color: '#007AFF',
-    textAlign: 'center',
-    padding: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    fontWeight: 'bold',
   },
 });
