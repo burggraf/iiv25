@@ -59,6 +59,7 @@ export default function ScannerScreen() {
 	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
+	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -185,6 +186,16 @@ export default function ScannerScreen() {
 			setScannedProduct(cachedProduct)
 			addToHistory(cachedProduct)
 			showOverlay()
+			
+			// Show "FREE!" message for cached scans (free users only)
+			if (subscriptionStatus?.subscription_level === 'free') {
+				setShowCacheHitMessage(true)
+				// Hide message after 3 seconds
+				setTimeout(() => {
+					setShowCacheHitMessage(false)
+				}, 3000)
+			}
+			
 			return
 		}
 
@@ -1031,6 +1042,13 @@ export default function ScannerScreen() {
 
 			{/* Bottom Instructions */}
 			<View style={styles.bottomInstructions}>
+				{/* Cache Hit Message */}
+				{showCacheHitMessage && subscriptionStatus?.subscription_level === 'free' && (
+					<Text style={styles.cacheHitText}>
+						FREE! (Recently scanned items do not count toward your quota.)
+					</Text>
+				)}
+				
 				{/* Free Plan Scan Counter */}
 				{subscriptionStatus?.subscription_level === 'free' && usageStats && (() => {
 					// Calculate remaining scans out of the full limit
@@ -1620,6 +1638,13 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#888',
 		marginBottom: 8,
+	},
+	cacheHitText: {
+		fontSize: 12,
+		textAlign: 'center',
+		color: '#4CAF50',
+		fontWeight: 'bold',
+		marginBottom: 4,
 	},
 	createProductModal: {
 		position: 'absolute',
