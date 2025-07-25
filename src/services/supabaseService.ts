@@ -255,11 +255,12 @@ export class SupabaseService {
    */
   static async searchProductsByName(name: string, pageOffset: number = 0): Promise<SupabaseProduct[]> {
     try {
-      // Testing simplified function without rate limiting - removed unused vars
-      // Use final optimized function with auth and pagination
+      const deviceId = await deviceIdService.getDeviceId();
+      
       const { data, error } = await supabase
-        .rpc('search_products_final', {
+        .rpc('search_products', {
           search_term: name,
+          device_id: deviceId,
           page_offset: pageOffset
         });
       
@@ -268,7 +269,20 @@ export class SupabaseService {
         throw error;
       }
       
-      // Direct query - return as-is
+      // Check for rate limit response
+      if (data && data.length === 1 && data[0].ean13 === '__RATE_LIMIT_EXCEEDED__') {
+        const rateLimitInfo = data[0];
+        const subscriptionLevel = rateLimitInfo.upc;
+        const rateLimit = rateLimitInfo.brand;
+        
+        // Throw a special error for rate limiting that can be handled by the UI
+        const error = new Error('Rate limit exceeded');
+        (error as any).isRateLimit = true;
+        (error as any).subscriptionLevel = subscriptionLevel;
+        (error as any).rateLimit = rateLimit;
+        throw error;
+      }
+      
       return data || [];
     } catch (error) {
       console.error('Failed to search products:', error);
