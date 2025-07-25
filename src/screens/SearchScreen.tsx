@@ -260,6 +260,11 @@ export default function SearchScreen() {
     setSupabaseIngredients([]);
   };
 
+  const handleBackToIngredientResults = () => {
+    setIngredientResult(null);
+    // Don't clear supabaseIngredients - go back to the results list
+  };
+
   const handleProductUpdated = (updatedProduct: Product) => {
     // Update the selected product state to reflect changes
     setSelectedProduct(updatedProduct);
@@ -326,9 +331,11 @@ export default function SearchScreen() {
     );
   }
 
-  // Show ingredient result (fallback)
+  // Show ingredient result (fallback or from supabase)
   if (ingredientResult) {
-    return <IngredientResult ingredient={ingredientResult} onBack={handleBackToSearch} />;
+    // If we have supabase ingredients, go back to results; otherwise go back to search
+    const backHandler = supabaseIngredients.length > 0 ? handleBackToIngredientResults : handleBackToSearch;
+    return <IngredientResult ingredient={ingredientResult} onBack={backHandler} />;
   }
 
   // Show Supabase ingredients results
@@ -353,7 +360,7 @@ export default function SearchScreen() {
                 style={styles.ingredientItem}
                 onPress={() => {
                   setIngredientResult(convertSupabaseIngredient(item));
-                  setSupabaseIngredients([]);
+                  // Keep supabaseIngredients so we can go back to results
                 }}
               >
                 <View style={styles.ingredientInfo}>
