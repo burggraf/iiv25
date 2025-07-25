@@ -399,6 +399,27 @@ export type Database = {
         Args: { input_upc: string }
         Returns: string
       }
+      debug_get_rate_limits_for_user: {
+        Args: { action_type: string; debug_device_id?: string }
+        Returns: {
+          debug_info: string
+          subscription_level: string
+          rate_limit: number
+          recent_searches: number
+          is_rate_limited: boolean
+          searches_remaining: number
+        }[]
+      }
+      debug_rate_limits_for_user: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          current_user_id: string
+          user_subscription_count: number
+          profiles_subscription_level: string
+          profiles_expires_at: string
+          profiles_is_active: boolean
+        }[]
+      }
       get_classes_for_upc: {
         Args: { input_upc: string }
         Returns: {
@@ -468,6 +489,130 @@ export type Database = {
           created: string
         }[]
       }
+      search_products: {
+        Args: { search_term: string; device_id: string; page_offset?: number }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+          total_count: number
+        }[]
+      }
+      search_products_final: {
+        Args: { search_term: string; page_offset?: number }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
+      search_products_minimal: {
+        Args: { search_term: string }
+        Returns: {
+          product_name: string
+        }[]
+      }
+      search_products_no_rate_limit: {
+        Args: { search_term: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
+      search_products_no_security: {
+        Args: { search_term: string }
+        Returns: {
+          product_name: string
+        }[]
+      }
+      search_products_optimized: {
+        Args: { search_term: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
+      search_products_simple: {
+        Args: { search_term: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
+      search_products_sql_only: {
+        Args: { search_term: string }
+        Returns: {
+          product_name: string
+        }[]
+      }
+      search_products_stable: {
+        Args: { search_term: string }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
+      search_products_working: {
+        Args: { search_term: string; device_id: string; page_offset?: number }
+        Returns: {
+          ean13: string
+          upc: string
+          product_name: string
+          brand: string
+          ingredients: string
+          classification: string
+          imageurl: string
+          issues: string
+          created: string
+          lastupdated: string
+        }[]
+      }
       update_subscription: {
         Args: {
           device_id_param: string
@@ -479,6 +624,15 @@ export type Database = {
       }
       update_user_subscription_userid: {
         Args: { device_id_param: string; new_user_id?: string }
+        Returns: boolean
+      }
+      webhook_update_subscription: {
+        Args: {
+          device_id_param: string
+          subscription_level_param: string
+          expires_at_param?: string
+          is_active_param?: boolean
+        }
         Returns: boolean
       }
     }

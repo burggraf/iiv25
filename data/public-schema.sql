@@ -1069,6 +1069,183 @@ $$;
 ALTER FUNCTION "public"."classify_upc"("input_upc" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."debug_get_rate_limits_for_user"("action_type" "text", "debug_device_id" "text" DEFAULT NULL::"text") RETURNS TABLE("debug_info" "text", "subscription_level" "text", "rate_limit" integer, "recent_searches" integer, "is_rate_limited" boolean, "searches_remaining" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    current_user_id uuid;
+    device_uuid uuid;
+    subscription_record RECORD;
+    profile_record RECORD;
+    final_subscription_level text;
+    final_expires_at timestamptz;
+    final_is_active boolean;
+    current_rate_limit integer;
+    search_count integer;
+    rate_limited boolean;
+    remaining_searches integer;
+    debug_text text;
+BEGIN
+    debug_text := '';
+    
+    -- Get the current user ID
+    current_user_id := auth.uid();
+    debug_text := debug_text || 'User ID: ' || coalesce(current_user_id::text, 'NULL') || '; ';
+    
+    -- Check if user is authenticated
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'You must be logged in to use this service';
+    END IF;
+    
+    -- Parse and validate device_id if provided
+    IF debug_device_id IS NOT NULL AND trim(debug_device_id) != '' THEN
+        BEGIN
+            device_uuid := debug_device_id::UUID;
+            debug_text := debug_text || 'Device UUID: ' || device_uuid::text || '; ';
+        EXCEPTION WHEN invalid_text_representation THEN
+            RAISE EXCEPTION 'device_id must be a valid UUID if provided';
+        END;
+    END IF;
+
+    -- First try to find subscription by device ID if provided
+    IF device_uuid IS NOT NULL THEN
+        SELECT 
+            us.subscription_level,
+            us.expires_at,
+            us.is_active,
+            us.deviceid,
+            us.userid
+        INTO 
+            subscription_record
+        FROM public.user_subscription us
+        WHERE us.deviceid = device_uuid;
+        
+        IF subscription_record IS NOT NULL THEN
+            debug_text := debug_text || 'Found device subscription: ' || subscription_record.subscription_level || ' (active: ' || subscription_record.is_active || '); ';
+        ELSE
+            debug_text := debug_text || 'No device subscription found; ';
+        END IF;
+    END IF;
+
+    -- Always check profiles table for override
+    SELECT 
+        p.subscription_level,
+        p.expires_at,
+        p.is_active
+    INTO 
+        profile_record
+    FROM public.profiles p
+    WHERE p.id = current_user_id;
+    
+    IF profile_record IS NOT NULL AND profile_record.subscription_level IS NOT NULL THEN
+        debug_text := debug_text || 'Found profile: ' || profile_record.subscription_level || ' (expires: ' || coalesce(profile_record.expires_at::text, 'never') || '); ';
+        
+        -- Use profile subscription since it exists
+        final_subscription_level := profile_record.subscription_level;
+        final_expires_at := profile_record.expires_at;
+        final_is_active := profile_record.is_active;
+    ELSE
+        debug_text := debug_text || 'No profile subscription found; ';
+        
+        -- Fall back to device subscription if available
+        IF subscription_record IS NOT NULL THEN
+            final_subscription_level := subscription_record.subscription_level;
+            final_expires_at := subscription_record.expires_at;
+            final_is_active := subscription_record.is_active;
+        ELSE
+            final_subscription_level := 'free';
+            final_expires_at := NULL;
+            final_is_active := TRUE;
+        END IF;
+    END IF;
+
+    debug_text := debug_text || 'Final subscription: ' || final_subscription_level || '; ';
+
+    -- Set rate limits
+    IF action_type = 'product_lookup' THEN
+        CASE final_subscription_level
+        WHEN 'free' THEN
+            current_rate_limit := 10;
+        WHEN 'standard' THEN
+            current_rate_limit := 999999;
+        WHEN 'premium' THEN
+            current_rate_limit := 999999;
+        ELSE
+            current_rate_limit := 10;
+        END CASE;
+    ELSE
+        current_rate_limit := 10; -- Default for other types
+    END IF;
+
+    debug_text := debug_text || 'Rate limit: ' || current_rate_limit || '; ';
+
+    -- Count recent searches
+    SELECT count(*) INTO search_count
+    FROM actionlog
+    WHERE type = action_type
+    AND created_at > now() - interval '24 hours'
+    AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+
+    rate_limited := search_count >= current_rate_limit;
+    remaining_searches := greatest(0, current_rate_limit - search_count);
+    
+    debug_text := debug_text || 'Search count: ' || search_count || '; Rate limited: ' || rate_limited;
+
+    -- Return debug info
+    RETURN QUERY
+    SELECT
+        debug_text,
+        coalesce(final_subscription_level, 'free')::text,
+        current_rate_limit,
+        search_count,
+        rate_limited,
+        remaining_searches;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."debug_get_rate_limits_for_user"("action_type" "text", "debug_device_id" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."debug_rate_limits_for_user"() RETURNS TABLE("current_user_id" "uuid", "user_subscription_count" integer, "profiles_subscription_level" "text", "profiles_expires_at" timestamp with time zone, "profiles_is_active" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    user_id uuid;
+    sub_count integer;
+    profile_level text;
+    profile_expires timestamptz;
+    profile_active boolean;
+BEGIN
+    -- Get current user
+    user_id := auth.uid();
+    
+    -- Count user subscriptions
+    SELECT count(*) INTO sub_count
+    FROM public.user_subscription us
+    WHERE us.userid = user_id;
+    
+    -- Get profile info
+    SELECT p.subscription_level, p.expires_at, p.is_active
+    INTO profile_level, profile_expires, profile_active
+    FROM public.profiles p
+    WHERE p.id = user_id;
+    
+    -- Return debug info
+    RETURN QUERY
+    SELECT 
+        user_id,
+        sub_count,
+        profile_level,
+        profile_expires,
+        profile_active;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."debug_rate_limits_for_user"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_classes_for_upc"("input_upc" "text") RETURNS TABLE("class" "text")
     LANGUAGE "sql"
     AS $$
@@ -1137,8 +1314,10 @@ CREATE OR REPLACE FUNCTION "public"."get_rate_limits"("action_type" "text", "dev
 DECLARE
     current_user_id uuid;
     device_uuid uuid;
+    profile_subscription_level text;
+    profile_expires_at timestamptz;
     user_subscription_level text;
-    user_subscription_expires_at timestamptz;
+    final_subscription_level text;
     current_rate_limit integer;
     search_count integer;
     rate_limited boolean;
@@ -1146,12 +1325,11 @@ DECLARE
 BEGIN
     -- Get the current user ID
     current_user_id := auth.uid();
-    -- Check if user is authenticated
     IF current_user_id IS NULL THEN
         RAISE EXCEPTION 'You must be logged in to use this service';
     END IF;
     
-    -- Parse and validate device_id if provided
+    -- Parse device_id if provided
     IF device_id IS NOT NULL AND trim(device_id) != '' THEN
         BEGIN
             device_uuid := device_id::UUID;
@@ -1159,96 +1337,65 @@ BEGIN
             RAISE EXCEPTION 'device_id must be a valid UUID if provided';
         END;
     END IF;
-    -- Get user subscription details
-    SELECT
-        us.subscription_level,
-        us.expires_at INTO user_subscription_level,
-        user_subscription_expires_at
-    FROM
-        public.user_subscription us
-    WHERE
-        us.userid = current_user_id
-        AND us.is_active = TRUE;
-    -- If no subscription record found, default to 'free'
-    IF user_subscription_level IS NULL THEN
-        user_subscription_level := 'free';
-    END IF;
-    -- Handle expired subscriptions
-    IF user_subscription_expires_at IS NOT NULL AND user_subscription_expires_at < now() THEN
-        -- Auto-deactivate expired subscription
-        UPDATE
-            public.user_subscription
-        SET
-            is_active = FALSE
-        WHERE
-            userid = current_user_id;
-        user_subscription_level := 'free';
-    END IF;
-    -- Set rate limits based on subscription level and action type
-    -- Different limits for product lookups vs searches
-    IF action_type = 'product_lookup' THEN
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10; -- 10 product lookups per day for free users
-        WHEN 'standard' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        WHEN 'premium' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
-    ELSIF action_type = 'ingredient_search' THEN
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10; -- 10 searches per day for free users
-        WHEN 'standard' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        WHEN 'premium' THEN
-            current_rate_limit := 999999; -- Unlimited for premium users
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
+
+    -- ALWAYS check profiles table first - this is the definitive source
+    SELECT p.subscription_level, p.expires_at
+    INTO profile_subscription_level, profile_expires_at
+    FROM public.profiles p
+    WHERE p.id = current_user_id;
+    
+    -- If profiles has a subscription and it's not expired, use it
+    IF profile_subscription_level IS NOT NULL AND 
+       (profile_expires_at IS NULL OR profile_expires_at > NOW()) THEN
+        final_subscription_level := profile_subscription_level;
     ELSE
-        -- Default rate limits for other action types
-        CASE user_subscription_level
-        WHEN 'free' THEN
-            current_rate_limit := 10;
-        WHEN 'standard' THEN
-            current_rate_limit := 999999;
-        WHEN 'premium' THEN
-            current_rate_limit := 999999;
-        ELSE
-            current_rate_limit := 10; -- Default to free tier
-        END CASE;
+        -- Fallback to user_subscription table
+        -- Try device-based lookup first
+        IF device_uuid IS NOT NULL THEN
+            SELECT us.subscription_level INTO user_subscription_level
+            FROM public.user_subscription us
+            WHERE us.deviceid = device_uuid AND us.is_active = TRUE;
+        END IF;
+        
+        -- If no device subscription, try user-based lookup
+        IF user_subscription_level IS NULL THEN
+            SELECT us.subscription_level INTO user_subscription_level
+            FROM public.user_subscription us
+            WHERE us.userid = current_user_id AND us.is_active = TRUE;
+        END IF;
+        
+        -- Use user subscription or default to free
+        final_subscription_level := coalesce(user_subscription_level, 'free');
     END IF;
-    -- Count recent searches for the specified action type
-    -- Optimized query that counts actions from either the current user OR the current device
-    -- This prevents users from circumventing limits by switching accounts on the same device
-    -- or by switching devices with the same account
+
+    -- Set rate limits - simplified logic
+    CASE final_subscription_level
+    WHEN 'standard', 'premium' THEN
+        current_rate_limit := 999999; -- Unlimited for paid tiers
+    ELSE
+        current_rate_limit := 10; -- 10 for free tier
+    END CASE;
+
+    -- Count recent searches
+    SELECT count(*) INTO search_count
+    FROM actionlog
+    WHERE type = action_type
+    AND created_at > now() - interval '24 hours'
+    AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+
+    -- Determine if rate limited
+    rate_limited := search_count >= current_rate_limit;
+    remaining_searches := greatest(0, current_rate_limit - search_count);
+
+    -- Return results
+    RETURN QUERY
     SELECT
-        count(*) INTO search_count
-    FROM
-        actionlog
-    WHERE
-        type = action_type
-        AND created_at > now() - interval '24 hours' -- Changed from 1 hour to 24 hours (daily limit)
-        AND (
-            userid = current_user_id
-            OR (device_uuid IS NOT NULL AND deviceid = device_uuid)
-        );
-        -- Determine if rate limited
-        rate_limited := search_count >= current_rate_limit;
-        -- Calculate remaining searches
-        remaining_searches := greatest(0, current_rate_limit - search_count);
-        -- Return the rate limit information
-        RETURN query
-        SELECT
-            coalesce(user_subscription_level, 'free')::text AS subscription_level,
-            current_rate_limit AS rate_limit,
-            search_count AS recent_searches,
-            rate_limited AS is_rate_limited,
-            remaining_searches AS searches_remaining;
-    END;
+        coalesce(final_subscription_level, 'free')::text AS subscription_level,
+        current_rate_limit AS rate_limit,
+        search_count AS recent_searches,
+        rate_limited AS is_rate_limited,
+        remaining_searches AS searches_remaining;
+END;
 $$;
 
 
@@ -1261,8 +1408,14 @@ CREATE OR REPLACE FUNCTION "public"."get_subscription_status"("device_id_param" 
     AS $$
 DECLARE
     device_uuid UUID;
-    subscription_record RECORD;
-    profile_record RECORD;
+    current_user_id UUID;
+    linked_user_id UUID;
+    profile_subscription_level TEXT;
+    profile_expires_at TIMESTAMP WITH TIME ZONE;
+    profile_is_active BOOLEAN;
+    user_subscription_level TEXT;
+    user_expires_at TIMESTAMP WITH TIME ZONE;
+    user_is_active BOOLEAN;
     final_subscription_level TEXT;
     final_expires_at TIMESTAMP WITH TIME ZONE;
     final_is_active BOOLEAN;
@@ -1281,86 +1434,79 @@ BEGIN
             );
     END;
     
-    -- Look up subscription by device ID
-    SELECT 
-        us.subscription_level,
-        us.expires_at,
-        us.is_active,
-        us.deviceid,
-        us.userid
-    INTO 
-        subscription_record
-    FROM public.user_subscription us
-    WHERE us.deviceid = device_uuid;
+    -- Get current user ID (might be null for anonymous users)
+    current_user_id := auth.uid();
     
-    -- If no subscription record found, return 'free'
-    IF subscription_record IS NULL THEN
-        RETURN json_build_object(
-            'subscription_level', 'free',
-            'is_active', true,
-            'device_id', device_id_param,
-            'expires_at', null
-        );
-    END IF;
-    
-    -- Initialize with user_subscription values
-    final_subscription_level := subscription_record.subscription_level;
-    final_expires_at := subscription_record.expires_at;
-    final_is_active := subscription_record.is_active;
-    
-    -- Check for profiles override if user is logged in
-    IF subscription_record.userid IS NOT NULL THEN
-        SELECT 
-            p.subscription_level,
-            p.expires_at,
-            p.is_active
-        INTO 
-            profile_record
-        FROM public.profiles p
-        WHERE p.id = subscription_record.userid;
+    -- If no current user, try to find user through device linkage
+    IF current_user_id IS NULL THEN
+        SELECT us.userid INTO linked_user_id
+        FROM public.user_subscription us
+        WHERE us.deviceid = device_uuid
+        LIMIT 1;
         
-        -- Apply profiles override if it exists and has higher precedence
-        IF profile_record IS NOT NULL AND profile_record.subscription_level IS NOT NULL THEN
-            -- Check if profile subscription has expired
-            IF profile_record.expires_at IS NOT NULL AND profile_record.expires_at < NOW() THEN
-                -- Profile subscription expired, use user_subscription values
-                -- (already set above)
-                NULL;
-            ELSE
-                -- Profile subscription is active, check if it's higher than user subscription
-                -- Hierarchy: premium > standard > free (null)
-                IF (profile_record.subscription_level = 'premium' AND 
-                    (final_subscription_level != 'premium')) OR
-                   (profile_record.subscription_level = 'standard' AND 
-                    (final_subscription_level NOT IN ('premium', 'standard'))) THEN
-                    
-                    -- Profile has higher subscription level, use profile values for final result
-                    -- Note: We no longer update user_subscription table since we always check profiles
-                    final_subscription_level := profile_record.subscription_level;
-                    final_expires_at := profile_record.expires_at;
-                    final_is_active := profile_record.is_active;
-                END IF;
-            END IF;
-        END IF;
+        current_user_id := linked_user_id;
     END IF;
     
-    -- Check if final subscription has expired
-    IF final_expires_at IS NOT NULL AND final_expires_at < NOW() THEN
-        -- Update user_subscription to inactive only if it's the user_subscription that expired
-        -- (not the profile override)
-        IF final_expires_at = subscription_record.expires_at THEN
+    -- ALWAYS check profiles table first if we have a user ID
+    IF current_user_id IS NOT NULL THEN
+        SELECT p.subscription_level, p.expires_at, p.is_active
+        INTO profile_subscription_level, profile_expires_at, profile_is_active
+        FROM public.profiles p
+        WHERE p.id = current_user_id;
+    END IF;
+    
+    -- Check if profile subscription is valid and not expired
+    IF profile_subscription_level IS NOT NULL AND 
+       (profile_is_active IS NULL OR profile_is_active = TRUE) AND
+       (profile_expires_at IS NULL OR profile_expires_at > NOW()) THEN
+        -- Use profile subscription
+        final_subscription_level := profile_subscription_level;
+        final_expires_at := profile_expires_at;
+        final_is_active := COALESCE(profile_is_active, TRUE);
+    ELSE
+        -- Fallback to user_subscription table
+        -- Look up subscription by device ID
+        SELECT 
+            us.subscription_level,
+            us.expires_at,
+            us.is_active
+        INTO 
+            user_subscription_level,
+            user_expires_at,
+            user_is_active
+        FROM public.user_subscription us
+        WHERE us.deviceid = device_uuid;
+        
+        -- If no subscription record found, return 'free'
+        IF user_subscription_level IS NULL THEN
+            RETURN json_build_object(
+                'subscription_level', 'free',
+                'is_active', true,
+                'device_id', device_id_param,
+                'expires_at', null
+            );
+        END IF;
+        
+        -- Check if user subscription has expired
+        IF user_expires_at IS NOT NULL AND user_expires_at < NOW() THEN
+            -- Auto-deactivate expired subscription
             UPDATE public.user_subscription 
             SET is_active = FALSE,
                 updated_at = NOW()
             WHERE deviceid = device_uuid;
+            
+            RETURN json_build_object(
+                'subscription_level', 'free',
+                'is_active', false,
+                'device_id', device_id_param,
+                'expires_at', user_expires_at
+            );
         END IF;
         
-        RETURN json_build_object(
-            'subscription_level', 'free',
-            'is_active', false,
-            'device_id', device_id_param,
-            'expires_at', final_expires_at
-        );
+        -- Use user subscription values
+        final_subscription_level := user_subscription_level;
+        final_expires_at := user_expires_at;
+        final_is_active := user_is_active;
     END IF;
     
     -- Return the final subscription status
@@ -1923,6 +2069,499 @@ $$;
 ALTER FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer DEFAULT 0) RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone, "total_count" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    current_user_id uuid;
+    device_uuid uuid;
+    search_result_count integer;
+    total_result_count integer;
+    rate_info RECORD;
+    cleaned_term text;
+    search_strategy text;
+BEGIN
+    -- Check if user is authenticated
+    current_user_id := auth.uid();
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'not logged in';
+    END IF;
+    
+    -- Validate inputs
+    IF search_term IS NULL OR trim(search_term) = '' THEN
+        RAISE EXCEPTION 'search term cannot be empty';
+    END IF;
+    
+    IF device_id IS NULL OR trim(device_id) = '' THEN
+        RAISE EXCEPTION 'device_id cannot be empty';
+    END IF;
+    
+    -- Validate page_offset
+    IF page_offset IS NULL OR page_offset < 0 THEN
+        page_offset := 0;
+    END IF;
+    
+    -- Validate and convert device_id to UUID
+    BEGIN
+        device_uuid := device_id::uuid;
+    EXCEPTION
+        WHEN invalid_text_representation THEN
+            RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
+    
+    -- Get rate limit information
+    SELECT * INTO rate_info
+    FROM get_rate_limits('product_search', device_id);
+    
+    -- Check if user has exceeded rate limit
+    IF rate_info.is_rate_limited THEN
+        -- Return special rate limit response instead of throwing error
+        RETURN QUERY
+        SELECT
+            '__RATE_LIMIT_EXCEEDED__'::varchar(255) AS ean13,
+            rate_info.subscription_level::varchar(255) AS upc,
+            'Rate limit exceeded'::varchar(255) AS product_name,
+            rate_info.rate_limit::varchar(255) AS brand,
+            'You have exceeded your search limit'::varchar(4096) AS ingredients,
+            'RATE_LIMIT'::text AS classification,
+            NULL::text AS imageurl,
+            NULL::text AS issues,
+            NOW() AS created,
+            NOW() AS lastupdated,
+            0::integer AS total_count;
+        RETURN;
+    END IF;
+    
+    -- Clean the search term
+    cleaned_term := trim(lower(search_term));
+    
+    -- Step 1: Try exact match first and get total count
+    SELECT COUNT(*) INTO total_result_count
+    FROM public.products p
+    WHERE lower((p.product_name)::text) = cleaned_term;
+    
+    IF total_result_count > 0 THEN
+        -- Exact match found
+        search_strategy := 'exact_match';
+        search_result_count := LEAST(total_result_count - page_offset, 20);
+        
+        RETURN QUERY
+        SELECT
+            p.ean13,
+            p.upc,
+            p.product_name,
+            p.brand,
+            p.ingredients,
+            p.classification,
+            p.imageurl,
+            p.issues,
+            p.created,
+            p.lastupdated,
+            total_result_count::integer AS total_count
+        FROM
+            public.products p
+        WHERE
+            lower((p.product_name)::text) = cleaned_term
+        ORDER BY
+            lower((p.product_name)::text)
+        LIMIT 20
+        OFFSET page_offset;
+    ELSE
+        -- No exact match, try prefix search and get total count
+        search_strategy := 'prefix_match';
+        
+        SELECT COUNT(*) INTO total_result_count
+        FROM public.products p
+        WHERE
+            lower((p.product_name)::text) >= cleaned_term
+            AND lower((p.product_name)::text) < (cleaned_term || chr(255))
+            AND lower((p.product_name)::text) LIKE (cleaned_term || '%');
+        
+        search_result_count := LEAST(total_result_count - page_offset, 20);
+        
+        RETURN QUERY
+        SELECT
+            p.ean13,
+            p.upc,
+            p.product_name,
+            p.brand,
+            p.ingredients,
+            p.classification,
+            p.imageurl,
+            p.issues,
+            p.created,
+            p.lastupdated,
+            total_result_count::integer AS total_count
+        FROM
+            public.products p
+        WHERE
+            lower((p.product_name)::text) >= cleaned_term
+            AND lower((p.product_name)::text) < (cleaned_term || chr(255))
+            AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
+        ORDER BY
+            lower((p.product_name)::text)
+        LIMIT 20
+        OFFSET page_offset;
+    END IF;
+    
+    -- Log the search operation (happens for both strategies)
+    INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
+    VALUES (
+        'product_search',
+        search_term,
+        current_user_id,
+        device_uuid,
+        CASE 
+            WHEN total_result_count > 0 THEN format('Found %s total results (%s %s)', total_result_count, search_result_count, search_strategy)
+            ELSE 'No matches found'
+        END,
+        json_build_object(
+            'device_id', device_id,
+            'search_strategy', search_strategy,
+            'result_count', search_result_count,
+            'total_count', total_result_count,
+            'search_term_length', length(search_term),
+            'page_offset', page_offset,
+            'subscription_level', rate_info.subscription_level,
+            'rate_limit', rate_info.rate_limit,
+            'searches_used', rate_info.recent_searches + 1
+        )
+    );
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_final"("search_term" "text", "page_offset" integer DEFAULT 0) RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    current_user_id uuid;
+    cleaned_term text;
+BEGIN
+    -- Check if user is authenticated
+    current_user_id := auth.uid();
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'not logged in';
+    END IF;
+    
+    -- Validate inputs
+    IF search_term IS NULL OR trim(search_term) = '' THEN
+        RAISE EXCEPTION 'search term cannot be empty';
+    END IF;
+    
+    -- Validate page_offset
+    IF page_offset IS NULL OR page_offset < 0 THEN
+        page_offset := 0;
+    END IF;
+    
+    -- Clean the search term
+    cleaned_term := trim(lower(search_term));
+    
+    -- Optimized search using correct index
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) >= cleaned_term
+        AND lower((p.product_name)::text) < (cleaned_term || chr(255))
+        AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
+    ORDER BY
+        lower((p.product_name)::text)
+    LIMIT 20
+    OFFSET page_offset;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_final"("search_term" "text", "page_offset" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_minimal"("search_term" "text") RETURNS TABLE("product_name" character varying)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- Just return a simple result without any complex logic
+    RETURN QUERY
+    SELECT p.product_name
+    FROM public.products p
+    WHERE lower((p.product_name)::text) LIKE (trim(lower(search_term)) || '%')
+    LIMIT 5;
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_minimal"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_no_rate_limit"("search_term" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    cleaned_search_term text;
+BEGIN
+    -- Just clean the search term and do the query
+    cleaned_search_term := trim(lower(search_term));
+    
+    -- Direct query without any complex logic
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) LIKE (cleaned_search_term || '%')
+    ORDER BY
+        p.product_name
+    LIMIT 20;
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_no_rate_limit"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_no_security"("search_term" "text") RETURNS TABLE("product_name" character varying)
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT p.product_name
+    FROM public.products p
+    WHERE lower((p.product_name)::text) LIKE (trim(lower(search_term)) || '%')
+    LIMIT 5;
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_no_security"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_optimized"("search_term" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    cleaned_term text;
+BEGIN
+    -- Clean the search term
+    cleaned_term := trim(lower(search_term));
+    
+    -- Force use of the text_pattern_ops index by using >= and < operators
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) >= cleaned_term
+        AND lower((p.product_name)::text) < (cleaned_term || chr(255))
+        AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
+    ORDER BY
+        lower((p.product_name)::text)
+    LIMIT 20;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_optimized"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_simple"("search_term" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    current_user_id uuid;
+    search_result_count integer;
+    cleaned_search_term text;
+BEGIN
+    -- Check if user is authenticated
+    current_user_id := auth.uid();
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'not logged in';
+    END IF;
+    
+    -- Clean and prepare search term
+    cleaned_search_term := trim(lower(search_term));
+    
+    -- Search for prefix match
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) LIKE (cleaned_search_term || '%')
+    ORDER BY
+        p.product_name
+    LIMIT 20;
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_simple"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_sql_only"("search_term" "text") RETURNS TABLE("product_name" character varying)
+    LANGUAGE "sql" SECURITY DEFINER
+    AS $$
+    SELECT p.product_name
+    FROM public.products p
+    WHERE lower((p.product_name)::text) LIKE (trim(lower(search_term)) || '%')
+    ORDER BY p.product_name
+    LIMIT 5;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_sql_only"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_stable"("search_term" "text") RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- Skip auth check for now to test stability
+    -- IF auth.uid() IS NULL THEN
+    --     RAISE EXCEPTION 'not logged in';
+    -- END IF;
+    
+    -- Direct search with minimal processing
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) LIKE (trim(lower(search_term)) || '%')
+    ORDER BY
+        p.product_name
+    LIMIT 20;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_stable"("search_term" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_working"("search_term" "text", "device_id" "text", "page_offset" integer DEFAULT 0) RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    current_user_id uuid;
+    device_uuid uuid;
+    search_result_count integer;
+    cleaned_search_term text;
+BEGIN
+    -- Check if user is authenticated
+    current_user_id := auth.uid();
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'not logged in';
+    END IF;
+    
+    -- Validate inputs
+    IF search_term IS NULL OR trim(search_term) = '' THEN
+        RAISE EXCEPTION 'search term cannot be empty';
+    END IF;
+    
+    -- Clean and prepare search term
+    cleaned_search_term := trim(lower(search_term));
+    
+    -- Search for prefix match using the indexed expression
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) LIKE (cleaned_search_term || '%')
+    ORDER BY
+        p.product_name
+    LIMIT 20
+    OFFSET page_offset;
+    
+    RETURN;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_working"("search_term" "text", "device_id" "text", "page_offset" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone DEFAULT NULL::timestamp with time zone, "is_active_param" boolean DEFAULT true) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2046,6 +2685,70 @@ $$;
 
 
 ALTER FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone DEFAULT NULL::timestamp with time zone, "is_active_param" boolean DEFAULT true) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    device_uuid uuid;
+    existing_user_id uuid;
+BEGIN
+    -- Validate and convert device_id to UUID
+    IF device_id_param IS NULL OR trim(device_id_param) = '' THEN
+        RAISE EXCEPTION 'device_id parameter is required';
+    END IF;
+
+    BEGIN
+        device_uuid := device_id_param::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'device_id must be a valid UUID';
+    END;
+
+    -- First, try to find existing user_id for this device
+    SELECT userid INTO existing_user_id 
+    FROM public.user_subscription 
+    WHERE deviceid = device_uuid;
+
+    -- Insert or update subscription record
+    INSERT INTO public.user_subscription (
+        userid,
+        deviceid,
+        subscription_level,
+        is_active,
+        expires_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        existing_user_id,  -- Use existing user_id if found, NULL otherwise
+        device_uuid,
+        subscription_level_param,
+        is_active_param,
+        expires_at_param,
+        now(),
+        now()
+    )
+    ON CONFLICT (deviceid) 
+    DO UPDATE SET
+        subscription_level = EXCLUDED.subscription_level,
+        is_active = EXCLUDED.is_active,
+        expires_at = EXCLUDED.expires_at,
+        updated_at = now();
+
+    RETURN TRUE;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE LOG 'webhook_update_subscription error: %', SQLERRM;
+        RETURN FALSE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) IS 'Updates subscription status via webhook calls with service role permissions. Does not require user authentication.';
+
 
 SET default_tablespace = '';
 
@@ -2223,6 +2926,14 @@ CREATE INDEX "products_mfg_idx" ON "public"."products" USING "btree" ("mfg");
 
 
 CREATE INDEX "products_name_idx" ON "public"."products" USING "btree" ("product_name");
+
+
+
+CREATE INDEX "products_name_lower_idx" ON "public"."products" USING "btree" ("lower"(("product_name")::"text"));
+
+
+
+CREATE INDEX "products_name_lower_text_pattern_idx" ON "public"."products" USING "btree" ("lower"(("product_name")::"text") "text_pattern_ops");
 
 
 
@@ -2415,6 +3126,18 @@ GRANT ALL ON FUNCTION "public"."classify_upc"("input_upc" "text") TO "service_ro
 
 
 
+GRANT ALL ON FUNCTION "public"."debug_get_rate_limits_for_user"("action_type" "text", "debug_device_id" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."debug_get_rate_limits_for_user"("action_type" "text", "debug_device_id" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."debug_get_rate_limits_for_user"("action_type" "text", "debug_device_id" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."debug_rate_limits_for_user"() TO "anon";
+GRANT ALL ON FUNCTION "public"."debug_rate_limits_for_user"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."debug_rate_limits_for_user"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_classes_for_upc"("input_upc" "text") TO "service_role";
 
 
@@ -2464,6 +3187,66 @@ GRANT ALL ON FUNCTION "public"."search_ingredients"("search_term" "text", "devic
 
 
 
+GRANT ALL ON FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_final"("search_term" "text", "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_final"("search_term" "text", "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_final"("search_term" "text", "page_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_minimal"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_minimal"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_minimal"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_no_rate_limit"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_no_rate_limit"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_no_rate_limit"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_no_security"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_no_security"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_no_security"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_optimized"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_optimized"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_optimized"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_simple"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_simple"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_simple"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_sql_only"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_sql_only"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_sql_only"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_stable"("search_term" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_stable"("search_term" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_stable"("search_term" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_working"("search_term" "text", "device_id" "text", "page_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_working"("search_term" "text", "device_id" "text", "page_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_working"("search_term" "text", "device_id" "text", "page_offset" integer) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "service_role";
@@ -2479,6 +3262,12 @@ GRANT ALL ON FUNCTION "public"."update_user_subscription_updated_at"() TO "servi
 GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_user_subscription_userid"("device_id_param" "text", "new_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."webhook_update_subscription"("device_id_param" "text", "subscription_level_param" "text", "expires_at_param" timestamp with time zone, "is_active_param" boolean) TO "service_role";
 
 
 
