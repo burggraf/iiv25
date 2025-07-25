@@ -183,11 +183,11 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderRadius: 16,
     alignItems: 'center',
     width: 110,
-    height: 50,
+    height: 65,
     justifyContent: 'center',
   },
   statusIconContainer: {

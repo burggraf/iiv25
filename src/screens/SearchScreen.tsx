@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, Keyboard, TouchableWithoutFeedback, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../components/Logo';
+import LogoWhite from '../components/LogoWhite';
 import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector';
 import ProductSearchItem from '../components/ProductSearchItem';
 import IngredientResult from '../components/IngredientResult';
@@ -376,6 +377,15 @@ export default function SearchScreen() {
                       (item.class === 'vegetarian' || item.class === 'typically vegetarian') && styles.vegetarianBadge,
                       (item.class === 'may be non-vegetarian' || !item.class) && styles.unknownBadge
                     ]}>
+                      <View style={styles.statusIconContainer}>
+                        {(item.class === 'vegan' || item.class === 'typically vegan') ? 
+                          <LogoWhite size={28} /> :
+                         (item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian') ? 
+                          <Text style={styles.statusIconText}>🥩</Text> :
+                         (item.class === 'vegetarian' || item.class === 'typically vegetarian') ? 
+                          <Text style={styles.statusIconText}>🥛</Text> :
+                          <Text style={styles.unknownIconText}>?</Text>}
+                      </View>
                       <Text style={styles.statusText}>
                         {item.class === 'vegan' || item.class === 'typically vegan' ? 'VEGAN' : 
                          item.class === 'non-vegetarian' || item.class === 'typically non-vegan' || item.class === 'typically non-vegetarian' ? 'NOT VEGETARIAN' : 
@@ -711,16 +721,32 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderRadius: 16,
-    minWidth: 80,
+    width: 110,
+    height: 65,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconContainer: {
+    marginBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconText: {
+    fontSize: 16,
+  },
+  unknownIconText: {
+    fontSize: 20,
+    color: 'white',
+    fontWeight: 'bold',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
     color: 'white',
+    textAlign: 'center',
   },
   veganBadge: {
     backgroundColor: '#4CAF50',
