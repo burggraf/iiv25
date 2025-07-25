@@ -10,8 +10,8 @@ import ManualIcon from '../../src/components/icons/ManualIcon'
 import SearchIcon from '../../src/components/icons/SearchIcon'
 import Logo from '../../src/components/Logo'
 import UserAccountModal from '../../src/components/UserAccountModal'
-import { useAuth } from '../../src/context/AuthContext'
 import { useApp } from '../../src/context/AppContext'
+import { useAuth } from '../../src/context/AuthContext'
 import { SubscriptionService, SubscriptionStatus } from '../../src/services/subscriptionService'
 
 export default function HomeScreen() {
@@ -81,7 +81,9 @@ export default function HomeScreen() {
 									onPress={() => setShowUserModal(true)}
 									activeOpacity={0.7}>
 									<Text style={styles.planChickletText}>
-										{SubscriptionService.getSubscriptionDisplayName(subscriptionStatus.subscription_level)}
+										{SubscriptionService.getSubscriptionDisplayName(
+											subscriptionStatus.subscription_level
+										)}
 									</Text>
 								</TouchableOpacity>
 							)}
@@ -174,13 +176,19 @@ export default function HomeScreen() {
 				<View style={styles.infoBox}>
 					<Text style={styles.infoBoxTitle}>More Information:</Text>
 					<Text style={styles.infoBoxText}>
-						After putting each ingredient into a category, Is It Vegan then decides whether the product is suitable for a vegan or vegetarian diet. Our database has information on hundreds of thousands of food and beverage products and verifies each of them using a master list containing thousands of classified ingredients.
+						After putting each ingredient into a category, Is It Vegan then decides whether the
+						product is suitable for a vegan or vegetarian diet. Our database has information on
+						hundreds of thousands of food and beverage products and verifies each of them using a
+						master list containing thousands of classified ingredients.
 					</Text>
 					<Text style={styles.infoBoxText}>
-						If a product is not yet in our app, you will be prompted to take a photo of the packaging, and/or one of the ingredients list. Is It Vegan will then categorize the ingredients, and automatically add it to our database for any future scans.
+						If a product is not yet in our app, you will be prompted to take a photo of the
+						packaging, and/or one of the ingredients list. Is It Vegan will then categorize the
+						ingredients, and automatically add it to our database for any future scans.
 					</Text>
 					<Text style={styles.infoBoxText}>
-						Is It Vegan now works on food labels in over 100 languages with our built-in ingredient translator.
+						Is It Vegan now works on food labels in over 100 languages with our built-in ingredient
+						translator.
 					</Text>
 				</View>
 
@@ -188,10 +196,26 @@ export default function HomeScreen() {
 				<View style={styles.disclaimerBox}>
 					<Text style={styles.disclaimerTitle}>Disclaimer:</Text>
 					<Text style={styles.disclaimerText}>
-						This app is designed for educational and entertainment purposes only. This app is designed to provide accurate information regarding the subject matter covered. It is not intended as a substitute for medical advice from a qualified physician. This app does not identify allergens or other health-related issues related to food, but rather is a guideline for individuals who, for various reasons, wish to eliminate animal-derived products from their diet. You should consult your medical doctor or a competent professional before making any dietary changes.
+						This app is designed for educational and entertainment purposes only. This app is
+						designed to provide accurate information regarding the subject matter covered. It is not
+						intended as a substitute for medical advice from a qualified physician. This app does
+						not identify allergens or other health-related issues related to food, but rather is a
+						guideline for individuals who, for various reasons, wish to eliminate animal-derived
+						products from their diet. You should consult your medical doctor or a competent
+						professional before making any dietary changes.
 					</Text>
 					<Text style={styles.disclaimerText}>
-						The developers of this app disclaim all responsibility for any liability, loss, or risk, personal or otherwise, from the use and application of any of the contents of this app or any related web site or other documentation (either printed or electronic).
+						The developers of this app disclaim all responsibility for any liability, loss, or risk,
+						personal or otherwise, from the use and application of any of the contents of this app
+						or any related web site or other documentation (either printed or electronic).
+					</Text>
+					<Text style={styles.disclaimerText}>
+						Portions of the data contained in this app are sourced from the following sources:
+						&copy; Open Food Facts contributors — https://world.openfoodfacts.org
+					</Text>
+					<Text style={styles.disclaimerText}>
+						The rest of the data contained in this app is &copy; Is It Vegan, Conner Burggraf, all
+						rights reserved worldwide
 					</Text>
 				</View>
 			</ScrollView>
