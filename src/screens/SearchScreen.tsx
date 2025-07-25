@@ -69,17 +69,21 @@ export default function SearchScreen() {
         classificationMethod: 'product-level' as const
       }));
       
+      // Get total count from the first result (all results have the same total_count)
+      const totalCount = supabaseProducts.length > 0 ? (supabaseProducts[0].total_count || 0) : 0;
+      
       if (page === 1) {
         setProductResults(products);
         setCurrentPage(1);
-        // Since we get fixed 20 results, assume there might be more if we got exactly 20
-        setHasNextPage(products.length === 20);
-        setTotalResults(products.length); // We don't get total count from the function
+        setTotalResults(totalCount);
+        // Check if there are more pages based on total count
+        setHasNextPage(totalCount > 20);
       } else {
         setProductResults(prev => [...prev, ...products]);
         setCurrentPage(page);
-        setHasNextPage(products.length === 20);
-        setTotalResults(prev => prev + products.length);
+        setTotalResults(totalCount);
+        // Check if there are more pages based on current page and total count
+        setHasNextPage((page * 20) < totalCount);
       }
       
       if (products.length === 0 && page === 1) {

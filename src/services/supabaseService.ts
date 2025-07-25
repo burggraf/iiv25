@@ -21,6 +21,7 @@ export interface SupabaseProduct {
   issues?: string;
   created?: string;
   lastupdated?: string;
+  total_count?: number;
 }
 
 export class SupabaseService {
