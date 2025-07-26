@@ -16,8 +16,8 @@ WebBrowser.maybeCompleteAuthSession()
 const createSessionFromUrl = async (url: string) => {
 	console.log('Creating session from OAuth URL:', url)
 	
-	// Only process URLs that contain OAuth tokens
-	if (!url.includes('access_token') && !url.includes('error=')) {
+	// Only process URLs that contain OAuth tokens or code
+	if (!url.includes('access_token') && !url.includes('error=') && !url.includes('code=')) {
 		console.log('URL does not contain OAuth parameters, skipping')
 		return
 	}
@@ -32,10 +32,28 @@ const createSessionFromUrl = async (url: string) => {
 		throw new Error(errorCode)
 	}
 	
-	const { access_token, refresh_token } = params
+	const { access_token, refresh_token, code } = params
 
+	// Handle OAuth code flow (PKCE)
+	if (code) {
+		// Clean the code parameter - remove any fragments or extra characters
+		const cleanCode = code.replace(/#.*$/, '').trim()
+		console.log('Exchanging OAuth code for session...', { originalCode: code, cleanCode })
+		
+		const { data, error } = await supabase.auth.exchangeCodeForSession(cleanCode)
+		
+		if (error) {
+			console.error('Error exchanging code for session:', error)
+			throw error
+		}
+		
+		console.log('OAuth session created successfully from code:', data.user?.id)
+		return data.session
+	}
+	
+	// Handle legacy implicit flow (for backwards compatibility)
 	if (!access_token) {
-		console.error('No access token found in OAuth URL params')
+		console.error('No access token or code found in OAuth URL params')
 		return
 	}
 
@@ -74,8 +92,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		
 		// Handle deep linking for OAuth callback
 		const handleDeepLink = (url: string) => {
-			// Only process URLs that contain OAuth tokens
-			const isOAuthUrl = url && (url.includes('access_token') || url.includes('error='))
+			// Only process URLs that contain OAuth tokens or code
+			const isOAuthUrl = url && (url.includes('access_token') || url.includes('error=') || url.includes('code='))
 			
 			if (isOAuthUrl) {
 				console.log('Processing OAuth deep link:', url)
