@@ -74,12 +74,20 @@ BEGIN
         current_rate_limit := 10; -- 10 for free tier
     END CASE;
 
-    -- Count recent searches
-    SELECT count(*) INTO search_count
-    FROM actionlog
-    WHERE type = action_type
-    AND created_at > now() - interval '24 hours'
-    AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    -- Count recent searches - for search actions, count both product_search and ingredient_search
+    IF action_type IN ('product_search', 'ingredient_search') THEN
+        SELECT count(*) INTO search_count
+        FROM actionlog
+        WHERE type IN ('product_search', 'ingredient_search')
+        AND created_at > now() - interval '24 hours'
+        AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    ELSE
+        SELECT count(*) INTO search_count
+        FROM actionlog
+        WHERE type = action_type
+        AND created_at > now() - interval '24 hours'
+        AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    END IF;
 
     -- Determine if rate limited
     rate_limited := search_count >= current_rate_limit;

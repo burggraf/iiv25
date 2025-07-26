@@ -6,9 +6,9 @@
 -- This function provides a hierarchical search strategy for ingredients with rate limiting:
 -- 1. Authentication check (requires valid auth.uid())
 -- 2. Rate limit check based on subscription level:
---    - Free: 10 searches per hour
---    - Standard: unlimited searches per hour
---    - Premium: unlimited searches per hour
+--    - Free: 10 total searches per day (combined with product_search and product_lookup)
+--    - Standard: unlimited searches per day
+--    - Premium: unlimited searches per day
 -- 3. Hierarchical search (exact → starts with → contains)
 -- 4. Automatic logging with subscription and rate limit metadata
 --

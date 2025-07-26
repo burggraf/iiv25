@@ -128,7 +128,11 @@ export class SupabaseService {
 
       return data || [];
     } catch (error) {
-      console.error('Failed to search ingredients:', error);
+      // Don't log authentication or rate limit errors as they are expected and handled gracefully
+      const errorMessage = (error as any)?.message || '';
+      if (errorMessage !== 'not logged in' && !(error as any).isRateLimit) {
+        console.error('Failed to search ingredients:', error);
+      }
       throw error;
     }
   }
@@ -294,7 +298,10 @@ export class SupabaseService {
       
       return data || [];
     } catch (error) {
-      console.error('Failed to search products:', error);
+      // Don't log rate limit errors as they are expected and handled gracefully
+      if (!(error as any).isRateLimit) {
+        console.error('Failed to search products:', error);
+      }
       throw error;
     }
   }

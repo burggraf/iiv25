@@ -1,7 +1,6 @@
 import { BarcodeScanningResult, Camera, CameraView } from 'expo-camera'
 import { isDevice } from 'expo-device'
 import * as ImagePicker from 'expo-image-picker'
-import { router } from 'expo-router'
 import { useIsFocused } from '@react-navigation/native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -22,6 +21,7 @@ import BellIcon from '../components/icons/BellIcon'
 import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
 import ProductDisplayContainer from '../components/ProductDisplayContainer'
+import RateLimitModal from '../components/RateLimitModal'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
 import TakePhotoButton from '../components/TakePhotoButton'
 import { useApp } from '../context/AppContext'
@@ -527,12 +527,6 @@ export default function ScannerScreen() {
 		// Clear processing state to allow new scans
 		processingBarcodeRef.current = null;
 		setIsLoading(false);
-	}
-
-	const handleSubscribe = () => {
-		setShowRateLimitModal(false);
-		// Navigate to home tab and automatically open subscription management
-		router.push('/(tabs)/?openSubscription=true');
 	}
 
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
@@ -1215,31 +1209,10 @@ export default function ScannerScreen() {
 			)}
 
 			{/* Rate Limit Modal */}
-			{showRateLimitModal && (
-				<View style={styles.createProductModal}>
-					<View style={styles.createProductModalContent}>
-						<View style={styles.createProductModalHeader}>
-							<Text style={styles.retryErrorIcon}>⏰</Text>
-							<Text style={styles.createProductModalTitle}>Rate Limit Exceeded</Text>
-							<Text style={styles.createProductModalSubtitle}>
-								The free plan includes 10 product lookups and 3 searches per day.
-							</Text>
-						</View>
-						<View style={styles.createProductModalButtons}>
-							<TouchableOpacity
-								style={styles.createProductModalCancelButton}
-								onPress={handleRateLimitClose}>
-								<Text style={styles.createProductModalCancelText}>Close</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={styles.createProductModalConfirmButton}
-								onPress={handleSubscribe}>
-								<Text style={styles.createProductModalConfirmText}>Upgrade Plan</Text>
-							</TouchableOpacity>
-						</View>
-					</View>
-				</View>
-			)}
+			<RateLimitModal 
+				isVisible={showRateLimitModal}
+				onClose={handleRateLimitClose}
+			/>
 
 			{/* Create Product Modal */}
 			{showCreateProductModal && (

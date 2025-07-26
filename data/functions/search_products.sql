@@ -5,9 +5,9 @@
 -- This function provides name-based product search with rate limiting and pagination:
 -- 1. Authentication check (requires valid auth.uid())
 -- 2. Rate limit check based on subscription level:
---    - Free: 10 searches per hour
---    - Standard: 20 searches per hour  
---    - Premium: 250 searches per hour
+--    - Free: 10 total searches per day (combined with ingredient_search and product_lookup)
+--    - Standard: unlimited searches per day  
+--    - Premium: unlimited searches per day
 -- 3. Two-tier search strategy (exact match → prefix match)
 -- 4. Pagination support (20 products per page)
 -- 5. Automatic logging with detailed metadata about the search

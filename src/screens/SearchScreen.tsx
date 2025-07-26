@@ -7,6 +7,7 @@ import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector
 import ProductSearchItem from '../components/ProductSearchItem';
 import IngredientResult from '../components/IngredientResult';
 import ProductDisplayContainer from '../components/ProductDisplayContainer';
+import RateLimitModal from '../components/RateLimitModal';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
 import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
 import { useApp } from '../context/AppContext';
@@ -29,6 +30,9 @@ export default function SearchScreen() {
   // Ingredient search state
   const [ingredientResult, setIngredientResult] = useState<IngredientInfo | null>(null);
   const [supabaseIngredients, setSupabaseIngredients] = useState<SupabaseIngredient[]>([]);
+  
+  // Rate limit modal state
+  const [showRateLimitModal, setShowRateLimitModal] = useState(false);
   
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -103,27 +107,13 @@ export default function SearchScreen() {
         Alert.alert('No Results', `No products found for "${query}". Try a different search term.`);
       }
     } catch (err: any) {
-      console.error('Search error:', err);
-      
       // Handle rate limit errors
       if (err.isRateLimit) {
-        const subscriptionLevel = err.subscriptionLevel;
-        const rateLimit = err.rateLimit;
-        
-        let upgradeMessage = '';
-        if (subscriptionLevel === 'free') {
-          upgradeMessage = '\n\nUpgrade to Standard (20/hour) or Premium (250/hour) for more searches.';
-        } else if (subscriptionLevel === 'standard') {
-          upgradeMessage = '\n\nUpgrade to Premium (250/hour) for more searches.';
-        }
-        
-        const alertTitle = 'Search Limit Reached';
-        const alertMessage = `You've reached your hourly search limit.\n\nRate limit exceeded: ${subscriptionLevel} tier allows ${rateLimit} searches per hour.${upgradeMessage}`;
-        
-        Alert.alert(alertTitle, alertMessage);
+        setShowRateLimitModal(true);
         return;
       }
       
+      console.error('Search error:', err);
       Alert.alert('Search Error', 'Failed to search products. Please try again.');
     }
   };
@@ -135,50 +125,7 @@ export default function SearchScreen() {
       
       // Check for rate limit response
       if (supabaseResults.length === 1 && supabaseResults[0].title === '__RATE_LIMIT_EXCEEDED__') {
-        const rateLimitInfo = supabaseResults[0];
-        const subscriptionLevel = rateLimitInfo.class;
-        const rateLimit = rateLimitInfo.productcount;
-        
-        // Create user-friendly message
-        let upgradeMessage = '';
-        if (subscriptionLevel === 'free') {
-          upgradeMessage = '\n\nUpgrade to Standard (20/hour) or Premium (250/hour) for more searches.';
-        } else if (subscriptionLevel === 'standard') {
-          upgradeMessage = '\n\nUpgrade to Premium (250/hour) for more searches.';
-        }
-        
-        const alertTitle = 'Search Limit Reached';
-        const alertMessage = `You've reached your hourly search limit.\n\nRate limit exceeded: ${subscriptionLevel} tier allows ${rateLimit} searches per hour.${upgradeMessage}`;
-        
-        // Use appropriate alert method based on platform
-        if (Platform.OS === 'web') {
-          // Web environment - use browser confirm dialog
-          if (upgradeMessage) {
-            const result = window.confirm(alertMessage + '\n\nWould you like to upgrade your subscription?');
-            if (result) {
-              // TODO: Navigate to subscription/upgrade screen
-              console.log('Should navigate to upgrade screen');
-            }
-          } else {
-            window.alert(alertMessage);
-          }
-        } else {
-          // Native environment - use React Native Alert
-          Alert.alert(
-            alertTitle,
-            alertMessage,
-            [
-              { text: 'OK' },
-              ...(upgradeMessage ? [{ 
-                text: 'Upgrade', 
-                onPress: () => {
-                  // TODO: Navigate to subscription/upgrade screen
-                  console.log('Should navigate to upgrade screen');
-                }
-              }] : [])
-            ]
-          );
-        }
+        setShowRateLimitModal(true);
         return;
       }
       
@@ -281,6 +228,10 @@ export default function SearchScreen() {
   const handleProductUpdated = (updatedProduct: Product) => {
     // Update the selected product state to reflect changes
     setSelectedProduct(updatedProduct);
+  };
+
+  const handleRateLimitClose = () => {
+    setShowRateLimitModal(false);
   };
 
   const handleNewSearch = () => {
@@ -530,6 +481,12 @@ export default function SearchScreen() {
           />
         </View>
       )}
+      
+      {/* Rate Limit Modal */}
+      <RateLimitModal 
+        isVisible={showRateLimitModal}
+        onClose={handleRateLimitClose}
+      />
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );

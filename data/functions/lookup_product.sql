@@ -5,9 +5,9 @@
 -- This function provides barcode-based product lookup with rate limiting:
 -- 1. Authentication check (requires valid auth.uid())
 -- 2. Rate limit check based on subscription level:
---    - Free: 10 searches per hour
---    - Standard: unlimited searches per hour
---    - Premium: unlimited searches per hour
+--    - Free: 10 total searches per day (combined with product_search and ingredient_search)
+--    - Standard: unlimited searches per day
+--    - Premium: unlimited searches per day
 -- 3. Product lookup by UPC/EAN13 barcode
 -- 4. Automatic logging with detailed metadata about the decision path
 --
