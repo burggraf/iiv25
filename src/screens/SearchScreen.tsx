@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, Keyboard, TouchableWithoutFeedback, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../components/Logo';
@@ -10,11 +10,12 @@ import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import RateLimitModal from '../components/RateLimitModal';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
 import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
+import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services/subscriptionService';
 import { useApp } from '../context/AppContext';
 import { Product, VeganStatus } from '../types';
 
 export default function SearchScreen() {
-  const { addToHistory } = useApp();
+  const { addToHistory, deviceId } = useApp();
   const [searchMode, setSearchMode] = useState<SearchMode>('products');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +35,50 @@ export default function SearchScreen() {
   // Rate limit modal state
   const [showRateLimitModal, setShowRateLimitModal] = useState(false);
   
+  // Subscription state
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+  
+  // Load subscription data when deviceId becomes available
+  useEffect(() => {
+    if (deviceId) {
+      loadSubscriptionData();
+    }
+  }, [deviceId, loadSubscriptionData]);
+
+  const loadSubscriptionData = useCallback(async () => {
+    try {
+      if (!deviceId) {
+        console.log('Device ID not available, skipping subscription data load');
+        return;
+      }
+
+      // Load subscription status and usage stats in parallel
+      const [status, stats] = await Promise.all([
+        SubscriptionService.getSubscriptionStatus(deviceId),
+        SubscriptionService.getUsageStats(deviceId)
+      ]);
+
+      setSubscriptionStatus(status);
+      setUsageStats(stats);
+      
+    } catch (error) {
+      console.error('Failed to load subscription data:', error);
+    }
+  }, [deviceId]);
+
+  const refreshUsageStats = async () => {
+    try {
+      if (!deviceId) return;
+
+      const stats = await SubscriptionService.getUsageStats(deviceId);
+      setUsageStats(stats);
+      
+    } catch (error) {
+      console.error('Failed to refresh usage stats:', error);
+    }
+  };
+  
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       Alert.alert('Search Required', 'Please enter a search term.');
@@ -48,6 +93,12 @@ export default function SearchScreen() {
     } else {
       await searchIngredient(searchQuery);
     }
+    
+    // Refresh usage stats after any search attempt (successful or not)
+    // Add a small delay to ensure backend has processed the search
+    setTimeout(() => {
+      refreshUsageStats();
+    }, 1000);
     
     setIsLoading(false);
   };
@@ -393,6 +444,19 @@ export default function SearchScreen() {
         }}
       />
 
+      {/* Free Plan Search Counter */}
+      {subscriptionStatus?.subscription_level === 'free' && usageStats && (() => {
+        // Both product and ingredient searches use the unified searches quota
+        const searchesRemaining = Math.max(0, usageStats.searches_limit - usageStats.searches_today);
+        return (
+          <View style={styles.searchCounterContainer}>
+            <Text style={styles.scanCounterText}>
+              Free Plan: {searchesRemaining} of {usageStats.searches_limit} searches remaining today
+            </Text>
+          </View>
+        );
+      })()}
+
       {/* Search Input */}
       <View style={styles.searchContainer}>
         <TouchableOpacity 
@@ -722,5 +786,18 @@ const styles = StyleSheet.create({
   },
   unknownBadge: {
     backgroundColor: '#9E9E9E',
+  },
+  searchCounterContainer: {
+    backgroundColor: 'white',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  scanCounterText: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#888',
+    marginBottom: 0,
   },
 });
