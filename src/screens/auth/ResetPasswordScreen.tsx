@@ -20,25 +20,36 @@ const { height: screenHeight } = Dimensions.get('window');
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const { updatePassword } = useAuth();
-  const { token, email } = useLocalSearchParams<{ token: string; email: string }>();
+  const { token_hash, type } = useLocalSearchParams<{ token_hash: string; type: string }>();
   
   const [formState, setFormState] = useState({
     password: '',
     confirmPassword: '',
     isLoading: false,
     error: null as string | null,
+    isValidated: false,
   });
 
   useEffect(() => {
-    // Validate that we have the required parameters
-    if (!token || !email) {
+    // Validate that we have the required parameters for password reset
+    if (!token_hash || type !== 'recovery') {
       Alert.alert(
         'Invalid Link',
         'This password reset link is invalid or expired. Please request a new one.',
         [{ text: 'OK', onPress: () => router.push('/auth/forgot-password') }]
       );
+      return;
     }
-  }, [token, email, router]);
+    
+    // Don't verify the token here as verifyOtp creates a session and logs user in
+    // Instead, just mark as validated if we have the required parameters
+    // The actual verification will happen during password update
+    console.log('Reset password screen - Valid parameters detected:', { token_hash, type });
+    setFormState(prev => ({ 
+      ...prev, 
+      isValidated: true 
+    }));
+  }, [token_hash, type, router]);
 
   const handleInputChange = (field: 'password' | 'confirmPassword', value: string) => {
     setFormState(prev => ({
@@ -78,11 +89,40 @@ export default function ResetPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!validateForm()) return;
+    
+    if (!formState.isValidated || !token_hash || type !== 'recovery') {
+      setFormState(prev => ({
+        ...prev,
+        error: 'Password reset link is not valid. Please request a new one.',
+      }));
+      return;
+    }
 
     setFormState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      await updatePassword(formState.password);
+      // Import supabase client to verify the token and update password
+      const { supabase } = await import('../../services/supabaseClient');
+      
+      // First verify the recovery token (this will create a session)
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'recovery',
+      });
+      
+      if (verifyError) {
+        throw new Error('Invalid or expired reset link. Please request a new one.');
+      }
+      
+      // Now update the password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: formState.password,
+      });
+      
+      if (updateError) {
+        throw updateError;
+      }
+      
       Alert.alert(
         'Password Updated',
         'Your password has been successfully updated. You can now sign in with your new password.',

@@ -90,16 +90,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		// Test polyfill on initialization
 		testPolyfill()
 		
-		// Handle deep linking for OAuth callback
+		// Handle deep linking for OAuth callback and password reset
 		const handleDeepLink = (url: string) => {
-			// Only process URLs that contain OAuth tokens or code
-			const isOAuthUrl = url && (url.includes('access_token') || url.includes('error=') || url.includes('code='))
+			if (!url) return
+			
+			console.log('🔗 Processing deep link:', url)
+			
+			// Check if it's an OAuth URL
+			const isOAuthUrl = url.includes('access_token') || url.includes('error=') || url.includes('code=')
+			
+			// Check if it's a password reset URL - be more specific about detection
+			const isPasswordResetUrl = url.includes('auth/reset-password')
+			const hasTokenHash = url.includes('token_hash')
+			const hasRecoveryType = url.includes('type=recovery')
+			
+			console.log('🔍 URL analysis:', { 
+				isOAuthUrl, 
+				isPasswordResetUrl, 
+				hasTokenHash, 
+				hasRecoveryType,
+				fullUrl: url 
+			})
 			
 			if (isOAuthUrl) {
-				console.log('Processing OAuth deep link:', url)
+				console.log('🔐 Processing OAuth deep link')
 				createSessionFromUrl(url).catch(console.error)
-			} else if (url) {
-				console.log('Ignoring non-OAuth deep link:', url)
+			} else if (isPasswordResetUrl) {
+				console.log('🔑 Processing password reset deep link')
+				if (hasTokenHash && hasRecoveryType) {
+					console.log('✅ Password reset URL has required parameters, Expo Router should handle navigation')
+				} else {
+					console.log('⚠️ Password reset URL missing expected parameters:', { hasTokenHash, hasRecoveryType })
+				}
+				// The password reset screen will handle the token_hash parameter
+				// No additional processing needed here, Expo Router will navigate to the correct screen
+			} else {
+				console.log('❌ Ignoring unrecognized deep link:', url)
 			}
 		}
 
