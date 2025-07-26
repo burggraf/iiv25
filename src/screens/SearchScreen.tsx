@@ -472,6 +472,7 @@ export default function SearchScreen() {
                 ? 'Search for products'
                 : 'Search for ingredients'
             }
+            placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearch}
