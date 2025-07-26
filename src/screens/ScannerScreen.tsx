@@ -51,6 +51,8 @@ export default function ScannerScreen() {
 	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
 	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
 	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
+	const [showIngredientScanSuccess, setShowIngredientScanSuccess] = useState(false)
+	const [showProductCreationSuccess, setShowProductCreationSuccess] = useState(false)
 	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
 	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
 	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
@@ -67,6 +69,18 @@ export default function ScannerScreen() {
 	// Simple cache for last 20 scanned UPCs and their results
 	const scannedUPCQueue = useRef<string[]>([])
 	const scannedResultsCache = useRef<Map<string, Product>>(new Map())
+
+	// Helper function to show success feedback before closing modal
+	const showSuccessFeedback = (
+		setSuccessState: (value: boolean) => void,
+		setModalState: (value: boolean) => void
+	) => {
+		setSuccessState(true)
+		setTimeout(() => {
+			setSuccessState(false)
+			setModalState(false)
+		}, 500)
+	}
 
 	useEffect(() => {
 		const getCameraPermissions = async () => {
@@ -294,6 +308,7 @@ export default function ScannerScreen() {
 
 
 	const handleScanIngredients = async () => {
+		let isSuccess = false
 		try {
 			setIsParsingIngredients(true)
 			setParsedIngredients(null)
@@ -358,6 +373,7 @@ export default function ScannerScreen() {
 
 			setParsedIngredients(data.ingredients)
 			setError(null)
+			isSuccess = true
 
 			// Always refresh the product data after successful ingredient processing
 			console.log(`🔄 Refreshing product data after ingredient processing`)
@@ -401,7 +417,12 @@ export default function ScannerScreen() {
 			setError('Failed to parse ingredients. Please try again.')
 		} finally {
 			setIsParsingIngredients(false)
-			setShowIngredientScanModal(false)
+			// Show success feedback before closing modal
+			if (isSuccess) {
+				showSuccessFeedback(setShowIngredientScanSuccess, setShowIngredientScanModal)
+			} else {
+				setShowIngredientScanModal(false)
+			}
 		}
 	}
 
@@ -530,6 +551,7 @@ export default function ScannerScreen() {
 	}
 
 	const processProductCreation = async (imageBase64: string, imageUri?: string) => {
+		let isSuccess = false
 		try {
 			setShowProductCreationModal(true)
 			
@@ -576,6 +598,7 @@ export default function ScannerScreen() {
 					
 					// Clear error since we're now showing the full product
 					setError(null)
+					isSuccess = true
 					
 					// Animate overlay to show the product
 					Animated.timing(overlayHeight, {
@@ -620,7 +643,12 @@ export default function ScannerScreen() {
 			});
 		} finally {
 			setIsCreatingProduct(false)
-			setShowProductCreationModal(false)
+			// Show success feedback before closing modal (only on success)
+			if (isSuccess) {
+				showSuccessFeedback(setShowProductCreationSuccess, setShowProductCreationModal)
+			} else {
+				setShowProductCreationModal(false)
+			}
 		}
 	}
 
@@ -1061,8 +1089,14 @@ export default function ScannerScreen() {
 				<View style={styles.loadingModal}>
 					<View style={styles.loadingModalContent}>
 						<LogoWhite size={48} />
-						<Text style={styles.loadingModalTitle}>Analyzing ingredients...</Text>
-						<ActivityIndicator size="large" color="#007AFF" style={styles.loadingSpinner} />
+						<Text style={styles.loadingModalTitle}>
+							{showIngredientScanSuccess ? 'Analysis complete!' : 'Analyzing ingredients...'}
+						</Text>
+						{showIngredientScanSuccess ? (
+							<Text style={styles.successCheckmark}>✅</Text>
+						) : (
+							<ActivityIndicator size="large" color="#007AFF" style={styles.loadingSpinner} />
+						)}
 					</View>
 				</View>
 			)}
@@ -1072,8 +1106,14 @@ export default function ScannerScreen() {
 				<View style={styles.loadingModal}>
 					<View style={styles.loadingModalContent}>
 						<BarcodeIcon size={48} color="#FF6B35" />
-						<Text style={styles.loadingModalTitle}>Adding new product...</Text>
-						<ActivityIndicator size="large" color="#FF6B35" style={styles.loadingSpinner} />
+						<Text style={styles.loadingModalTitle}>
+							{showProductCreationSuccess ? 'Product added!' : 'Adding new product...'}
+						</Text>
+						{showProductCreationSuccess ? (
+							<Text style={styles.successCheckmark}>✅</Text>
+						) : (
+							<ActivityIndicator size="large" color="#FF6B35" style={styles.loadingSpinner} />
+						)}
 					</View>
 				</View>
 			)}
@@ -1722,6 +1762,10 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 	},
 	loadingSpinner: {
+		marginTop: 10,
+	},
+	successCheckmark: {
+		fontSize: 48,
 		marginTop: 10,
 	},
 	inactiveCamera: {
