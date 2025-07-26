@@ -340,9 +340,9 @@ export class PaymentService {
       const isLifetimeProduct = productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME;
       
       if (isLifetimeProduct) {
-        // For non-consumable products, use requestPurchase
+        // For non-consumable products, use requestPurchase with sku (not skus array)
         console.log('PaymentService: Purchasing non-consumable product:', productId);
-        await requestPurchase({ skus: [productId] });
+        await requestPurchase({ sku: productId });
       } else {
         // For subscriptions, use requestSubscription
         console.log('PaymentService: Purchasing subscription:', productId);
