@@ -60,6 +60,17 @@ export default function HomeScreen() {
 		}
 	}, [deviceId, user])
 
+	const handleUserModalClose = () => {
+		setShowUserModal(false)
+		// Refresh subscription status when modal closes
+		loadSubscriptionStatus()
+	}
+
+	const handleSubscriptionChanged = () => {
+		// Refresh subscription status immediately when subscription changes
+		loadSubscriptionStatus()
+	}
+
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
 			<ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -221,7 +232,11 @@ export default function HomeScreen() {
 			</ScrollView>
 
 			{/* User Account Modal */}
-			<UserAccountModal visible={showUserModal} onClose={() => setShowUserModal(false)} />
+			<UserAccountModal 
+				visible={showUserModal} 
+				onClose={handleUserModalClose}
+				onSubscriptionChanged={handleSubscriptionChanged}
+			/>
 		</SafeAreaView>
 	)
 }

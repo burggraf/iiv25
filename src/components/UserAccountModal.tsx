@@ -27,9 +27,10 @@ import {
 interface UserAccountModalProps {
 	visible: boolean
 	onClose: () => void
+	onSubscriptionChanged?: () => void
 }
 
-export default function UserAccountModal({ visible, onClose }: UserAccountModalProps) {
+export default function UserAccountModal({ visible, onClose, onSubscriptionChanged }: UserAccountModalProps) {
 	const { user, signOut, isAnonymous } = useAuth()
 	const { deviceId } = useApp()
 	const insets = useSafeAreaInsets()
@@ -89,6 +90,11 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 		}
 	}
 
+	const handleSubscriptionChanged = () => {
+		loadSubscriptionStatus()
+		loadUsageStats()
+		onSubscriptionChanged?.()
+	}
 
 	const handleSignOut = async () => {
 		try {
@@ -298,6 +304,7 @@ export default function UserAccountModal({ visible, onClose }: UserAccountModalP
 			<ManageSubscriptionModal
 				visible={showManageSubscription}
 				onClose={() => setShowManageSubscription(false)}
+				onSubscriptionChanged={handleSubscriptionChanged}
 			/>
 		</Modal>
 	)

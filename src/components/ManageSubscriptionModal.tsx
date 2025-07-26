@@ -30,9 +30,10 @@ import {
 interface ManageSubscriptionModalProps {
 	visible: boolean
 	onClose: () => void
+	onSubscriptionChanged?: () => void
 }
 
-export default function ManageSubscriptionModal({ visible, onClose }: ManageSubscriptionModalProps) {
+export default function ManageSubscriptionModal({ visible, onClose, onSubscriptionChanged }: ManageSubscriptionModalProps) {
 	const { user } = useAuth()
 	const { deviceId } = useApp()
 	const insets = useSafeAreaInsets()
@@ -170,6 +171,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 				// Refresh subscription status after a short delay
 				setTimeout(() => {
 					loadSubscriptionData()
+					onSubscriptionChanged?.()
 				}, 2000)
 			} else {
 				Alert.alert('Purchase Failed', result.error || 'Unable to complete purchase.')
@@ -251,6 +253,7 @@ export default function ManageSubscriptionModal({ visible, onClose }: ManageSubs
 
 					// Refresh subscription status
 					loadSubscriptionData()
+					onSubscriptionChanged?.()
 				} else {
 					Alert.alert(
 						'No Purchases Found',
