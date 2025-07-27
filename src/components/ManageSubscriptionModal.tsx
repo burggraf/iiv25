@@ -247,7 +247,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 				if (result.restoredCount > 0) {
 					Alert.alert(
 						'Purchases Restored',
-						`Successfully restored ${result.restoredCount} purchase(s).`,
+						'Purchases were successfully restored.',
 						[{ text: 'OK' }]
 					)
 

@@ -1081,7 +1081,7 @@ export default function ScannerScreen() {
 						</Text>
 					)
 				})()}
-				<Text style={styles.tipText}>💡 Scan continuously{'\n'}Tap product card to view details</Text>
+				<Text style={styles.tipText}>💡 Scan food product barcodes{'\n'}Tap product to view details</Text>
 			</View>
 
 			{/* Ingredient Scan Modal */}
