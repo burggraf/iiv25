@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "net.isitvegan.app",
-      "buildNumber": "15",
+      "buildNumber": "18",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
         "NSMicrophoneUsageDescription": "This app does not use the microphone.",

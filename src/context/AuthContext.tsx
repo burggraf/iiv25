@@ -16,6 +16,12 @@ WebBrowser.maybeCompleteAuthSession()
 const createSessionFromUrl = async (url: string) => {
 	console.log('Creating session from OAuth URL:', url)
 	
+	// ABSOLUTELY SKIP password reset URLs - let Expo Router handle them
+	if (url.includes('auth/reset-password')) {
+		console.log('🚫 PASSWORD RESET URL DETECTED - COMPLETELY SKIPPING OAUTH PROCESSING')
+		return
+	}
+	
 	// Only process URLs that contain OAuth tokens or code
 	if (!url.includes('access_token') && !url.includes('error=') && !url.includes('code=')) {
 		console.log('URL does not contain OAuth parameters, skipping')
@@ -96,34 +102,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			
 			console.log('🔗 Processing deep link:', url)
 			
-			// Check if it's an OAuth URL
-			const isOAuthUrl = url.includes('access_token') || url.includes('error=') || url.includes('code=')
+			// Fix Supabase URL fragments (#) to query parameters (?) for React Navigation
+			let processedUrl = url;
+			if (url.includes('#')) {
+				console.log('🔧 Converting URL fragment to query parameters');
+				// Only replace the first # with & if there are already query parameters, otherwise with ?
+				if (url.includes('?')) {
+					processedUrl = url.replace('#', '&');
+				} else {
+					processedUrl = url.replace('#', '?');
+				}
+				console.log('🔧 Converted URL:', processedUrl);
+			}
 			
-			// Check if it's a password reset URL - be more specific about detection
-			const isPasswordResetUrl = url.includes('auth/reset-password')
-			const hasTokenHash = url.includes('token_hash')
-			const hasRecoveryType = url.includes('type=recovery')
+			// Check if it's a password reset URL first (more specific check)
+			const isPasswordResetUrl = processedUrl.includes('auth/reset-password')
+			
+			// Check if it's an OAuth URL - but exclude password reset URLs
+			const isOAuthUrl = !isPasswordResetUrl && (processedUrl.includes('access_token') || processedUrl.includes('error=') || processedUrl.includes('code='))
+			
+			const hasTokenHash = processedUrl.includes('token_hash')
+			const hasRecoveryType = processedUrl.includes('type=recovery')
 			
 			console.log('🔍 URL analysis:', { 
 				isOAuthUrl, 
 				isPasswordResetUrl, 
 				hasTokenHash, 
 				hasRecoveryType,
-				fullUrl: url 
+				originalUrl: url,
+				processedUrl: processedUrl 
 			})
 			
-			if (isOAuthUrl) {
+			if (isPasswordResetUrl) {
+				console.log('🔑 Processing password reset deep link - prioritizing over OAuth')
+				console.log('✅ Password reset URL detected, letting Expo Router handle navigation')
+				// COMPLETELY SKIP OAuth processing for password reset URLs
+			} else if (isOAuthUrl) {
 				console.log('🔐 Processing OAuth deep link')
-				createSessionFromUrl(url).catch(console.error)
-			} else if (isPasswordResetUrl) {
-				console.log('🔑 Processing password reset deep link')
-				if (hasTokenHash && hasRecoveryType) {
-					console.log('✅ Password reset URL has required parameters, Expo Router should handle navigation')
-				} else {
-					console.log('⚠️ Password reset URL missing expected parameters:', { hasTokenHash, hasRecoveryType })
-				}
-				// The password reset screen will handle the token_hash parameter
-				// No additional processing needed here, Expo Router will navigate to the correct screen
+				// TEMPORARILY DISABLED - createSessionFromUrl(processedUrl).catch(console.error)
+				console.log('🚫 OAuth processing temporarily disabled for debugging')
 			} else {
 				console.log('❌ Ignoring unrecognized deep link:', url)
 			}
@@ -168,7 +185,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 							console.log('Initial session subscription update completed successfully')
 						} catch (subscriptionError) {
 							console.error('Failed to update subscription on initial session:', subscriptionError)
-							console.error('Initial session error details:', subscriptionError.message, subscriptionError.stack)
+							console.error('Initial session error details:', (subscriptionError as Error).message, (subscriptionError as Error).stack)
 						}
 					}).catch((error) => {
 						console.error('Promise rejection in initial session subscription update:', error)
@@ -189,7 +206,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 		// Listen for auth changes
 		const {
-			data: { authSubscription },
+			data: { subscription: authSubscription },
 		} = supabase.auth.onAuthStateChange(async (event, session) => {
 			console.log('Auth state changed:', event, session?.user?.id)
 
@@ -212,7 +229,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 						console.log('Subscription update completed successfully')
 					} catch (error) {
 						console.error('Failed to update subscription on auth change:', error)
-						console.error('Error details:', error.message, error.stack)
+						console.error('Error details:', (error as Error).message, (error as Error).stack)
 					}
 				}).catch((error) => {
 					console.error('Promise rejection in subscription update:', error)

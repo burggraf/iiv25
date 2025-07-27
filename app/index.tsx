@@ -24,13 +24,45 @@ export default function IndexScreen() {
         console.log('IndexScreen - Initial URL:', initialUrl);
         
         if (initialUrl && initialUrl.includes('auth/reset-password')) {
-          console.log('IndexScreen - Password reset deep link detected, navigating to reset screen');
+          console.log('IndexScreen - Password reset deep link detected:', initialUrl);
+          
+          // Fix Supabase URL fragments (#) to query parameters (?) for React Navigation
+          let parsedUrl = initialUrl;
+          if (initialUrl.includes('#')) {
+            console.log('IndexScreen - Converting URL fragment to query parameters');
+            parsedUrl = initialUrl.replace('#', '?');
+            console.log('IndexScreen - Converted URL:', parsedUrl);
+          }
           
           // Extract query parameters from the deep link
-          // Deep link format: net.isitvegan.app://auth/reset-password?token_hash=xxx&type=recovery
-          const queryStartIndex = initialUrl.indexOf('?');
-          const searchParams = queryStartIndex !== -1 ? initialUrl.substring(queryStartIndex) : '';
+          const queryStartIndex = parsedUrl.indexOf('?');
+          const searchParams = queryStartIndex !== -1 ? parsedUrl.substring(queryStartIndex) : '';
           console.log('IndexScreen - Extracted params:', searchParams);
+          
+          // Parse the URL to extract individual parameters for debugging
+          try {
+            const url = new URL(parsedUrl);
+            const access_token = url.searchParams.get('access_token');
+            const refresh_token = url.searchParams.get('refresh_token');
+            const token_hash = url.searchParams.get('token_hash');
+            const type = url.searchParams.get('type');
+            const code = url.searchParams.get('code');
+            
+            console.log('IndexScreen - Parsed access_token:', access_token ? 'present' : 'missing');
+            console.log('IndexScreen - Parsed refresh_token:', refresh_token ? 'present' : 'missing');
+            console.log('IndexScreen - Parsed token_hash:', token_hash);
+            console.log('IndexScreen - Parsed type:', type);
+            console.log('IndexScreen - Parsed code:', code);
+          } catch (error) {
+            console.log('IndexScreen - URL parsing failed, trying manual extraction');
+            // Fallback: try to extract parameters manually
+            if (searchParams) {
+              const params = new URLSearchParams(searchParams);
+              console.log('IndexScreen - Manual token_hash:', params.get('token_hash'));
+              console.log('IndexScreen - Manual type:', params.get('type'));
+              console.log('IndexScreen - Manual code:', params.get('code'));
+            }
+          }
           
           // Set redirect path for password reset
           setRedirectPath(`/auth/reset-password${searchParams}`);

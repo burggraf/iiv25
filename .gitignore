@@ -68,3 +68,5 @@ vendor/
 
 # Build artifacts
 build.ipa
+local-ios-*
+upload-to-testflight.sh

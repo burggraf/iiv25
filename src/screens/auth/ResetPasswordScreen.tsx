@@ -19,8 +19,16 @@ const { height: screenHeight } = Dimensions.get('window');
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { updatePassword } = useAuth();
-  const { token_hash, type } = useLocalSearchParams<{ token_hash: string; type: string }>();
+  const searchParams = useLocalSearchParams<{ token_hash?: string; type?: string; code?: string; error?: string; error_code?: string }>();
+  
+  // DEBUG: Log all parameters we receive (can be removed in production)
+  // console.log('🔍 ALL URL PARAMS RECEIVED:', JSON.stringify(searchParams, null, 2));
+  
+  // Handle both token_hash (older format) and code (current format) parameters
+  const token_hash = searchParams.token_hash || searchParams.code;
+  const type = searchParams.type || 'recovery';
+  const error = searchParams.error;
+  const error_code = searchParams.error_code;
   
   const [formState, setFormState] = useState({
     password: '',
@@ -31,8 +39,29 @@ export default function ResetPasswordScreen() {
   });
 
   useEffect(() => {
+    console.log('ResetPasswordScreen - useEffect triggered');
+    console.log('ResetPasswordScreen - token_hash:', token_hash);
+    console.log('ResetPasswordScreen - type:', type);
+    console.log('ResetPasswordScreen - error:', error);
+    console.log('ResetPasswordScreen - error_code:', error_code);
+    
+    // Check for errors first
+    if (error || error_code) {
+      let errorMessage = 'This password reset link is invalid or expired.';
+      if (error_code === 'otp_expired') {
+        errorMessage = 'This password reset link has expired. Please request a new one.';
+      }
+      Alert.alert(
+        'Invalid Link',
+        errorMessage,
+        [{ text: 'OK', onPress: () => router.push('/auth/forgot-password') }]
+      );
+      return;
+    }
+    
     // Validate that we have the required parameters for password reset
     if (!token_hash || type !== 'recovery') {
+      console.log('ResetPasswordScreen - Invalid parameters detected, showing alert');
       Alert.alert(
         'Invalid Link',
         'This password reset link is invalid or expired. Please request a new one.',
@@ -41,15 +70,12 @@ export default function ResetPasswordScreen() {
       return;
     }
     
-    // Don't verify the token here as verifyOtp creates a session and logs user in
-    // Instead, just mark as validated if we have the required parameters
-    // The actual verification will happen during password update
     console.log('Reset password screen - Valid parameters detected:', { token_hash, type });
     setFormState(prev => ({ 
       ...prev, 
       isValidated: true 
     }));
-  }, [token_hash, type, router]);
+  }, [token_hash, type, error, error_code, router]);
 
   const handleInputChange = (field: 'password' | 'confirmPassword', value: string) => {
     setFormState(prev => ({
@@ -104,24 +130,33 @@ export default function ResetPasswordScreen() {
       // Import supabase client to verify the token and update password
       const { supabase } = await import('../../services/supabaseClient');
       
-      // First verify the recovery token (this will create a session)
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        token_hash,
-        type: 'recovery',
-      });
+      console.log('Attempting password reset with token:', token_hash);
+      console.log('Token type:', type);
       
-      if (verifyError) {
+      // If we received a "code" parameter, always use exchangeCodeForSession
+      // This is the modern PKCE flow - the email contains pkce_ but gets transformed to code
+      console.log('Using exchangeCodeForSession for password reset code');
+      
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(token_hash);
+      
+      if (exchangeError) {
+        console.error('Code exchange error:', exchangeError);
         throw new Error('Invalid or expired reset link. Please request a new one.');
       }
       
-      // Now update the password
+      console.log('Code exchange successful, session created');
+      
+      // Now update the password (user should be authenticated after token exchange/verification)
       const { error: updateError } = await supabase.auth.updateUser({
         password: formState.password,
       });
       
       if (updateError) {
+        console.error('Password update error:', updateError);
         throw updateError;
       }
+      
+      console.log('Password updated successfully');
       
       Alert.alert(
         'Password Updated',
@@ -129,6 +164,7 @@ export default function ResetPasswordScreen() {
         [{ text: 'OK', onPress: () => router.push('/auth/login') }]
       );
     } catch (error) {
+      console.error('Password reset error:', error);
       setFormState(prev => ({
         ...prev,
         isLoading: false,
