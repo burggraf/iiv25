@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useCallback, useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
@@ -10,6 +9,7 @@ import ManualIcon from '../../src/components/icons/ManualIcon'
 import SearchIcon from '../../src/components/icons/SearchIcon'
 import Logo from '../../src/components/Logo'
 import UserAccountModal from '../../src/components/UserAccountModal'
+import { IconSymbol } from '../../components/ui/IconSymbol'
 import { useApp } from '../../src/context/AppContext'
 import { useAuth } from '../../src/context/AuthContext'
 import { SubscriptionService, SubscriptionStatus } from '../../src/services/subscriptionService'
@@ -102,8 +102,8 @@ export default function HomeScreen() {
 								style={styles.userIconButton}
 								onPress={() => setShowUserModal(true)}
 								activeOpacity={0.7}>
-								<Ionicons
-									name={user?.is_anonymous ? 'person-outline' : 'person-circle-outline'}
+								<IconSymbol
+									name={user?.is_anonymous ? 'person.fill' : 'person.circle.fill'}
 									size={28}
 									color='#14A44A'
 								/>

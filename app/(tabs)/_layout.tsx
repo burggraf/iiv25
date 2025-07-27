@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
@@ -12,6 +13,7 @@ export default function TabLayout() {
   const GREEN_COLOR = '#14A44A';
   const WHITE_COLOR = '#FFFFFF';
   const GRAY_COLOR = '#8E8E93';
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -25,15 +27,25 @@ export default function TabLayout() {
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E5EA',
-            paddingBottom: 4,
+            paddingBottom: Math.max(insets.bottom, 4),
             paddingTop: 0,
+            height: 80 + Math.max(insets.bottom, 4),
+          },
+          android: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E5EA',
+            paddingBottom: Math.max(insets.bottom + 8, 12),
+            paddingTop: 0,
+            height: 80 + Math.max(insets.bottom + 8, 12),
           },
           default: {
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E5EA',
-            paddingBottom: 4,
+            paddingBottom: Math.max(insets.bottom, 4),
             paddingTop: 0,
+            height: 80 + Math.max(insets.bottom, 4),
           },
         }),
         tabBarItemStyle: {
