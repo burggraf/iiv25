@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, Activity
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../components/Logo';
 import LogoWhite from '../components/LogoWhite';
+import SearchIcon from '../components/icons/SearchIcon';
 import SearchModeSelector, { SearchMode } from '../components/SearchModeSelector';
 import ProductSearchItem from '../components/ProductSearchItem';
 import IngredientResult from '../components/IngredientResult';
@@ -495,9 +496,10 @@ export default function SearchScreen() {
           onPress={handleSearch}
           disabled={!searchQuery.trim() || isLoading}
         >
-          <Text style={[styles.searchButtonText, !searchQuery.trim() && styles.searchButtonTextDisabled]}>
-            🔍
-          </Text>
+          <SearchIcon 
+            size={24} 
+            color={!searchQuery.trim() ? '#666' : 'white'} 
+          />
         </TouchableOpacity>
       </View>
 
@@ -635,12 +637,6 @@ const styles = StyleSheet.create({
   },
   searchButtonDisabled: {
     backgroundColor: '#ccc',
-  },
-  searchButtonText: {
-    fontSize: 20,
-  },
-  searchButtonTextDisabled: {
-    opacity: 0.5,
   },
   loadingContainer: {
     flex: 1,
