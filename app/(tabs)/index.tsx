@@ -74,19 +74,12 @@ export default function HomeScreen() {
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
 			<ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-				{/* Header Section */}
-				<View style={styles.header}>
-					<Logo size={100} style={styles.logo} />
-					<Text style={styles.title}>Is It Vegan?</Text>
-					<Text style={styles.subtitle}>Just scan to find out!</Text>
-				</View>
-
-				{/* Quick Actions Section */}
-				<View style={styles.actionsSection}>
-					<View style={styles.actionsSectionHeader}>
-						<Text style={styles.sectionTitle}>Quick Actions</Text>
-						<View style={styles.headerButtons}>
-							{subscriptionStatus && (
+				{/* Top Buttons - Above Header */}
+				<View style={styles.topButtons}>
+					<View style={styles.planSection}>
+						{subscriptionStatus && (
+							<>
+								<Text style={styles.planLabel}>Current plan:</Text>
 								<TouchableOpacity
 									style={styles.planChicklet}
 									onPress={() => setShowUserModal(true)}
@@ -97,19 +90,30 @@ export default function HomeScreen() {
 										)}
 									</Text>
 								</TouchableOpacity>
-							)}
-							<TouchableOpacity
-								style={styles.userIconButton}
-								onPress={() => setShowUserModal(true)}
-								activeOpacity={0.7}>
-								<UserIcon
-									size={28}
-									color='#14A44A'
-									filled={!user?.is_anonymous}
-								/>
-							</TouchableOpacity>
-						</View>
+							</>
+						)}
 					</View>
+					<TouchableOpacity
+						style={styles.userIconButton}
+						onPress={() => setShowUserModal(true)}
+						activeOpacity={0.7}>
+						<UserIcon
+							size={28}
+							color='#14A44A'
+							filled={!user?.is_anonymous}
+						/>
+					</TouchableOpacity>
+				</View>
+
+				{/* Header Section */}
+				<View style={styles.header}>
+					<Logo size={100} style={styles.logo} />
+					<Text style={styles.title}>Is It Vegan?</Text>
+					<Text style={styles.subtitle}>Just scan to find out!</Text>
+				</View>
+
+				{/* Actions Section */}
+				<View style={styles.actionsSection}>
 
 					<View style={styles.actionGrid}>
 						<TouchableOpacity
@@ -250,6 +254,25 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 		paddingHorizontal: 20,
 		paddingBottom: 20,
+	},
+	topButtons: {
+		flexDirection: 'row',
+		justifyContent: 'flex-end',
+		alignItems: 'center',
+		paddingHorizontal: 20,
+		paddingTop: 16,
+		paddingBottom: 8,
+		gap: 8,
+	},
+	planSection: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	planLabel: {
+		fontSize: 14,
+		color: '#666',
+		fontWeight: '500',
 	},
 	headerButtons: {
 		flexDirection: 'row',
