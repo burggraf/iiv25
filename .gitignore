@@ -18,6 +18,9 @@ ios/
 android/
 .kotlin/
 *.orig.*
+
+# Downloaded APK files
+*.apk
 *.jks
 *.p8
 *.p12

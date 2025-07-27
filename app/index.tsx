@@ -1,12 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useAuth } from '../src/context/AuthContext';
 
 export default function IndexScreen() {
   const { user, isInitialized } = useAuth();
-  const router = useRouter();
+  const [canRedirect, setCanRedirect] = useState(false);
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('IndexScreen - Effect triggered. User:', user?.id, 'IsInitialized:', isInitialized);
@@ -31,8 +32,9 @@ export default function IndexScreen() {
           const searchParams = queryStartIndex !== -1 ? initialUrl.substring(queryStartIndex) : '';
           console.log('IndexScreen - Extracted params:', searchParams);
           
-          // Navigate to the reset password screen with parameters
-          router.replace(`/auth/reset-password${searchParams}`);
+          // Set redirect path for password reset
+          setRedirectPath(`/auth/reset-password${searchParams}`);
+          setCanRedirect(true);
           return;
         }
       } catch (error) {
@@ -43,23 +45,31 @@ export default function IndexScreen() {
       if (user) {
         // User is authenticated, redirect to main app
         console.log('IndexScreen - User is authenticated, redirecting to tabs');
-        router.replace('/(tabs)');
+        setRedirectPath('/(tabs)');
       } else {
         // User is not authenticated, redirect to login
         console.log('IndexScreen - User is not authenticated, redirecting to login');
-        router.replace('/auth/login');
+        setRedirectPath('/auth/login');
       }
+      
+      // Add small delay to ensure router is mounted
+      setTimeout(() => setCanRedirect(true), 100);
     };
 
     checkForPasswordResetLink();
-  }, [user, isInitialized, router]);
+  }, [user, isInitialized]);
 
-  // Show loading screen while checking authentication
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color="#14A44A" />
-    </View>
-  );
+  // Show loading screen while auth initializes or router mounts
+  if (!isInitialized || !canRedirect || !redirectPath) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#14A44A" />
+      </View>
+    );
+  }
+
+  // Use Redirect component instead of router.replace()
+  return <Redirect href={redirectPath as any} />;
 }
 
 const styles = StyleSheet.create({

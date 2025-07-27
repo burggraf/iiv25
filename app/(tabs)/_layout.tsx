@@ -6,7 +6,7 @@ import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+import { IconSymbol } from '../../components/ui/IconSymbol';
 
 export default function TabLayout() {
   const GREEN_COLOR = '#14A44A';

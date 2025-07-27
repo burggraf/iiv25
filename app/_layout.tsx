@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 // import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import 'react-native-reanimated'; // Temporarily disabled due to crashes
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { useColorScheme } from '../hooks/useColorScheme';
 import { AppProvider } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
 
@@ -24,14 +24,16 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+    } else {
+      // Add timeout for Android - don't wait forever for fonts
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync();
+      }, 2000);
+      return () => clearTimeout(timer);
     }
   }, [loaded]);
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
+  // Don't block rendering on font loading - especially for Android compatibility
   return (
     <AuthProvider>
       <AppProvider>
