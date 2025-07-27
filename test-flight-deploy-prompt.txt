@@ -1,0 +1,10 @@
+I'm about to create a new testflight build and send it to Apple.
+But first I need you to look through my git commits and create release notes. 
+Look at all commits since my last commit that begins with "4.0.0-". (I usually add the build number such as 4.0.0-15 for build 15.)
+Make release notes for my beta testers telling them what's changed, but only include things relevant to users, specifically beta testers.
+Format this with no emoji's or special characters, or else Apple will not allow it.
+No special characters of any kind, if you want to use bullet points use dashes or something simple.
+Format this nicely on multiple lines (no \n stuff) and pass this output as a parameter to my script ./tf.sh.
+Do NOT let this time out after 2 minutes -- the build process will take up to 10 minutes.
+Then the submit process afterwards may take up to 10 minutes as well.
+So just be patient and wait for each part of the script to finish.

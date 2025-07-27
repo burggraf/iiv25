@@ -1,19 +1,17 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import HomeIcon from '../../src/components/icons/HomeIcon';
 import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
-import { IconSymbol } from '../../components/ui/IconSymbol';
 
 export default function TabLayout() {
   const GREEN_COLOR = '#14A44A';
   const WHITE_COLOR = '#FFFFFF';
   const GRAY_COLOR = '#8E8E93';
-  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -27,25 +25,15 @@ export default function TabLayout() {
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E5EA',
-            paddingBottom: Math.max(insets.bottom, 4),
+            paddingBottom: 4,
             paddingTop: 0,
-            height: 80 + Math.max(insets.bottom, 4),
-          },
-          android: {
-            backgroundColor: 'white',
-            borderTopWidth: 1,
-            borderTopColor: '#E5E5EA',
-            paddingBottom: Math.max(insets.bottom + 8, 12),
-            paddingTop: 0,
-            height: 80 + Math.max(insets.bottom + 8, 12),
           },
           default: {
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E5EA',
-            paddingBottom: Math.max(insets.bottom, 4),
+            paddingBottom: 4,
             paddingTop: 0,
-            height: 80 + Math.max(insets.bottom, 4),
           },
         }),
         tabBarItemStyle: {
@@ -67,9 +55,8 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused }) => (
-            <IconSymbol 
-              size={28} 
-              name="house.fill" 
+            <HomeIcon 
+              size={24} 
               color={focused ? WHITE_COLOR : GREEN_COLOR} 
             />
           ),

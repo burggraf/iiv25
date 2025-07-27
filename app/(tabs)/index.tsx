@@ -7,9 +7,9 @@ import BarcodeIcon from '../../src/components/icons/BarcodeIcon'
 import HistoryIcon from '../../src/components/icons/HistoryIcon'
 import ManualIcon from '../../src/components/icons/ManualIcon'
 import SearchIcon from '../../src/components/icons/SearchIcon'
+import UserIcon from '../../src/components/icons/UserIcon'
 import Logo from '../../src/components/Logo'
 import UserAccountModal from '../../src/components/UserAccountModal'
-import { IconSymbol } from '../../components/ui/IconSymbol'
 import { useApp } from '../../src/context/AppContext'
 import { useAuth } from '../../src/context/AuthContext'
 import { SubscriptionService, SubscriptionStatus } from '../../src/services/subscriptionService'
@@ -102,10 +102,10 @@ export default function HomeScreen() {
 								style={styles.userIconButton}
 								onPress={() => setShowUserModal(true)}
 								activeOpacity={0.7}>
-								<IconSymbol
-									name={user?.is_anonymous ? 'person.fill' : 'person.circle.fill'}
+								<UserIcon
 									size={28}
 									color='#14A44A'
+									filled={!user?.is_anonymous}
 								/>
 							</TouchableOpacity>
 						</View>
