@@ -162,17 +162,63 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 			const result = await PaymentService.purchaseSubscription(productId as any, deviceId)
 
 			if (result.success) {
-				Alert.alert(
-					'Purchase Initiated',
-					'Your purchase is being processed. You will receive a confirmation shortly.',
-					[{ text: 'OK' }]
-				)
+				// Show special dialog for Lifetime Subscription purchases
+				if (productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME) {
+					console.log('Lifetime subscription purchased, showing dialog...')
+					// First show generic success message, then show cancellation dialog
+					// Show cancellation steps in an Alert
+					const cancelSteps = Platform.OS === 'ios' 
+						? 'To cancel your existing subscription:\n\n1. Open Settings on your device\n2. Tap your Apple ID at the top\n3. Tap "Subscriptions"\n4. Find "Is It Vegan?" and tap it\n5. Tap "Cancel Subscription"'
+						: 'To cancel your existing subscription:\n\n1. Open the Google Play Store app\n2. Tap Menu → Subscriptions\n3. Find "Is It Vegan?" and tap it\n4. Tap "Cancel subscription"'
+					
+					Alert.alert(
+						'Lifetime Purchase Complete!',
+						'Thank you for your purchase. You now have lifetime access to all premium features.\n\nImportant: If you have an existing subscription, you\'ll need to manually cancel it or it will continue to renew.',
+						[
+							{ 
+								text: 'Show Cancellation Steps',
+								onPress: () => {
+									Alert.alert(
+										'Cancel Your Existing Subscription',
+										cancelSteps,
+										[
+											{ 
+												text: Platform.OS === 'ios' ? 'Open Settings' : 'Open Play Store',
+												onPress: () => handleOpenSubscriptionManagement()
+											},
+											{ 
+												text: 'Done',
+												style: 'cancel'
+											}
+										]
+									)
+								}
+							},
+							{ 
+								text: 'I\'ll Do This Later',
+								style: 'cancel'
+							}
+						]
+					)
 
-				// Refresh subscription status after a short delay
-				setTimeout(() => {
-					loadSubscriptionData()
-					onSubscriptionChanged?.()
-				}, 2000)
+					// Refresh subscription status
+					setTimeout(() => {
+						loadSubscriptionData()
+						onSubscriptionChanged?.()
+					}, 1000)
+				} else {
+					Alert.alert(
+						'Purchase Initiated',
+						'Your purchase is being processed. You will receive a confirmation shortly.',
+						[{ text: 'OK' }]
+					)
+
+					// Refresh subscription status after a short delay
+					setTimeout(() => {
+						loadSubscriptionData()
+						onSubscriptionChanged?.()
+					}, 2000)
+				}
 			} else {
 				Alert.alert('Purchase Failed', result.error || 'Unable to complete purchase.')
 			}
@@ -272,9 +318,9 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 		}
 	}
 
-	// const handleManageSubscription = () => {
-	// 	PaymentService.showSubscriptionManagement()
-	// }
+	const handleOpenSubscriptionManagement = () => {
+		PaymentService.showSubscriptionManagement()
+	}
 
 	const isPremium =
 		subscriptionStatus?.subscription_level === 'standard' ||
@@ -616,6 +662,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 					<View style={styles.bottomPadding} />
 				</ScrollView>
 			</View>
+
 		</Modal>
 	)
 }
