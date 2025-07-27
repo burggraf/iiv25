@@ -274,14 +274,15 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   instructionsContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   instructionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   instructionText: {
     fontSize: 16,
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
   },
   upcContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   upcLabel: {

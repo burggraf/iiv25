@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { Input, Button } from 'react-native-elements';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -178,16 +179,17 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <StatusBar style="dark" />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.header}>
           <Logo size={80} />
           <Text style={styles.title}>Set New Password</Text>
@@ -243,20 +245,24 @@ export default function ResetPasswordScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+  </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 40,
-    minHeight: screenHeight * 0.9,
+    paddingTop: 40,
+    paddingBottom: 60,
   },
   header: {
     alignItems: 'center',
@@ -278,7 +284,8 @@ const styles = StyleSheet.create({
   },
   form: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 20,
   },
   inputContainer: {
     marginBottom: 10,
