@@ -5,6 +5,7 @@ import { VeganStatus } from '../types';
 import { IngredientInfo } from '../services/ingredientDatabase';
 import Logo from './Logo';
 import LogoWhite from './LogoWhite';
+import SearchIcon from './icons/SearchIcon';
 
 interface IngredientResultProps {
   ingredient: IngredientInfo;
@@ -124,8 +125,11 @@ export default function IngredientResult({ ingredient, onBack }: IngredientResul
 
       {/* Bottom Back Button */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backButton}>← Back to Search Results</Text>
+        <TouchableOpacity onPress={onBack} style={styles.backButtonContainer}>
+          <View style={styles.backButtonContent}>
+            <SearchIcon size={18} color="#666" />
+            <Text style={styles.backButton}>Back to Search Results</Text>
+          </View>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -164,13 +168,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
-  backButton: {
-    fontSize: 18,
-    color: '#007AFF',
-    textAlign: 'center',
-    padding: 16,
+  backButtonContainer: {
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  backButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backButton: {
+    fontSize: 18,
+    color: '#666',
     fontWeight: 'bold',
   },
   scrollView: {

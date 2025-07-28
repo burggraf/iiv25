@@ -37,10 +37,10 @@ export default function ProductDisplayContainer({
       <View style={styles.buttonContainer}>
         <TouchableOpacity onPress={onBack} style={styles.backButtonContainer}>
           <View style={styles.backButtonContent}>
-            {iconType === 'scanner' && <BarcodeIcon size={18} color="#007AFF" />}
-            {iconType === 'history' && <HistoryIcon size={18} color="#007AFF" />}
-            {iconType === 'search' && <SearchIcon size={18} color="#007AFF" />}
-            {iconType === 'manual' && <ManualIcon size={18} color="#007AFF" />}
+            {iconType === 'scanner' && <BarcodeIcon size={18} color="#666" />}
+            {iconType === 'history' && <HistoryIcon size={18} color="#666" />}
+            {iconType === 'search' && <SearchIcon size={18} color="#666" />}
+            {iconType === 'manual' && <ManualIcon size={18} color="#666" />}
             <Text style={styles.backButton}>
               {backButtonText.replace('🔢 ', '').replace('← ', '')}
             </Text>
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     fontSize: 18,
-    color: '#007AFF',
+    color: '#666',
     fontWeight: 'bold',
   },
 });
