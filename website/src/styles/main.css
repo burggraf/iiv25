@@ -101,6 +101,7 @@ body {
     align-items: center;
     justify-content: space-between;
     height: 70px;
+    position: relative;
 }
 
 .nav-logo {
@@ -172,20 +173,20 @@ body {
 
 @media (max-width: 768px) {
     .nav-links {
-        position: fixed;
-        top: 70px;
+        display: none;
+        position: absolute;
+        top: 100%;
         left: 0;
-        right: 0;
+        width: 100%;
         background: white;
         flex-direction: column;
         padding: var(--spacing-xl);
         box-shadow: var(--shadow-large);
-        transform: translateX(-100%);
-        transition: var(--transition-normal);
+        border-bottom: 1px solid #e2e8f0;
     }
     
     .nav-links.mobile-open {
-        transform: translateX(0);
+        display: flex !important;
     }
     
     .nav-toggle {

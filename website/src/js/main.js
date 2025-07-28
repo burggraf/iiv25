@@ -127,9 +127,38 @@ function initNavigation() {
     const navLinks = document.querySelector('.nav-links');
     
     if (navToggle && navLinks) {
-        navToggle.addEventListener('click', function() {
-            navLinks.classList.toggle('mobile-open');
-            navToggle.classList.toggle('active');
+        navToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Mobile menu button clicked');
+            
+            const isOpen = navLinks.classList.contains('mobile-open');
+            console.log('Menu is currently open:', isOpen);
+            
+            if (isOpen) {
+                navLinks.classList.remove('mobile-open');
+                navToggle.classList.remove('active');
+                navToggle.setAttribute('aria-expanded', 'false');
+                console.log('Closing menu');
+            } else {
+                navLinks.classList.add('mobile-open');
+                navToggle.classList.add('active');
+                navToggle.setAttribute('aria-expanded', 'true');
+                console.log('Opening menu');
+            }
+            
+            // Force style recalculation
+            navLinks.style.display = isOpen ? 'none' : 'flex';
+        });
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!navToggle.contains(e.target) && !navLinks.contains(e.target)) {
+                navLinks.classList.remove('mobile-open');
+                navToggle.classList.remove('active');
+                navToggle.setAttribute('aria-expanded', 'false');
+            }
         });
     }
     
