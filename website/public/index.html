@@ -44,12 +44,15 @@
         .hero { padding: 140px 24px 80px; background: linear-gradient(135deg, #e6f3f7 0%, #ffffff 100%); }
         .hero-container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
         .hero-title { font-size: 48px; font-weight: 700; line-height: 1.1; color: #11181C; margin-bottom: 24px; }
-        .hero-subtitle { font-size: 20px; color: #687076; margin-bottom: 32px; line-height: 1.6; }
-        .hero-buttons { display: flex; flex-direction: column; gap: 16px; }
-        .btn { display: inline-flex; align-items: center; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; transition: 0.25s; }
+        .hero-subtitle { font-size: 20px; color: #687076; margin-bottom: 16px; line-height: 1.6; }
+        .hero-subtext { font-size: 16px; color: #0a7ea4; font-weight: 600; margin-bottom: 32px; }
+        .hero-buttons { display: flex; flex-direction: column; gap: 20px; }
+        .btn { display: inline-flex; align-items: center; padding: 20px 40px; border-radius: 16px; text-decoration: none; font-weight: 600; transition: 0.25s; overflow: visible; }
         .btn-primary { background: #0a7ea4; color: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .btn-secondary { background: white; border: 2px solid #e2e8f0; color: #11181C; }
-        .store-badge { height: 40px; }
+        .store-badge { height: 60px; }
+        .btn-disabled { opacity: 0.6; cursor: not-allowed; position: relative; overflow: visible; }
+        .coming-soon { position: absolute; top: -10px; right: -10px; background-color: #0a7ea4; color: white; font-size: 11px; font-weight: 600; padding: 3px 6px; border-radius: 3px; white-space: nowrap; z-index: 10; }
         .hero-phone { max-width: 300px; height: auto; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.1)); transform: rotate(-5deg); }
         @media (max-width: 768px) {
             .hero-container { grid-template-columns: 1fr; gap: 32px; text-align: center; }
@@ -93,8 +96,9 @@
     <section class="hero">
         <div class="hero-container">
             <div class="hero-content">
-                <h1 class="hero-title">Scan. Know. Choose.</h1>
-                <p class="hero-subtitle">Instantly discover if any product is vegan, vegetarian, or contains animal ingredients with our barcode scanning app.</p>
+                <h1 class="hero-title">Just scan to find out!</h1>
+                <p class="hero-subtitle">Discover if any food product is vegan or vegetarian within seconds with our barcode scanner!</p>
+                <p class="hero-subtext">Now works on ingredients in over 100 languages!</p>
                 <div class="hero-buttons">
                     <a href="https://apps.apple.com/app/is-it-vegan/id6671396750" class="btn btn-primary" target="_blank" rel="noopener">
                         <img src="/assets/images/app-store-badge.svg" alt="Download on the App Store" class="store-badge">
@@ -119,32 +123,32 @@
                 <div class="feature-card">
                     <div class="feature-icon">📱</div>
                     <h3 class="feature-title">Instant Scanning</h3>
-                    <p class="feature-description">Simply scan any product barcode to get immediate results about its vegan status.</p>
+                    <p class="feature-description">Simply scan any barcode for an immediate ingredient summary.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🌱</div>
                     <h3 class="feature-title">Comprehensive Database</h3>
-                    <p class="feature-description">Access to over 400,000 products with detailed ingredient analysis and classification.</p>
+                    <p class="feature-description">Search for info on any product in our extensive database.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔍</div>
                     <h3 class="feature-title">Detailed Analysis</h3>
-                    <p class="feature-description">Get clear explanations of why a product is or isn't vegan, with ingredient breakdowns.</p>
+                    <p class="feature-description">All non-vegan ingredients are identified and clearly categorized to make shopping simple.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📚</div>
-                    <h3 class="feature-title">Search & History</h3>
-                    <p class="feature-description">Search products manually and keep track of your scanning history for easy reference.</p>
+                    <h3 class="feature-title">View Your History</h3>
+                    <p class="feature-description">Keep track of your scanning history for easy reference.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🌐</div>
                     <h3 class="feature-title">Offline Ready</h3>
-                    <p class="feature-description">Works offline with cached data, perfect for shopping in areas with poor connectivity.</p>
+                    <p class="feature-description">Previously viewed items will always be available offline.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🚀</div>
                     <h3 class="feature-title">Fast & Reliable</h3>
-                    <p class="feature-description">Lightning-fast results with high accuracy powered by multiple data sources.</p>
+                    <p class="feature-description">Instant and accurate results driven by multiple data sources.</p>
                 </div>
             </div>
         </div>

@@ -233,14 +233,21 @@ body {
 .hero-subtitle {
     font-size: var(--font-size-xl);
     color: var(--text-light);
-    margin-bottom: var(--spacing-2xl);
+    margin-bottom: var(--spacing-md);
     line-height: 1.6;
+}
+
+.hero-subtext {
+    font-size: var(--font-size-base);
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-bottom: var(--spacing-2xl);
 }
 
 .hero-buttons {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: var(--spacing-lg);
     align-items: flex-start;
 }
 
@@ -295,8 +302,8 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-md) var(--spacing-xl);
-    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg) var(--spacing-2xl);
+    border-radius: var(--radius-xl);
     text-decoration: none;
     font-weight: 600;
     font-size: var(--font-size-base);
@@ -304,7 +311,7 @@ body {
     border: none;
     cursor: pointer;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .btn-primary {
@@ -334,6 +341,7 @@ body {
     opacity: 0.6;
     cursor: not-allowed;
     position: relative;
+    overflow: visible;
 }
 
 .btn-disabled:hover {
@@ -341,20 +349,22 @@ body {
 }
 
 .store-badge {
-    height: 40px;
+    height: 60px;
     width: auto;
 }
 
 .coming-soon {
     position: absolute;
-    top: -8px;
-    right: -8px;
+    top: -10px;
+    right: -10px;
     background-color: var(--primary-color);
     color: white;
-    font-size: var(--font-size-xs);
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    z-index: 10;
 }
 
 /* Sections */
