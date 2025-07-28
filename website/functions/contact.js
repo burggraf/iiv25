@@ -200,7 +200,7 @@ async function sendEmail(subject, body, replyToEmail, env) {
           personalizations: [{
             to: [{ email: env.CONTACT_EMAIL || 'support@isitvegan.net' }],
           }],
-          from: { email: 'noreply@isitvegan.net', name: 'IsItVegan Contact Form' },
+          from: { email: 'support@isitvegan.net', name: 'IsItVegan Contact Form' },
           reply_to: { email: replyToEmail },
           subject: subject,
           content: [{
@@ -227,7 +227,7 @@ async function sendEmail(subject, body, replyToEmail, env) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'IsItVegan Contact <noreply@isitvegan.net>',
+          from: 'IsItVegan Contact <support@isitvegan.net>',
           reply_to: [replyToEmail],
           to: [env.CONTACT_EMAIL || 'support@isitvegan.net'],
           subject: subject,
