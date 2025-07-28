@@ -87,7 +87,7 @@ export default {
       const emailBody = createEmailBody(sanitizedData, clientIP, request.headers.get('User-Agent'));
 
       // Send email using Cloudflare's email service or external service
-      const emailSent = await sendEmail(emailSubject, emailBody, env);
+      const emailSent = await sendEmail(emailSubject, emailBody, sanitizedData.email, env);
 
       if (emailSent) {
         // Update rate limit counter
@@ -135,25 +135,33 @@ function sanitizeInput(input) {
 // Create formatted email body
 function createEmailBody(data, clientIP, userAgent) {
   return `
-New contact form submission from IsItVegan.net
+Hello,
 
+You have received a new message through the Is It Vegan website contact form.
+
+CONTACT DETAILS:
 Name: ${data.name}
 Email: ${data.email}
 Subject: ${data.subject}
 
-Message:
+MESSAGE:
 ${data.message}
 
+You can reply directly to this email to respond to ${data.name}.
+
+Best regards,
+Is It Vegan Contact System
+
 ---
-Technical Details:
+Technical Information:
+Submitted: ${new Date().toISOString()}
 IP Address: ${clientIP}
 User Agent: ${userAgent || 'Unknown'}
-Timestamp: ${new Date().toISOString()}
 `.trim();
 }
 
 // Send email using external service (configure based on your needs)
-async function sendEmail(subject, body, env) {
+async function sendEmail(subject, body, replyToEmail, env) {
   // Option 1: Use Mailgun API
   if (env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN) {
     try {
@@ -165,6 +173,7 @@ async function sendEmail(subject, body, env) {
         },
         body: new URLSearchParams({
           from: `IsItVegan Contact Form <noreply@${env.MAILGUN_DOMAIN}>`,
+          'h:Reply-To': replyToEmail,
           to: env.CONTACT_EMAIL || 'support@isitvegan.net',
           subject: subject,
           text: body,
@@ -192,6 +201,7 @@ async function sendEmail(subject, body, env) {
             to: [{ email: env.CONTACT_EMAIL || 'support@isitvegan.net' }],
           }],
           from: { email: 'noreply@isitvegan.net', name: 'IsItVegan Contact Form' },
+          reply_to: { email: replyToEmail },
           subject: subject,
           content: [{
             type: 'text/plain',
@@ -218,6 +228,7 @@ async function sendEmail(subject, body, env) {
         },
         body: JSON.stringify({
           from: 'IsItVegan Contact <noreply@isitvegan.net>',
+          reply_to: [replyToEmail],
           to: [env.CONTACT_EMAIL || 'support@isitvegan.net'],
           subject: subject,
           text: body,
