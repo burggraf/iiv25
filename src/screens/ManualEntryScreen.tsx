@@ -6,6 +6,8 @@ import * as Clipboard from 'expo-clipboard';
 import Logo from '../components/Logo';
 import NumericKeypad from '../components/NumericKeypad';
 import ProductDisplayContainer from '../components/ProductDisplayContainer';
+import PasteIcon from '../components/icons/PasteIcon';
+import SearchIcon from '../components/icons/SearchIcon';
 import { ProductLookupService } from '../services/productLookupService';
 import { useApp } from '../context/AppContext';
 import { Product } from '../types';
@@ -160,7 +162,8 @@ export default function ManualEntryScreen() {
           style={styles.pasteIconButton} 
           onPress={handlePaste}
         >
-          <Text style={styles.pasteIcon}>📋</Text>
+          <PasteIcon size={20} color="#666" />
+          <Text style={styles.pasteLabel}>Paste</Text>
         </TouchableOpacity>
       </View>
 
@@ -196,12 +199,18 @@ export default function ManualEntryScreen() {
           onPress={handleLookup}
           disabled={!validateUPC(upcCode)}
         >
-          <Text style={[
-            styles.lookupButtonText,
-            !validateUPC(upcCode) && styles.lookupButtonTextDisabled
-          ]}>
-            🔍 Lookup Product
-          </Text>
+          <View style={styles.lookupButtonContent}>
+            <SearchIcon 
+              size={18} 
+              color={validateUPC(upcCode) ? 'white' : '#999'} 
+            />
+            <Text style={[
+              styles.lookupButtonText,
+              !validateUPC(upcCode) && styles.lookupButtonTextDisabled
+            ]}>
+              Lookup Product
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -265,14 +274,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pasteIconButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  pasteIcon: {
-    fontSize: 20,
+  pasteLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#666',
+    marginTop: 2,
   },
   appTitle: {
     fontSize: 18,
@@ -347,6 +358,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  lookupButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   lookupButtonDisabled: {
     backgroundColor: '#ccc',

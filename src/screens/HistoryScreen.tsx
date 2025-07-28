@@ -51,6 +51,7 @@ export default function HistoryScreen() {
         backButtonText="← Back to History"
         onProductUpdated={handleProductUpdated}
         useAbsolutePositioning={false}
+        iconType="history"
       />
     );
   }

@@ -337,6 +337,7 @@ export default function SearchScreen() {
         backButtonText="← Back to Search Results"
         onProductUpdated={handleProductUpdated}
         useAbsolutePositioning={false}
+        iconType="search"
       />
     );
   }

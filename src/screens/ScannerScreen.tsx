@@ -1282,6 +1282,7 @@ export default function ScannerScreen() {
 					onBack={handleBackFromDetail}
 					backButtonText="← Back to Scanner"
 					onProductUpdated={handleProductUpdated}
+					iconType="scanner"
 				/>
 			)}
 		</SafeAreaView>

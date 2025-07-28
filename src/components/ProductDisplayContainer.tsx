@@ -1,6 +1,10 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import ProductResult from './ProductResult';
+import ManualIcon from './icons/ManualIcon';
+import BarcodeIcon from './icons/BarcodeIcon';
+import HistoryIcon from './icons/HistoryIcon';
+import SearchIcon from './icons/SearchIcon';
 import { Product } from '../types';
 
 interface ProductDisplayContainerProps {
@@ -9,6 +13,7 @@ interface ProductDisplayContainerProps {
   backButtonText: string;
   onProductUpdated?: (updatedProduct: Product) => void;
   useAbsolutePositioning?: boolean;
+  iconType?: 'manual' | 'scanner' | 'history' | 'search';
 }
 
 export default function ProductDisplayContainer({
@@ -17,6 +22,7 @@ export default function ProductDisplayContainer({
   backButtonText,
   onProductUpdated,
   useAbsolutePositioning = true,
+  iconType = 'manual',
 }: ProductDisplayContainerProps) {
   const containerStyle = useAbsolutePositioning ? styles.overlayContainer : styles.fullScreenContainer;
   
@@ -29,10 +35,16 @@ export default function ProductDisplayContainer({
         onProductUpdated={onProductUpdated} 
       />
       <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backButton}>
-            {backButtonText}
-          </Text>
+        <TouchableOpacity onPress={onBack} style={styles.backButtonContainer}>
+          <View style={styles.backButtonContent}>
+            {iconType === 'scanner' && <BarcodeIcon size={18} color="#007AFF" />}
+            {iconType === 'history' && <HistoryIcon size={18} color="#007AFF" />}
+            {iconType === 'search' && <SearchIcon size={18} color="#007AFF" />}
+            {iconType === 'manual' && <ManualIcon size={18} color="#007AFF" />}
+            <Text style={styles.backButton}>
+              {backButtonText.replace('🔢 ', '').replace('← ', '')}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -59,13 +71,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
+  backButtonContainer: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  backButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   backButton: {
     fontSize: 18,
     color: '#007AFF',
-    textAlign: 'center',
-    padding: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
     fontWeight: 'bold',
   },
 });
