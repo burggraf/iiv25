@@ -32,6 +32,7 @@ import { ProductImageUploadService } from '../services/productImageUploadService
 import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services/subscriptionService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
+import { validateIngredientParsingResult } from '../utils/ingredientValidation'
 
 
 export default function ScannerScreen() {
@@ -357,17 +358,9 @@ export default function ScannerScreen() {
 				scannedProduct || undefined
 			)
 
-			if (data.error) {
-				setIngredientScanError(data.error)
-				setShowIngredientScanModal(false)
-				return
-			}
-
-			if (!data.isValidIngredientsList || data.confidence < 0.9) {
-				const confidencePercentage = Math.round(data.confidence * 100)
-				setIngredientScanError(
-					`Photo quality too low (${confidencePercentage}% confidence). Please try again with better lighting.`
-				)
+			const validation = validateIngredientParsingResult(data)
+			if (!validation.isValid) {
+				setIngredientScanError(validation.errorMessage!)
 				setShowIngredientScanModal(false)
 				return
 			}

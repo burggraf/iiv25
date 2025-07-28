@@ -20,6 +20,7 @@ import { ProductImageUploadService } from '../services/productImageUploadService
 import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
 import { Product, VeganStatus } from '../types'
+import { validateIngredientParsingResult } from '../utils/ingredientValidation'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
 
@@ -49,6 +50,7 @@ export default function ProductResult({
 	const [processingReport, setProcessingReport] = useState(false)
 	const [reportType, setReportType] = useState<string>('')
 	const [showProcessingModal, setShowProcessingModal] = useState(false)
+	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
 
 	// Fetch ingredient classifications from database
 	useEffect(() => {
@@ -201,6 +203,7 @@ export default function ProductResult({
 			setShowProcessingModal(true)
 
 			// Process based on issue type
+			let success = true
 			switch (issueType) {
 				case 'image':
 					await handleImageUpdate(imageUri, imageBase64)
@@ -209,14 +212,18 @@ export default function ProductResult({
 					await handleNameUpdate(imageBase64)
 					break
 				case 'ingredients':
-					await handleIngredientsUpdate(imageBase64)
+					success = await handleIngredientsUpdate(imageBase64)
 					break
 			}
 
-			// Hide processing modal, refresh product data, and show success
-			setShowProcessingModal(false)
-			await refreshProductData()
-			Alert.alert('Success', successMessage)
+			// Only show success if the operation actually succeeded
+			if (success) {
+				// Hide processing modal, refresh product data, and show success
+				setShowProcessingModal(false)
+				await refreshProductData()
+				Alert.alert('Success', successMessage)
+			}
+			// If success is false, the error handling was already done in the specific handler
 		} catch (error) {
 			console.error('Error processing report:', error)
 			// Hide processing modal and show error
@@ -269,8 +276,8 @@ export default function ProductResult({
 		}
 	}
 
-	const handleIngredientsUpdate = async (imageBase64: string) => {
-		if (!currentProduct.barcode) return
+	const handleIngredientsUpdate = async (imageBase64: string): Promise<boolean> => {
+		if (!currentProduct.barcode) return false
 
 		// Extract ingredients using OCR service - this edge function handles the database update
 		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(
@@ -278,13 +285,27 @@ export default function ProductResult({
 			currentProduct.barcode
 		)
 
-		if (ocrResponse.error) {
-			throw new Error(ocrResponse.error)
+		// Use the same validation logic as the scanner screen
+		const validation = validateIngredientParsingResult(ocrResponse)
+		if (!validation.isValid) {
+			// Set error state and show modal instead of throwing
+			setIngredientScanError(validation.errorMessage!)
+			setShowProcessingModal(false)
+			setProcessingReport(false)
+			setReportType('')
+			return false
 		}
 
-		if (!ocrResponse.ingredients || ocrResponse.ingredients.length === 0) {
-			throw new Error('No ingredients could be extracted from the image')
-		}
+		return true
+	}
+
+	const handleIngredientScanRetry = () => {
+		setIngredientScanError(null)
+		handleReportIssue('ingredients')
+	}
+
+	const handleIngredientScanCancel = () => {
+		setIngredientScanError(null)
 	}
 
 	const getVerdictColor = (verdict: string): string => {
@@ -618,6 +639,38 @@ export default function ProductResult({
 					</View>
 				</View>
 			</Modal>
+
+			{/* Ingredient Scan Error Modal */}
+			{ingredientScanError && (
+				<View style={styles.createProductModal}>
+					<View style={styles.createProductModalContent}>
+						<View style={styles.createProductModalHeader}>
+							<Text style={styles.retryErrorIcon}>❌</Text>
+							<Text style={styles.createProductModalTitle}>Ingredient Scan Failed</Text>
+							<Text style={styles.createProductModalSubtitle}>
+								{ingredientScanError}
+							</Text>
+						</View>
+						<View style={styles.createProductModalButtons}>
+							<TouchableOpacity
+								style={styles.createProductModalCancelButton}
+								onPress={handleIngredientScanCancel}>
+								<Text style={styles.createProductModalCancelText}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={styles.createProductModalConfirmButton}
+								onPress={handleIngredientScanRetry}
+								disabled={processingReport}>
+								{processingReport ? (
+									<ActivityIndicator size='small' color='white' />
+								) : (
+									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
+								)}
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			)}
 		</SafeAreaView>
 	)
 }
@@ -1025,5 +1078,84 @@ const styles = StyleSheet.create({
 		color: '#666',
 		textAlign: 'center',
 		lineHeight: 20,
+	},
+	createProductModal: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0, 0, 0, 0.9)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 2000,
+	},
+	createProductModalContent: {
+		backgroundColor: 'white',
+		borderRadius: 16,
+		padding: 32,
+		margin: 20,
+		alignItems: 'center',
+		maxWidth: 350,
+		width: '90%',
+	},
+	createProductModalHeader: {
+		alignItems: 'center',
+		marginBottom: 32,
+	},
+	createProductModalTitle: {
+		fontSize: 24,
+		fontWeight: 'bold',
+		color: '#333',
+		marginTop: 16,
+		marginBottom: 12,
+		textAlign: 'center',
+	},
+	createProductModalSubtitle: {
+		fontSize: 16,
+		color: '#666',
+		textAlign: 'center',
+		lineHeight: 22,
+	},
+	createProductModalButtons: {
+		flexDirection: 'row',
+		gap: 12,
+		width: '100%',
+		justifyContent: 'space-between',
+	},
+	createProductModalCancelButton: {
+		flex: 1,
+		backgroundColor: '#f0f0f0',
+		paddingVertical: 16,
+		paddingHorizontal: 8,
+		borderRadius: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	createProductModalCancelText: {
+		color: '#666',
+		fontSize: 16,
+		fontWeight: '600',
+		textAlign: 'center',
+	},
+	createProductModalConfirmButton: {
+		flex: 1,
+		backgroundColor: '#FF6B35',
+		paddingVertical: 16,
+		paddingHorizontal: 8,
+		borderRadius: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	createProductModalConfirmText: {
+		color: 'white',
+		fontSize: 16,
+		fontWeight: '600',
+		textAlign: 'center',
+	},
+	retryErrorIcon: {
+		fontSize: 32,
+		textAlign: 'center',
+		marginBottom: 8,
 	},
 })
