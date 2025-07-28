@@ -111,7 +111,7 @@ This folder contains all the assets required for submitting "Is It Vegan?" to bo
 The main app icons and splash screens are already configured in `app.json`. The generated assets in `/assets/images/` are automatically used by Expo during the build process.
 
 ### Bundle IDs
-- **iOS:** net.isitvegan.app
-- **Android:** net.isitvegan.app
+- **iOS:** net.isitvegan.free
+- **Android:** net.isitvegan.free
 
 All assets have been generated from the original high-quality source files and are optimized for their respective platforms.

@@ -324,7 +324,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const signInWithGoogle = async (): Promise<void> => {
 		try {
 			// OAuth requires development build - cannot work in Expo Go
-			const redirectTo = makeRedirectUri({ scheme: 'net.isitvegan.app' })
+			const redirectTo = makeRedirectUri({ scheme: 'net.isitvegan.free' })
 			console.log('OAuth redirect URI:', redirectTo)
 
 			const { data, error } = await supabase.auth.signInWithOAuth({
@@ -374,7 +374,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const resetPassword = async (email: string): Promise<void> => {
 		try {
 			const { error } = await supabase.auth.resetPasswordForEmail(email, {
-				redirectTo: 'net.isitvegan.app://auth/reset-password',
+				redirectTo: 'net.isitvegan.free://auth/reset-password',
 			})
 
 			if (error) {

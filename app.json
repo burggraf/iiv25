@@ -5,13 +5,13 @@
     "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
-    "scheme": "net.isitvegan.app",
+    "scheme": "net.isitvegan.free",
     "userInterfaceStyle": "automatic",
     "description": "Scan product barcodes to instantly check if they're vegan, vegetarian, or contain animal products.",
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "net.isitvegan.app",
+      "bundleIdentifier": "net.isitvegan.free",
       "buildNumber": "22",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
@@ -31,7 +31,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "net.isitvegan.app",
+      "package": "net.isitvegan.free",
       "versionCode": 1,
       "permissions": [
         "CAMERA",

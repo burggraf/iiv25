@@ -102,7 +102,7 @@ src/
 ### Environment Setup
 
 - **Supabase**: Requires SUPABASE_URL and SUPABASE_ANON_KEY in environment
-- **Bundle ID**: `net.isitvegan.app`
+- **Bundle ID**: `net.isitvegan.free`
 - **Metro Config**: Custom resolver with polyfills for crypto/URL APIs
 - **EAS Config**: Profiles for development, preview, production, testflight
 

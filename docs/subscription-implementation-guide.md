@@ -21,7 +21,7 @@ This guide provides comprehensive instructions for configuring and testing the s
 
 - Apple Developer Account with valid membership
 - App already registered in App Store Connect
-- Bundle ID: `net.isitvegan.app`
+- Bundle ID: `net.isitvegan.free`
 - Xcode with proper provisioning profiles
 
 ### Step 1: Configure Subscription Groups
@@ -100,7 +100,7 @@ For each subscription, add:
 
    - Go to App Information → App Store Server Notifications
    - Set Notification URL: `https://[your-project].supabase.co/functions/v1/subscription-webhook`
-   - Bundle ID: `net.isitvegan.app`
+   - Bundle ID: `net.isitvegan.free`
    - Enable for Production and Sandbox
 
 2. **Configure Events**
@@ -121,7 +121,7 @@ For each subscription, add:
 
 - Google Play Console account
 - App published (at least internal testing)
-- Package name: `net.isitvegan.app`
+- Package name: `net.isitvegan.free`
 
 ### Step 1: Create Subscription Products
 
