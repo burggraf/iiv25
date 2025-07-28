@@ -9,7 +9,7 @@
 --    - Standard: unlimited searches per day  
 --    - Premium: unlimited searches per day
 -- 3. Two-tier search strategy (exact match → prefix match)
--- 4. Pagination support (20 products per page)
+-- 4. Pagination support (250 products per page)
 -- 5. Automatic logging with detailed metadata about the search
 --
 -- Features:
@@ -19,7 +19,7 @@
 -- - Expiration handling: Automatically downgrades expired subscriptions to free
 -- - Automatic logging: All searches logged to actionlog table with enhanced metadata
 -- - Two-tier search: Exact match first, then optimized prefix match
--- - Pagination: Returns 20 results per page with offset support
+-- - Pagination: Returns 250 results per page with offset support
 -- - Graceful rate limits: Returns special response instead of throwing errors
 -- - Optimized indexing: Uses proper text_pattern_ops index for fast LIKE queries
 CREATE OR REPLACE FUNCTION search_products(search_term text, device_id text, page_offset integer DEFAULT 0)
@@ -75,7 +75,7 @@ BEGIN
     
     -- Get rate limit information
     SELECT * INTO rate_info
-    FROM get_rate_limits('product_search', device_id);
+    FROM get_rate_limits('search', device_id);
     
     -- Check if user has exceeded rate limit
     IF rate_info.is_rate_limited THEN
@@ -117,7 +117,7 @@ BEGIN
         lower((p.product_name)::text) = cleaned_term
     ORDER BY
         lower((p.product_name)::text)
-    LIMIT 20
+    LIMIT 250
     OFFSET page_offset;
     
     -- Check if exact match found
@@ -127,13 +127,14 @@ BEGIN
         -- Log the search operation
         INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
         VALUES (
-            'product_search',
+            'search',
             search_term,
             current_user_id,
             device_uuid,
             format('Found %s exact matches', search_result_count),
             json_build_object(
                 'device_id', device_id,
+                'search_type', 'product',
                 'search_strategy', 'exact_match',
                 'result_count', search_result_count,
                 'search_term_length', length(search_term),
@@ -167,7 +168,7 @@ BEGIN
         AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
     ORDER BY
         lower((p.product_name)::text)
-    LIMIT 20
+    LIMIT 250
     OFFSET page_offset;
     
     -- Log the search operation (even if no results)
@@ -185,6 +186,7 @@ BEGIN
         END,
         json_build_object(
             'device_id', device_id,
+            'search_type', 'product',
             'search_strategy', 'prefix_match',
             'result_count', search_result_count,
             'search_term_length', length(search_term),
@@ -227,7 +229,7 @@ $$;
 -- Search Strategy:
 -- 1. Exact match: lower((product_name)::text) = 'search term'
 -- 2. Prefix match: Optimized range query + LIKE for fast index usage
--- 3. Returns 20 results per page with offset support
+-- 3. Returns 250 results per page with offset support
 -- 4. Results ordered by product_name for consistent pagination
 
 -- Performance Optimizations:
