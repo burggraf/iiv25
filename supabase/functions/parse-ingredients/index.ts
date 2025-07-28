@@ -226,6 +226,21 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
       }
       parsedResult = JSON.parse(jsonMatch[0]);
 
+      // Normalize confidence score to 0-1 range with error handling
+      try {
+        const confidence = Number(parsedResult.confidence);
+        if (isNaN(confidence)) {
+          parsedResult.confidence = 0.0;
+        } else if (confidence > 1) {
+          parsedResult.confidence = confidence / 100;
+        } else {
+          parsedResult.confidence = confidence;
+        }
+      } catch (error) {
+        console.warn('Failed to normalize confidence score:', parsedResult.confidence);
+        parsedResult.confidence = 0.0;
+      }
+
       // Add cost info to successful response
       if (apiCostInfo) {
         parsedResult.apiCost = apiCostInfo;
