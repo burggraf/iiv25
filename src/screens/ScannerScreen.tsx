@@ -363,9 +363,10 @@ export default function ScannerScreen() {
 				return
 			}
 
-			if (!data.isValidIngredientsList || data.confidence < 0.7) {
+			if (!data.isValidIngredientsList || data.confidence < 0.9) {
+				const confidencePercentage = Math.round(data.confidence * 100)
 				setIngredientScanError(
-					'Could not clearly read ingredients from the image. Please try again with better lighting.'
+					`Photo quality too low (${confidencePercentage}% confidence). Please try again with better lighting.`
 				)
 				setShowIngredientScanModal(false)
 				return
