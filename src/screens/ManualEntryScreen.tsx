@@ -156,6 +156,12 @@ export default function ManualEntryScreen() {
           <Logo size={32} />
           <Text style={styles.appTitle}>Is It Vegan?</Text>
         </View>
+        <TouchableOpacity 
+          style={styles.pasteIconButton} 
+          onPress={handlePaste}
+        >
+          <Text style={styles.pasteIcon}>📋</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Instructions */}
@@ -206,16 +212,6 @@ export default function ManualEntryScreen() {
         onClear={handleClear}
       />
 
-      {/* Paste Button */}
-      <View style={styles.pasteContainer}>
-        <TouchableOpacity 
-          style={styles.pasteButton} 
-          onPress={handlePaste}
-        >
-          <Text style={styles.pasteButtonIcon}>📋</Text>
-          <Text style={styles.pasteButtonLabel}>Paste from clipboard</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Rate Limit Modal */}
       {showRateLimitModal && (
@@ -255,7 +251,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: 'white',
@@ -266,6 +262,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
+  },
+  pasteIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  pasteIcon: {
+    fontSize: 20,
   },
   appTitle: {
     fontSize: 18,
@@ -320,26 +327,6 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     textAlign: 'center',
     minHeight: 30,
-  },
-  pasteContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  pasteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  pasteButtonIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  pasteButtonLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '400',
   },
   errorContainer: {
     paddingHorizontal: 20,
