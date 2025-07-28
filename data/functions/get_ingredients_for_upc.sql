@@ -3,9 +3,10 @@ RETURNS TABLE(title TEXT, class TEXT)
 LANGUAGE sql
 SECURITY DEFINER
 AS $$
-  SELECT i.title, i.class
-  FROM ingredients i
-  WHERE i.title = ANY(
+  SELECT 
+    ingredient_name as title, 
+    i.class
+  FROM UNNEST(
     STRING_TO_ARRAY(
       RTRIM(
         (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
@@ -13,5 +14,6 @@ AS $$
       ),
       '~'
     )
-  );
+  ) AS ingredient_name
+  LEFT JOIN ingredients i ON i.title = ingredient_name;
 $$;

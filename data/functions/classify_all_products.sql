@@ -35,14 +35,14 @@ AS $$
         COUNT(*) FILTER (WHERE i.class = 'may be non-vegetarian') as may_non_veg_count,
         COUNT(*) FILTER (WHERE i.class = 'typically vegan') as typically_vegan_count,
         COUNT(*) FILTER (WHERE i.class = 'typically vegetarian') as typically_veg_count,
-        COUNT(*) FILTER (WHERE i.class IS NULL) as null_class_count
-      FROM ingredients i
-      WHERE i.title = ANY(
+        COUNT(*) FILTER (WHERE i.class IS NULL OR i.title IS NULL) as null_class_count
+      FROM UNNEST(
         STRING_TO_ARRAY(
           RTRIM(p.analysis, '~'),
           '~'
         )
-      )
+      ) AS ingredient_name
+      LEFT JOIN ingredients i ON i.title = ingredient_name
     ) as class_analysis
   ),
   updated AS (
