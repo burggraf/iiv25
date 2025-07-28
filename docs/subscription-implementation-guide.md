@@ -43,7 +43,7 @@ Create each subscription with these exact Product IDs:
 
 #### Monthly Subscription
 
-- **Product ID**: `isitvegan_standard_monthly`
+- **Product ID**: `iiv_standard_monthly`
 - **Reference Name**: "Monthly Standard"
 - **Subscription Duration**: 1 month
 - **Price**: $1.99 USD (Tier 2)
@@ -51,7 +51,7 @@ Create each subscription with these exact Product IDs:
 
 #### Quarterly Subscription
 
-- **Product ID**: `isitvegan_standard_quarterly`
+- **Product ID**: `iiv_standard_quarterly`
 - **Reference Name**: "3-Month Standard"
 - **Subscription Duration**: 3 months
 - **Price**: $4.99 USD (Tier 5)
@@ -59,7 +59,7 @@ Create each subscription with these exact Product IDs:
 
 #### Semiannual Subscription
 
-- **Product ID**: `isitvegan_standard_semiannual`
+- **Product ID**: `iiv_standard_semiannual`
 - **Reference Name**: "6-Month Standard"
 - **Subscription Duration**: 6 months
 - **Price**: $6.99 USD (Tier 7)
@@ -67,7 +67,7 @@ Create each subscription with these exact Product IDs:
 
 #### Annual Subscription
 
-- **Product ID**: `isitvegan_standard_annual`
+- **Product ID**: `iiv_standard_annual`
 - **Reference Name**: "Annual Standard"
 - **Subscription Duration**: 1 year
 - **Price**: $9.99 USD (Tier 10)
@@ -75,7 +75,7 @@ Create each subscription with these exact Product IDs:
 
 #### Lifetime Purchase
 
-- **Product ID**: `isitvegan_standard_lifetime_subscription`
+- **Product ID**: `iiv_standard_lifetime`
 - **Reference Name**: "Lifetime Standard"
 - **Type**: Non-Consumable In-App Purchase (not subscription)
 - **Price**: $19.99 USD (Tier 20)
@@ -136,7 +136,7 @@ For each subscription, add:
 
 #### Monthly Subscription
 
-- **Product ID**: `isitvegan_standard_monthly`
+- **Product ID**: `iiv_standard_monthly`
 - **Name**: "Monthly Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements"
 - **Billing period**: 1 month
@@ -146,7 +146,7 @@ For each subscription, add:
 
 #### Quarterly Subscription
 
-- **Product ID**: `isitvegan_standard_quarterly`
+- **Product ID**: `iiv_standard_quarterly`
 - **Name**: "3-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 17%"
 - **Billing period**: 3 months
@@ -156,7 +156,7 @@ For each subscription, add:
 
 #### Semiannual Subscription
 
-- **Product ID**: `isitvegan_standard_semiannual`
+- **Product ID**: `iiv_standard_semiannual`
 - **Name**: "6-Month Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 42%"
 - **Billing period**: 6 months
@@ -166,7 +166,7 @@ For each subscription, add:
 
 #### Annual Subscription
 
-- **Product ID**: `isitvegan_standard_annual`
+- **Product ID**: `iiv_standard_annual`
 - **Name**: "Annual Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Save 58%"
 - **Billing period**: 12 months
@@ -182,7 +182,7 @@ For each subscription, add:
 
 #### Lifetime Purchase
 
-- **Product ID**: `isitvegan_standard_lifetime`
+- **Product ID**: `iiv_standard_lifetime`
 - **Name**: "Lifetime Standard"
 - **Description**: "Unlimited product scans and ingredient searches with no advertisements - Pay once, use forever"
 - **Price**: $19.99 USD
@@ -348,7 +348,7 @@ curl -X POST https://[your-project].supabase.co/functions/v1/subscription-webhoo
   -d '{
     "type": "INITIAL_PURCHASE",
     "data": {
-      "product_id": "isitvegan_standard_monthly",
+      "product_id": "iiv_standard_monthly",
       "transaction_id": "test-transaction-123",
       "device_id": "test-device-id",
       "purchase_date": "2024-01-01T00:00:00Z",

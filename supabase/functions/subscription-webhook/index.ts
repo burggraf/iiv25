@@ -204,11 +204,11 @@ export async function processSubscriptionCancellation(data: WebhookEvent['data']
  */
 export function getSubscriptionInfo(productId: string): { level: string; duration: number } | null {
   const productMap: Record<string, { level: string; duration: number }> = {
-    'isitvegan_standard_monthly': { level: 'standard', duration: 30 },
-    'isitvegan_standard_quarterly': { level: 'standard', duration: 90 },
-    'isitvegan_standard_semiannual': { level: 'standard', duration: 180 },
-    'isitvegan_standard_annual': { level: 'standard', duration: 365 },
-    'isitvegan_standard_lifetime_subscription': { level: 'standard', duration: -1 }, // -1 for lifetime
+    'iiv_standard_monthly': { level: 'standard', duration: 30 },
+    'iiv_standard_quarterly': { level: 'standard', duration: 90 },
+    'iiv_standard_semiannual': { level: 'standard', duration: 180 },
+    'iiv_standard_annual': { level: 'standard', duration: 365 },
+    'iiv_standard_lifetime': { level: 'standard', duration: -1 }, // -1 for lifetime
   }
 
   return productMap[productId] || null
