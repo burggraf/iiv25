@@ -3,12 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product } from '../types';
 import deviceIdService from '../services/deviceIdService';
 
+export interface HistoryItem {
+  barcode: string;
+  scannedAt: Date;
+  cachedProduct: Product; // For immediate display
+}
+
 interface AppContextType {
   scanHistory: Product[];
+  historyItems: HistoryItem[];
   addToHistory: (product: Product) => void;
   clearHistory: () => void;
   isLoading: boolean;
   deviceId: string | null;
+  updateHistoryProduct: (barcode: string, product: Product) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -21,6 +29,7 @@ interface AppProviderProps {
 
 export function AppProvider({ children }: AppProviderProps) {
   const [scanHistory, setScanHistory] = useState<Product[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
@@ -48,12 +57,41 @@ export function AppProvider({ children }: AppProviderProps) {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const history = JSON.parse(stored);
-        // Convert date strings back to Date objects
-        const historyWithDates = history.map((item: any) => ({
-          ...item,
-          lastScanned: new Date(item.lastScanned)
-        }));
-        setScanHistory(historyWithDates);
+        
+        // Check if this is the old format (array of Products) or new format (array of HistoryItems)
+        if (history.length > 0 && 'cachedProduct' in history[0]) {
+          // New format - HistoryItem[]
+          const historyWithDates = history.map((item: any) => ({
+            ...item,
+            scannedAt: new Date(item.scannedAt),
+            cachedProduct: {
+              ...item.cachedProduct,
+              lastScanned: new Date(item.cachedProduct.lastScanned)
+            }
+          }));
+          setHistoryItems(historyWithDates);
+          // Also set scanHistory for backward compatibility
+          setScanHistory(historyWithDates.map(item => item.cachedProduct));
+        } else {
+          // Old format - Product[] - migrate to new format
+          const historyWithDates = history.map((item: any) => ({
+            ...item,
+            lastScanned: new Date(item.lastScanned)
+          }));
+          
+          // Convert to new format
+          const newHistoryItems: HistoryItem[] = historyWithDates.map((product: Product) => ({
+            barcode: product.barcode,
+            scannedAt: product.lastScanned || new Date(),
+            cachedProduct: product
+          }));
+          
+          setHistoryItems(newHistoryItems);
+          setScanHistory(historyWithDates);
+          
+          // Save in new format
+          await saveHistoryItems(newHistoryItems);
+        }
       }
     } catch (error) {
       console.error('Error loading scan history:', error);
@@ -70,37 +108,95 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   };
 
+  const saveHistoryItems = async (items: HistoryItem[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error saving history items:', error);
+    }
+  };
+
   const addToHistory = (product: Product) => {
+    const now = new Date();
+    const productWithTimestamp = { ...product, lastScanned: now };
+    
+    // Update both scanHistory and historyItems
     setScanHistory(prev => {
-      // Check if product already exists in history
       const existingIndex = prev.findIndex(item => item.barcode === product.barcode);
       
       let newHistory: Product[];
       if (existingIndex >= 0) {
         // Update existing product and move to top
         newHistory = [
-          { ...product, lastScanned: new Date() },
+          productWithTimestamp,
           ...prev.filter(item => item.barcode !== product.barcode)
         ];
       } else {
         // Add new product to top
-        newHistory = [{ ...product, lastScanned: new Date() }, ...prev];
+        newHistory = [productWithTimestamp, ...prev];
       }
       
       // Keep only last 100 items
-      const limitedHistory = newHistory.slice(0, 100);
+      return newHistory.slice(0, 100);
+    });
+
+    setHistoryItems(prev => {
+      const existingIndex = prev.findIndex(item => item.barcode === product.barcode);
+      
+      let newHistoryItems: HistoryItem[];
+      if (existingIndex >= 0) {
+        // Update existing item and move to top
+        newHistoryItems = [
+          {
+            barcode: product.barcode,
+            scannedAt: now,
+            cachedProduct: productWithTimestamp
+          },
+          ...prev.filter(item => item.barcode !== product.barcode)
+        ];
+      } else {
+        // Add new item to top
+        newHistoryItems = [
+          {
+            barcode: product.barcode,
+            scannedAt: now,
+            cachedProduct: productWithTimestamp
+          },
+          ...prev
+        ];
+      }
+      
+      // Keep only last 100 items
+      const limitedHistoryItems = newHistoryItems.slice(0, 100);
       
       // Save to storage
-      saveHistory(limitedHistory);
+      saveHistoryItems(limitedHistoryItems);
       
-      return limitedHistory;
+      return limitedHistoryItems;
     });
+  };
+
+  const updateHistoryProduct = (barcode: string, product: Product) => {
+    setScanHistory(prev => 
+      prev.map(item => 
+        item.barcode === barcode ? { ...product, lastScanned: item.lastScanned } : item
+      )
+    );
+
+    setHistoryItems(prev => 
+      prev.map(item => 
+        item.barcode === barcode 
+          ? { ...item, cachedProduct: { ...product, lastScanned: item.scannedAt } }
+          : item
+      )
+    );
   };
 
   const clearHistory = async () => {
     try {
       await AsyncStorage.removeItem(STORAGE_KEY);
       setScanHistory([]);
+      setHistoryItems([]);
     } catch (error) {
       console.error('Error clearing scan history:', error);
     }
@@ -108,10 +204,12 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const value = {
     scanHistory,
+    historyItems,
     addToHistory,
     clearHistory,
     isLoading,
-    deviceId
+    deviceId,
+    updateHistoryProduct
   };
 
   return (

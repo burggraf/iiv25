@@ -1,15 +1,99 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
+import { SupabaseService } from '../services/supabaseService';
+import { ProductImageUrlService } from '../services/productImageUrlService';
 import Logo from '../components/Logo';
 import HistoryItem from '../components/HistoryItem';
 import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import { Product } from '../types';
 
 export default function HistoryScreen() {
-  const { scanHistory, clearHistory, isLoading } = useApp();
+  const { scanHistory, historyItems, clearHistory, isLoading, updateHistoryProduct } = useApp();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
+
+  // Initialize display products from cached data
+  useEffect(() => {
+    setDisplayProducts(scanHistory);
+    
+    // Background refresh of recent items (if online and has items)
+    if (historyItems.length > 0) {
+      refreshLatestItems();
+    }
+  }, [scanHistory, historyItems, refreshLatestItems]);
+
+  // Convert Supabase products to our Product format
+  const convertSupabaseToProduct = useCallback((supabaseProduct: any, originalBarcode: string): Product => {
+    return {
+      id: supabaseProduct.upc || supabaseProduct.ean13 || originalBarcode,
+      barcode: supabaseProduct.upc || supabaseProduct.ean13 || originalBarcode,
+      name: supabaseProduct.product_name || 'Unknown Product',
+      brand: supabaseProduct.brand,
+      ingredients: supabaseProduct.ingredients ? 
+        supabaseProduct.ingredients.split(',').map((ing: string) => ing.trim()) : [],
+      veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
+      imageUrl: ProductImageUrlService.resolveImageUrl(supabaseProduct.imageurl, originalBarcode) || undefined,
+      issues: supabaseProduct.issues,
+      lastScanned: new Date(),
+      classificationMethod: 'product-level' as const
+    };
+  }, []);
+
+  // Background refresh of latest items
+  const refreshLatestItems = useCallback(async () => {
+    if (historyItems.length === 0) return;
+    
+    try {
+      const barcodes = historyItems.slice(0, 25).map(item => item.barcode);
+      const freshProducts = await SupabaseService.getProductsByBarcodes(barcodes);
+      
+      // Convert to Product format and update display
+      const refreshedProducts = freshProducts.map(supabaseProduct => {
+        const originalBarcode = barcodes.find(bc => 
+          bc === supabaseProduct.upc || bc === supabaseProduct.ean13
+        ) || supabaseProduct.upc || supabaseProduct.ean13 || '';
+        
+        return convertSupabaseToProduct(supabaseProduct, originalBarcode);
+      });
+
+      // Update display products
+      setDisplayProducts(prev => {
+        const updatedProducts = [...prev];
+        
+        refreshedProducts.forEach(refreshedProduct => {
+          const index = updatedProducts.findIndex(p => p.barcode === refreshedProduct.barcode);
+          if (index >= 0) {
+            // Preserve the original scan time
+            const originalScanTime = updatedProducts[index].lastScanned;
+            updatedProducts[index] = { ...refreshedProduct, lastScanned: originalScanTime };
+            
+            // Update the context cache
+            updateHistoryProduct(refreshedProduct.barcode, refreshedProduct);
+          }
+        });
+        
+        return updatedProducts;
+      });
+    } catch (error) {
+      console.error('Failed to refresh history items:', error);
+      // Fail silently - cached data is still displayed
+    }
+  }, [historyItems, convertSupabaseToProduct, updateHistoryProduct]);
+
+  // Manual refresh (pull-to-refresh)
+  const onRefresh = useCallback(async () => {
+    if (historyItems.length === 0) return;
+    
+    setIsRefreshing(true);
+    try {
+      await refreshLatestItems();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshLatestItems, historyItems.length]);
 
   const handleProductPress = (product: Product) => {
     setSelectedProduct(product);
@@ -66,7 +150,7 @@ export default function HistoryScreen() {
       </View>
 
       {/* Empty State */}
-      {!isLoading && scanHistory.length === 0 && (
+      {!isLoading && displayProducts.length === 0 && (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📋</Text>
           <Text style={styles.emptyTitle}>No scans yet</Text>
@@ -78,11 +162,11 @@ export default function HistoryScreen() {
       )}
 
       {/* History List */}
-      {scanHistory.length > 0 && (
+      {displayProducts.length > 0 && (
         <>
           <View style={styles.listHeader}>
             <Text style={styles.historyCount}>
-              {scanHistory.length} product{scanHistory.length !== 1 ? 's' : ''} scanned
+              {displayProducts.length} product{displayProducts.length !== 1 ? 's' : ''} scanned
             </Text>
             <TouchableOpacity onPress={handleClearHistory}>
               <Text style={styles.clearButton}>Clear All</Text>
@@ -90,7 +174,7 @@ export default function HistoryScreen() {
           </View>
 
           <FlatList
-            data={scanHistory}
+            data={displayProducts}
             keyExtractor={(item) => `${item.barcode}-${item.lastScanned?.getTime()}`}
             renderItem={({ item }) => (
               <HistoryItem
@@ -101,6 +185,12 @@ export default function HistoryScreen() {
             style={styles.list}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl 
+                refreshing={isRefreshing}
+                onRefresh={onRefresh}
+              />
+            }
           />
         </>
       )}

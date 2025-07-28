@@ -189,6 +189,38 @@ export class SupabaseService {
   }
 
   /**
+   * Get multiple products by their barcodes in a single query
+   * @param barcodes - Array of UPC/EAN13 codes to lookup
+   * @returns Promise with array of products found
+   */
+  static async getProductsByBarcodes(barcodes: string[]): Promise<SupabaseProduct[]> {
+    if (barcodes.length === 0) {
+      return [];
+    }
+
+    try {
+      // Build OR query for multiple barcodes
+      const orConditions = barcodes.map(barcode => `upc.eq.${barcode},ean13.eq.${barcode}`).join(',');
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .or(orConditions)
+        .limit(barcodes.length);
+
+      if (error) {
+        console.error('Error getting products by barcodes:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Failed to get products by barcodes:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Search for products by barcode using PostgreSQL function with auth check, rate limiting, and logging
    * @param barcode - The barcode to search for
    * @returns Promise with the product if found, null if not found, or throws error for rate limiting
