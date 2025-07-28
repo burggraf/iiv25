@@ -32,6 +32,10 @@ export default function SearchScreen() {
   // Ingredient search state
   const [ingredientResult, setIngredientResult] = useState<IngredientInfo | null>(null);
   const [supabaseIngredients, setSupabaseIngredients] = useState<SupabaseIngredient[]>([]);
+  const [allIngredientResults, setAllIngredientResults] = useState<SupabaseIngredient[]>([]);
+  const [ingredientCurrentPage, setIngredientCurrentPage] = useState(1);
+  const [ingredientHasNextPage, setIngredientHasNextPage] = useState(false);
+  const [ingredientTotalResults, setIngredientTotalResults] = useState(0);
   
   // Rate limit modal state
   const [showRateLimitModal, setShowRateLimitModal] = useState(false);
@@ -106,8 +110,8 @@ export default function SearchScreen() {
 
   const searchProducts = async (query: string, page: number) => {
     try {
-      // Calculate page offset (20 products per page)
-      const pageOffset = (page - 1) * 20;
+      // Calculate page offset (25 products per page)
+      const pageOffset = (page - 1) * 25;
       
       const supabaseProducts = await SupabaseService.searchProductsByName(query, pageOffset);
       
@@ -144,15 +148,17 @@ export default function SearchScreen() {
       if (page === 1) {
         setProductResults(products);
         setCurrentPage(1);
-        setTotalResults(totalCount);
-        // Check if there are more pages based on total count
-        setHasNextPage(totalCount > 20);
+        // For now, show the count of results we have. TODO: Get actual database total from backend
+        setTotalResults(products.length);
+        // Check if there are more pages - if we got 25 results, there might be more
+        setHasNextPage(products.length >= 25);
       } else {
         setProductResults(prev => [...prev, ...products]);
         setCurrentPage(page);
-        setTotalResults(totalCount);
-        // Check if there are more pages based on current page and total count
-        setHasNextPage((page * 20) < totalCount);
+        // Update total to show we have at least this many
+        setTotalResults(prev => prev + products.length);
+        // Check if there are more pages - if we got 25 results, there might be more
+        setHasNextPage(products.length >= 25);
       }
       
       if (products.length === 0 && page === 1) {
@@ -182,7 +188,15 @@ export default function SearchScreen() {
       }
       
       if (supabaseResults.length > 0) {
-        setSupabaseIngredients(supabaseResults);
+        // Store all results and paginate client-side
+        setAllIngredientResults(supabaseResults);
+        const pageSize = 25;
+        const firstPageResults = supabaseResults.slice(0, pageSize);
+        
+        setSupabaseIngredients(firstPageResults);
+        setIngredientCurrentPage(1);
+        setIngredientTotalResults(supabaseResults.length);
+        setIngredientHasNextPage(supabaseResults.length > pageSize);
         setIngredientResult(null); // Clear fallback result
         return;
       }
@@ -253,6 +267,20 @@ export default function SearchScreen() {
     }
   };
 
+  const handleLoadMoreIngredients = () => {
+    if (!isLoading && ingredientHasNextPage && allIngredientResults.length > 0) {
+      const pageSize = 25;
+      const nextPage = ingredientCurrentPage + 1;
+      const startIndex = (nextPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const nextPageResults = allIngredientResults.slice(startIndex, endIndex);
+      
+      setSupabaseIngredients(prev => [...prev, ...nextPageResults]);
+      setIngredientCurrentPage(nextPage);
+      setIngredientHasNextPage(endIndex < allIngredientResults.length);
+    }
+  };
+
   const handleProductSelect = async (product: Product) => {
     // Since the product already has all the details from Supabase, just use it directly
     setIsLoading(true);
@@ -270,6 +298,10 @@ export default function SearchScreen() {
     setSelectedProduct(null);
     setIngredientResult(null);
     setSupabaseIngredients([]);
+    setAllIngredientResults([]);
+    setIngredientCurrentPage(1);
+    setIngredientHasNextPage(false);
+    setIngredientTotalResults(0);
     setProductResults([]);
     setCurrentPage(1);
     setHasNextPage(false);
@@ -368,7 +400,7 @@ export default function SearchScreen() {
         
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsHeader}>
-            {totalResults} product{totalResults !== 1 ? 's' : ''} found
+            {totalResults} product{totalResults !== 1 ? 's' : ''} found{hasNextPage ? ' (showing ' + productResults.length + ')' : ''}
           </Text>
           
           <FlatList
@@ -422,7 +454,7 @@ export default function SearchScreen() {
         
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsHeader}>
-            {supabaseIngredients.length} ingredient{supabaseIngredients.length !== 1 ? 's' : ''} found
+            {ingredientTotalResults} ingredient{ingredientTotalResults !== 1 ? 's' : ''} found
           </Text>
           
           <FlatList
@@ -471,6 +503,13 @@ export default function SearchScreen() {
             )}
             style={styles.resultsList}
             contentContainerStyle={styles.resultsListContent}
+            ListFooterComponent={
+              ingredientHasNextPage ? (
+                <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMoreIngredients}>
+                  <Text style={styles.loadMoreButtonText}>Load More Results</Text>
+                </TouchableOpacity>
+              ) : null
+            }
           />
         </View>
         

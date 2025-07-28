@@ -97,7 +97,7 @@ export class SupabaseService {
   /**
    * Search for ingredients by title using PostgreSQL function with auth check and logging
    * @param title - The ingredient title to search for
-   * @returns Promise with matching ingredients (limited to 100 results)
+   * @returns Promise with matching ingredients (limited by backend function)
    * @throws Error if user is not authenticated ('not logged in')
    */
   static async searchIngredientsByTitle(title: string): Promise<SupabaseIngredient[]> {
