@@ -555,7 +555,7 @@ body {
 }
 
 .faq-answer.active {
-    max-height: 200px;
+    max-height: 400px;
 }
 
 .faq-answer p {
@@ -576,6 +576,10 @@ body {
     
     .faq-answer p {
         padding: 0 var(--spacing-lg) var(--spacing-lg);
+    }
+    
+    .faq-answer.active {
+        max-height: 500px;
     }
 }
 
