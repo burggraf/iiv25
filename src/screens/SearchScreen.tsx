@@ -270,6 +270,10 @@ export default function SearchScreen() {
     setSelectedProduct(null);
     setIngredientResult(null);
     setSupabaseIngredients([]);
+    setProductResults([]);
+    setCurrentPage(1);
+    setHasNextPage(false);
+    setTotalResults(0);
   };
 
   const handleBackToIngredientResults = () => {
@@ -330,11 +334,15 @@ export default function SearchScreen() {
 
   // Show selected product details
   if (selectedProduct) {
+    // If we have product results, go back to results; otherwise go back to search
+    const backHandler = productResults.length > 0 ? () => setSelectedProduct(null) : handleBackToSearch;
+    const backButtonText = productResults.length > 0 ? "← Back to Search Results" : "← Back to Search";
+    
     return (
       <ProductDisplayContainer
         product={selectedProduct}
-        onBack={handleBackToSearch}
-        backButtonText="← Back to Search Results"
+        onBack={backHandler}
+        backButtonText={backButtonText}
         onProductUpdated={handleProductUpdated}
         useAbsolutePositioning={false}
         iconType="search"
@@ -347,6 +355,60 @@ export default function SearchScreen() {
     // If we have supabase ingredients, go back to results; otherwise go back to search
     const backHandler = supabaseIngredients.length > 0 ? handleBackToIngredientResults : handleBackToSearch;
     return <IngredientResult ingredient={ingredientResult} onBack={backHandler} />;
+  }
+
+  // Show product results in full screen
+  if (searchMode === 'products' && productResults.length > 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Logo size={32} />
+          <Text style={styles.appTitle}>Product Results</Text>
+        </View>
+        
+        <View style={styles.resultsContainer}>
+          <Text style={styles.resultsHeader}>
+            {totalResults} product{totalResults !== 1 ? 's' : ''} found
+          </Text>
+          
+          <FlatList
+            data={productResults}
+            keyExtractor={(item) => item.barcode}
+            renderItem={({ item }) => (
+              <ProductSearchItem
+                product={item}
+                onPress={() => handleProductSelect(item)}
+              />
+            )}
+            style={styles.resultsList}
+            contentContainerStyle={styles.resultsListContent}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              isLoading && productResults.length > 0 ? (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color="#007AFF" />
+                  <Text style={styles.loadMoreText}>Loading more...</Text>
+                </View>
+              ) : hasNextPage ? (
+                <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
+                  <Text style={styles.loadMoreButtonText}>Load More Results</Text>
+                </TouchableOpacity>
+              ) : null
+            }
+          />
+        </View>
+        
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity onPress={handleBackToSearch} style={styles.backButtonContainer}>
+            <View style={styles.backButtonContent}>
+              <SearchIcon size={18} color="#666" />
+              <Text style={styles.backButton}>Back to Search</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   // Show Supabase ingredients results
@@ -517,41 +579,6 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {/* Product Results */}
-      {searchMode === 'products' && productResults.length > 0 && (
-        <View style={styles.resultsContainer}>
-          <Text style={styles.resultsHeader}>
-            {totalResults} product{totalResults !== 1 ? 's' : ''} found
-          </Text>
-          
-          <FlatList
-            data={productResults}
-            keyExtractor={(item) => item.barcode}
-            renderItem={({ item }) => (
-              <ProductSearchItem
-                product={item}
-                onPress={() => handleProductSelect(item)}
-              />
-            )}
-            style={styles.resultsList}
-            contentContainerStyle={styles.resultsListContent}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              isLoading && productResults.length > 0 ? (
-                <View style={styles.loadMoreContainer}>
-                  <ActivityIndicator size="small" color="#007AFF" />
-                  <Text style={styles.loadMoreText}>Loading more...</Text>
-                </View>
-              ) : hasNextPage ? (
-                <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
-                  <Text style={styles.loadMoreButtonText}>Load More Results</Text>
-                </TouchableOpacity>
-              ) : null
-            }
-          />
-        </View>
-      )}
       
       {/* Rate Limit Modal */}
       <RateLimitModal 
