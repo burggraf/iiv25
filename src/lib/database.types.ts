@@ -440,7 +440,7 @@ export type Database = {
         }[]
       }
       get_rate_limits: {
-        Args: { action_type: string; device_id?: string }
+        Args: { action_type: string; device_id: string }
         Returns: {
           subscription_level: string
           rate_limit: number
@@ -502,7 +502,6 @@ export type Database = {
           issues: string
           created: string
           lastupdated: string
-          total_count: number
         }[]
       }
       search_products_final: {

@@ -982,14 +982,14 @@ CREATE OR REPLACE FUNCTION "public"."classify_all_products"() RETURNS TABLE("upc
         COUNT(*) FILTER (WHERE i.class = 'may be non-vegetarian') as may_non_veg_count,
         COUNT(*) FILTER (WHERE i.class = 'typically vegan') as typically_vegan_count,
         COUNT(*) FILTER (WHERE i.class = 'typically vegetarian') as typically_veg_count,
-        COUNT(*) FILTER (WHERE i.class IS NULL) as null_class_count
-      FROM ingredients i
-      WHERE i.title = ANY(
+        COUNT(*) FILTER (WHERE i.class IS NULL OR i.title IS NULL) as null_class_count
+      FROM UNNEST(
         STRING_TO_ARRAY(
           RTRIM(p.analysis, '~'),
           '~'
         )
-      )
+      ) AS ingredient_name
+      LEFT JOIN ingredients i ON i.title = ingredient_name
     ) as class_analysis
   ),
   updated AS (
@@ -1021,9 +1021,8 @@ CREATE OR REPLACE FUNCTION "public"."classify_upc"("input_upc" "text") RETURNS "
       COUNT(*) FILTER (WHERE i.class = 'may be non-vegetarian') as may_non_veg_count,
       COUNT(*) FILTER (WHERE i.class = 'typically vegan') as typically_vegan_count,
       COUNT(*) FILTER (WHERE i.class = 'typically vegetarian') as typically_veg_count,
-      COUNT(*) FILTER (WHERE i.class IS NULL) as null_class_count
-    FROM ingredients i
-    WHERE i.title = ANY(
+      COUNT(*) FILTER (WHERE i.class IS NULL OR i.title IS NULL) as null_class_count
+    FROM UNNEST(
       STRING_TO_ARRAY(
         RTRIM(
           (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
@@ -1031,7 +1030,8 @@ CREATE OR REPLACE FUNCTION "public"."classify_upc"("input_upc" "text") RETURNS "
         ),
         '~'
       )
-    )
+    ) AS ingredient_name
+    LEFT JOIN ingredients i ON i.title = ingredient_name
   ),
   classification_result AS (
     SELECT 
@@ -1267,39 +1267,22 @@ $$;
 ALTER FUNCTION "public"."get_classes_for_upc"("input_upc" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") RETURNS TABLE("title" character varying, "class" character varying)
-    LANGUAGE "plpgsql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."get_ingredients_for_upc"("input_upc" "text") RETURNS TABLE("title" "text", "class" "text")
+    LANGUAGE "sql" SECURITY DEFINER
     AS $$
-DECLARE
-    normalized_upc TEXT;
-BEGIN
-    -- Normalize barcode format: prefer UPC (without leading zero)
-    -- Convert EAN13 with leading zero to UPC format for consistent lookup
-    normalized_upc := TRIM(input_upc);
-    
-    IF LENGTH(normalized_upc) = 13 AND LEFT(normalized_upc, 1) = '0' THEN
-        normalized_upc := SUBSTRING(normalized_upc, 2); -- Remove leading zero
-    END IF;
-    
-    RETURN QUERY
-    SELECT i.title, i.class
-    FROM ingredients i
-    WHERE i.title = ANY(
-        STRING_TO_ARRAY(
-            RTRIM(
-                (SELECT p.analysis 
-                 FROM products p 
-                 WHERE p.upc = normalized_upc 
-                    OR p.ean13 = input_upc 
-                    OR p.upc = input_upc 
-                    OR p.ean13 = normalized_upc
-                 LIMIT 1),
-                '~'
-            ),
-            '~'
-        )
-    );
-END;
+  SELECT 
+    ingredient_name as title, 
+    i.class
+  FROM UNNEST(
+    STRING_TO_ARRAY(
+      RTRIM(
+        (SELECT p.analysis FROM products p WHERE p.upc = input_upc),
+        '~'
+      ),
+      '~'
+    )
+  ) AS ingredient_name
+  LEFT JOIN ingredients i ON i.title = ingredient_name;
 $$;
 
 
@@ -1327,8 +1310,9 @@ $$;
 ALTER FUNCTION "public"."get_primary_classes_for_upc"("input_upc" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text" DEFAULT NULL::"text") RETURNS TABLE("subscription_level" "text", "rate_limit" integer, "recent_searches" integer, "is_rate_limited" boolean, "searches_remaining" integer)
+CREATE OR REPLACE FUNCTION "public"."get_rate_limits"("action_type" "text", "device_id" "text") RETURNS TABLE("subscription_level" "text", "rate_limit" integer, "recent_searches" integer, "is_rate_limited" boolean, "searches_remaining" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
     current_user_id uuid;
@@ -1395,12 +1379,22 @@ BEGIN
         current_rate_limit := 10; -- 10 for free tier
     END CASE;
 
-    -- Count recent searches
-    SELECT count(*) INTO search_count
-    FROM actionlog
-    WHERE type = action_type
-    AND created_at > now() - interval '24 hours'
-    AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    -- Count recent searches with unified logic for search-related actions
+    IF action_type = 'search' THEN
+        -- For unified search rate limiting, count all search types
+        SELECT count(*) INTO search_count
+        FROM actionlog
+        WHERE type IN ('search', 'ingredient_search', 'product_search')
+        AND created_at > now() - interval '24 hours'
+        AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    ELSE
+        -- For other action types, count only that specific type
+        SELECT count(*) INTO search_count
+        FROM actionlog
+        WHERE type = action_type
+        AND created_at > now() - interval '24 hours'
+        AND (userid = current_user_id OR (device_uuid IS NOT NULL AND deviceid = device_uuid));
+    END IF;
 
     -- Determine if rate limited
     rate_limited := search_count >= current_rate_limit;
@@ -1544,6 +1538,7 @@ ALTER FUNCTION "public"."get_subscription_status"("device_id_param" "text") OWNE
 
 CREATE OR REPLACE FUNCTION "public"."get_usage_stats"("device_id_param" "text") RETURNS TABLE("product_lookups_today" integer, "product_lookups_limit" integer, "searches_today" integer, "searches_limit" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
     current_user_id uuid;
@@ -1577,7 +1572,7 @@ BEGIN
     SELECT subscription_level 
     INTO user_subscription_level
     FROM public.user_subscription 
-    WHERE deviceid = device_uuid  -- Now both sides are UUID
+    WHERE deviceid = device_uuid
       AND is_active = TRUE
     ORDER BY created_at DESC
     LIMIT 1;
@@ -1601,16 +1596,17 @@ BEGIN
     SELECT COUNT(*)
     INTO product_lookup_count
     FROM actionlog
-    WHERE deviceid = device_uuid  -- Both sides are UUID
+    WHERE deviceid = device_uuid
       AND type = 'product_lookup'
       AND created_at > now() - interval '24 hours';
 
-    -- Count searches in the last 24 hours for this device
+    -- Count unified searches in the last 24 hours for this device
+    -- This includes both the new 'search' type and legacy types for backwards compatibility
     SELECT COUNT(*)
     INTO search_count
     FROM actionlog
-    WHERE deviceid = device_uuid  -- Both sides are UUID
-      AND type = 'ingredient_search'
+    WHERE deviceid = device_uuid
+      AND type IN ('search', 'ingredient_search', 'product_search')
       AND created_at > now() - interval '24 hours';
 
     RETURN QUERY SELECT
@@ -1921,14 +1917,14 @@ CREATE OR REPLACE FUNCTION "public"."search_ingredients"("search_term" "text", "
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    current_user_id UUID;
-    device_uuid UUID;
-    search_result_count INTEGER;
+    current_user_id uuid;
+    device_uuid uuid;
+    search_result_count integer;
     rate_info RECORD;
+    valid_classes TEXT[] := ARRAY['may be non-vegetarian', 'non-vegetarian', 'typically non-vegan', 'typically non-vegetarian', 'typically vegan', 'typically vegetarian', 'vegan', 'vegetarian'];
 BEGIN
     -- Check if user is authenticated
     current_user_id := auth.uid();
-    
     IF current_user_id IS NULL THEN
         RAISE EXCEPTION 'not logged in';
     END IF;
@@ -1944,133 +1940,64 @@ BEGIN
     
     -- Validate and convert device_id to UUID
     BEGIN
-        device_uuid := device_id::UUID;
-    EXCEPTION WHEN invalid_text_representation THEN
-        RAISE EXCEPTION 'device_id must be a valid UUID';
+        device_uuid := device_id::uuid;
+    EXCEPTION
+        WHEN invalid_text_representation THEN
+            RAISE EXCEPTION 'device_id must be a valid UUID';
     END;
     
-    -- Get rate limit information with device tracking
-    SELECT * INTO rate_info FROM get_rate_limits('ingredient_search', device_id);
+    -- Get rate limit information using unified 'search' action type
+    SELECT * INTO rate_info
+    FROM get_rate_limits('search', device_id);
     
     -- Check if user has exceeded rate limit
     IF rate_info.is_rate_limited THEN
         -- Return special rate limit response instead of throwing error
         RETURN QUERY
-        SELECT 
-            '__RATE_LIMIT_EXCEEDED__'::VARCHAR(255) as title,
-            rate_info.subscription_level::VARCHAR(255) as class,
-            rate_info.rate_limit::INTEGER as productcount,
-            NOW() as lastupdated,
-            NOW() as created;
+        SELECT
+            '__RATE_LIMIT_EXCEEDED__'::varchar(255) AS title,
+            rate_info.subscription_level::varchar(255) AS class,
+            rate_info.rate_limit::integer AS productcount,
+            NOW() AS lastupdated,
+            NOW() AS created;
         RETURN;
     END IF;
     
     -- Clean search term
     search_term := trim(lower(search_term));
     
-    -- Valid ingredient classes to filter by
-    DECLARE
-        valid_classes TEXT[] := ARRAY[
-            'may be non-vegetarian',
-            'non-vegetarian', 
-            'typically non-vegan',
-            'typically non-vegetarian',
-            'typically vegan',
-            'typically vegetarian',
-            'vegan',
-            'vegetarian'
-        ];
-    BEGIN
-        -- Step 1: Search for exact match first
-        RETURN QUERY
-        SELECT i.title, i.class, i.productcount, i.lastupdated, i.created
-        FROM public.ingredients i
-        WHERE i.title = search_term
-        AND i.class = ANY(valid_classes)
-        ORDER BY i.title
-        LIMIT 100;
-        
-        -- If exact match found, log and return
-        GET DIAGNOSTICS search_result_count = ROW_COUNT;
-        IF search_result_count > 0 THEN
-            -- Log the search operation
-            INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
-            VALUES (
-                'ingredient_search',
-                search_term,
-                current_user_id,
-                device_uuid,
-                format('Found %s exact matches', search_result_count),
-                json_build_object(
-                    'device_id', device_id,
-                    'search_strategy', 'exact_match',
-                    'result_count', search_result_count,
-                    'search_term_length', length(search_term),
-                    'subscription_level', rate_info.subscription_level,
-                    'rate_limit', rate_info.rate_limit,
-                    'searches_used', rate_info.recent_searches + 1
-                )
-            );
-            RETURN;
-        END IF;
-        
-        -- Step 2: Search for starts with pattern
-        RETURN QUERY
-        SELECT i.title, i.class, i.productcount, i.lastupdated, i.created
-        FROM public.ingredients i
-        WHERE i.title ILIKE (search_term || '%')
-        AND i.class = ANY(valid_classes)
-        ORDER BY i.title
-        LIMIT 100;
-        
-        -- If starts with match found, log and return
-        GET DIAGNOSTICS search_result_count = ROW_COUNT;
-        IF search_result_count > 0 THEN
-            -- Log the search operation
-            INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
-            VALUES (
-                'ingredient_search',
-                search_term,
-                current_user_id,
-                device_uuid,
-                format('Found %s starts-with matches', search_result_count),
-                json_build_object(
-                    'device_id', device_id,
-                    'search_strategy', 'starts_with',
-                    'result_count', search_result_count,
-                    'search_term_length', length(search_term),
-                    'subscription_level', rate_info.subscription_level,
-                    'rate_limit', rate_info.rate_limit,
-                    'searches_used', rate_info.recent_searches + 1
-                )
-            );
-            RETURN;
-        END IF;
-        
-        -- Step 3: Search for contains pattern
-        RETURN QUERY
-        SELECT i.title, i.class, i.productcount, i.lastupdated, i.created
-        FROM public.ingredients i
-        WHERE i.title ILIKE ('%' || search_term || '%')
-        AND i.class = ANY(valid_classes)
-        ORDER BY i.title
-        LIMIT 100;
-        
-        -- Log the search operation (even if no results)
-        GET DIAGNOSTICS search_result_count = ROW_COUNT;
-        INSERT INTO public.actionlog (type, input, userid, deviceid, result, metadata)
+    -- Step 1: Search for exact match first
+    RETURN QUERY
+    SELECT
+        i.title,
+        i.class,
+        i.productcount,
+        i.lastupdated,
+        i.created
+    FROM
+        public.ingredients i
+    WHERE
+        i.title = search_term
+        AND i.class = ANY (valid_classes)
+    ORDER BY
+        i.title
+    LIMIT 250;
+    
+    -- If exact match found, log and return
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    IF search_result_count > 0 THEN
+        -- Log the search operation using unified 'search' action type
+        INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
         VALUES (
-            'ingredient_search',
+            'search',
             search_term,
             current_user_id,
             device_uuid,
-            CASE 
-                WHEN search_result_count > 0 THEN format('Found %s contains matches', search_result_count)
-                ELSE 'No matches found'
-            END,
+            format('Found %s exact matches', search_result_count),
             json_build_object(
                 'device_id', device_id,
-                'search_strategy', 'contains',
+                'search_type', 'ingredient',
+                'search_strategy', 'exact_match',
                 'result_count', search_result_count,
                 'search_term_length', length(search_term),
                 'subscription_level', rate_info.subscription_level,
@@ -2078,9 +2005,93 @@ BEGIN
                 'searches_used', rate_info.recent_searches + 1
             )
         );
-        
         RETURN;
-    END;
+    END IF;
+    
+    -- Step 2: Search for starts with pattern
+    RETURN QUERY
+    SELECT
+        i.title,
+        i.class,
+        i.productcount,
+        i.lastupdated,
+        i.created
+    FROM
+        public.ingredients i
+    WHERE
+        i.title ILIKE (search_term || '%')
+        AND i.class = ANY (valid_classes)
+    ORDER BY
+        i.title
+    LIMIT 250;
+    
+    -- If starts with match found, log and return
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    IF search_result_count > 0 THEN
+        -- Log the search operation using unified 'search' action type
+        INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
+        VALUES (
+            'search',
+            search_term,
+            current_user_id,
+            device_uuid,
+            format('Found %s starts-with matches', search_result_count),
+            json_build_object(
+                'device_id', device_id,
+                'search_type', 'ingredient',
+                'search_strategy', 'starts_with',
+                'result_count', search_result_count,
+                'search_term_length', length(search_term),
+                'subscription_level', rate_info.subscription_level,
+                'rate_limit', rate_info.rate_limit,
+                'searches_used', rate_info.recent_searches + 1
+            )
+        );
+        RETURN;
+    END IF;
+    
+    -- Step 3: Search for contains pattern
+    RETURN QUERY
+    SELECT
+        i.title,
+        i.class,
+        i.productcount,
+        i.lastupdated,
+        i.created
+    FROM
+        public.ingredients i
+    WHERE
+        i.title ILIKE ('%' || search_term || '%')
+        AND i.class = ANY (valid_classes)
+    ORDER BY
+        i.title
+    LIMIT 250;
+    
+    -- Log the search operation (even if no results) using unified 'search' action type
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
+    VALUES (
+        'search',
+        search_term,
+        current_user_id,
+        device_uuid,
+        CASE 
+            WHEN search_result_count > 0 THEN format('Found %s contains matches', search_result_count)
+            ELSE 'No matches found'
+        END,
+        json_build_object(
+            'device_id', device_id,
+            'search_type', 'ingredient',
+            'search_strategy', 'contains',
+            'result_count', search_result_count,
+            'search_term_length', length(search_term),
+            'subscription_level', rate_info.subscription_level,
+            'rate_limit', rate_info.rate_limit,
+            'searches_used', rate_info.recent_searches + 1
+        )
+    );
+    
+    RETURN;
 END;
 $$;
 
@@ -2088,7 +2099,7 @@ $$;
 ALTER FUNCTION "public"."search_ingredients"("search_term" "text", "device_id" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer DEFAULT 0) RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone, "total_count" integer)
+CREATE OR REPLACE FUNCTION "public"."search_products"("search_term" "text", "device_id" "text", "page_offset" integer DEFAULT 0) RETURNS TABLE("ean13" character varying, "upc" character varying, "product_name" character varying, "brand" character varying, "ingredients" character varying, "classification" "text", "imageurl" "text", "issues" "text", "created" timestamp with time zone, "lastupdated" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -2096,10 +2107,8 @@ DECLARE
     current_user_id uuid;
     device_uuid uuid;
     search_result_count integer;
-    total_result_count integer;
     rate_info RECORD;
     cleaned_term text;
-    search_strategy text;
 BEGIN
     -- Check if user is authenticated
     current_user_id := auth.uid();
@@ -2129,9 +2138,9 @@ BEGIN
             RAISE EXCEPTION 'device_id must be a valid UUID';
     END;
     
-    -- Get rate limit information
+    -- Get rate limit information using unified 'search' action type
     SELECT * INTO rate_info
-    FROM get_rate_limits('product_search', device_id);
+    FROM get_rate_limits('search', device_id);
     
     -- Check if user has exceeded rate limit
     IF rate_info.is_rate_limited THEN
@@ -2147,99 +2156,104 @@ BEGIN
             NULL::text AS imageurl,
             NULL::text AS issues,
             NOW() AS created,
-            NOW() AS lastupdated,
-            0::integer AS total_count;
+            NOW() AS lastupdated;
         RETURN;
     END IF;
     
     -- Clean the search term
     cleaned_term := trim(lower(search_term));
     
-    -- Step 1: Try exact match first and get total count
-    SELECT COUNT(*) INTO total_result_count
-    FROM public.products p
-    WHERE lower((p.product_name)::text) = cleaned_term;
+    -- Step 1: Search for exact match first
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) = cleaned_term
+    ORDER BY
+        lower((p.product_name)::text)
+    LIMIT 250
+    OFFSET page_offset;
     
-    IF total_result_count > 0 THEN
-        -- Exact match found
-        search_strategy := 'exact_match';
-        search_result_count := LEAST(total_result_count - page_offset, 20);
-        
-        RETURN QUERY
-        SELECT
-            p.ean13,
-            p.upc,
-            p.product_name,
-            p.brand,
-            p.ingredients,
-            p.classification,
-            p.imageurl,
-            p.issues,
-            p.created,
-            p.lastupdated,
-            total_result_count::integer AS total_count
-        FROM
-            public.products p
-        WHERE
-            lower((p.product_name)::text) = cleaned_term
-        ORDER BY
-            lower((p.product_name)::text)
-        LIMIT 20
-        OFFSET page_offset;
-    ELSE
-        -- No exact match, try prefix search and get total count
-        search_strategy := 'prefix_match';
-        
-        SELECT COUNT(*) INTO total_result_count
-        FROM public.products p
-        WHERE
-            lower((p.product_name)::text) >= cleaned_term
-            AND lower((p.product_name)::text) < (cleaned_term || chr(255))
-            AND lower((p.product_name)::text) LIKE (cleaned_term || '%');
-        
-        search_result_count := LEAST(total_result_count - page_offset, 20);
-        
-        RETURN QUERY
-        SELECT
-            p.ean13,
-            p.upc,
-            p.product_name,
-            p.brand,
-            p.ingredients,
-            p.classification,
-            p.imageurl,
-            p.issues,
-            p.created,
-            p.lastupdated,
-            total_result_count::integer AS total_count
-        FROM
-            public.products p
-        WHERE
-            lower((p.product_name)::text) >= cleaned_term
-            AND lower((p.product_name)::text) < (cleaned_term || chr(255))
-            AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
-        ORDER BY
-            lower((p.product_name)::text)
-        LIMIT 20
-        OFFSET page_offset;
+    -- Check if exact match found
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    
+    IF search_result_count > 0 THEN
+        -- Log the search operation using unified 'search' action type
+        INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
+        VALUES (
+            'search',
+            search_term,
+            current_user_id,
+            device_uuid,
+            format('Found %s exact matches', search_result_count),
+            json_build_object(
+                'device_id', device_id,
+                'search_type', 'product',
+                'search_strategy', 'exact_match',
+                'result_count', search_result_count,
+                'search_term_length', length(search_term),
+                'page_offset', page_offset,
+                'subscription_level', rate_info.subscription_level,
+                'rate_limit', rate_info.rate_limit,
+                'searches_used', rate_info.recent_searches + 1
+            )
+        );
+        RETURN;
     END IF;
     
-    -- Log the search operation (happens for both strategies)
+    -- Step 2: Search for prefix match if no exact match
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) >= cleaned_term
+        AND lower((p.product_name)::text) < (cleaned_term || chr(255))
+        AND lower((p.product_name)::text) LIKE (cleaned_term || '%')
+    ORDER BY
+        lower((p.product_name)::text)
+    LIMIT 250
+    OFFSET page_offset;
+    
+    -- Log the search operation (even if no results)
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    
     INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
     VALUES (
-        'product_search',
+        'search',
         search_term,
         current_user_id,
         device_uuid,
         CASE 
-            WHEN total_result_count > 0 THEN format('Found %s total results (%s %s)', total_result_count, search_result_count, search_strategy)
+            WHEN search_result_count > 0 THEN format('Found %s prefix matches', search_result_count)
             ELSE 'No matches found'
         END,
         json_build_object(
             'device_id', device_id,
-            'search_strategy', search_strategy,
+            'search_type', 'product',
+            'search_strategy', 'prefix_match',
             'result_count', search_result_count,
-            'total_count', total_result_count,
             'search_term_length', length(search_term),
             'page_offset', page_offset,
             'subscription_level', rate_info.subscription_level,
