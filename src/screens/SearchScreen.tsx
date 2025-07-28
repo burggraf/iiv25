@@ -12,6 +12,7 @@ import RateLimitModal from '../components/RateLimitModal';
 import { IngredientService, IngredientInfo } from '../services/ingredientDatabase';
 import { SupabaseService, SupabaseIngredient } from '../services/supabaseService';
 import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services/subscriptionService';
+import { ProductImageUrlService } from '../services/productImageUrlService';
 import { useApp } from '../context/AppContext';
 import { Product, VeganStatus } from '../types';
 
@@ -122,20 +123,23 @@ export default function SearchScreen() {
         const supabaseProducts = await SupabaseService.searchProductsByName(query, currentOffset);
         
         // Convert SupabaseProduct to Product format
-        const products: Product[] = supabaseProducts.map(supabaseProduct => ({
-          // Prefer UPC over EAN13 for better compatibility
-          id: supabaseProduct.upc || supabaseProduct.ean13 || '',
-          barcode: supabaseProduct.upc || supabaseProduct.ean13 || '',
-          name: supabaseProduct.product_name || 'Unknown Product',
-          brand: supabaseProduct.brand,
-          ingredients: supabaseProduct.ingredients ? 
-            supabaseProduct.ingredients.split(',').map(ing => ing.trim()) : [],
-          veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
-          imageUrl: supabaseProduct.imageurl,
-          issues: supabaseProduct.issues,
-          lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
-          classificationMethod: 'product-level' as const
-        }));
+        const products: Product[] = supabaseProducts.map(supabaseProduct => {
+          const barcode = supabaseProduct.upc || supabaseProduct.ean13 || '';
+          return {
+            // Prefer UPC over EAN13 for better compatibility
+            id: barcode,
+            barcode: barcode,
+            name: supabaseProduct.product_name || 'Unknown Product',
+            brand: supabaseProduct.brand,
+            ingredients: supabaseProduct.ingredients ? 
+              supabaseProduct.ingredients.split(',').map(ing => ing.trim()) : [],
+            veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
+            imageUrl: ProductImageUrlService.resolveImageUrl(supabaseProduct.imageurl, barcode) || undefined,
+            issues: supabaseProduct.issues,
+            lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
+            classificationMethod: 'product-level' as const
+          };
+        });
         
         allProducts.push(...products);
         
