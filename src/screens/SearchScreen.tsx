@@ -24,6 +24,7 @@ export default function SearchScreen() {
   
   // Product search state
   const [productResults, setProductResults] = useState<Product[]>([]);
+  const [allProductResults, setAllProductResults] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
@@ -94,7 +95,7 @@ export default function SearchScreen() {
     setIsLoading(true);
     
     if (searchMode === 'products') {
-      await searchProducts(searchQuery, 1);
+      await searchProducts(searchQuery);
     } else {
       await searchIngredient(searchQuery);
     }
@@ -108,31 +109,42 @@ export default function SearchScreen() {
     setIsLoading(false);
   };
 
-  const searchProducts = async (query: string, page: number) => {
+  const searchProducts = async (query: string) => {
     try {
-      // Calculate page offset (25 products per page)
-      const pageOffset = (page - 1) * 25;
+      // Fetch multiple pages from backend to get a larger set for client-side pagination
+      const allProducts: Product[] = [];
+      let currentOffset = 0;
+      const pageSize = 20; // Backend page size
+      let hasMorePages = true;
       
-      const supabaseProducts = await SupabaseService.searchProductsByName(query, pageOffset);
+      // Fetch up to 5 pages (100 products) for client-side pagination
+      while (hasMorePages && allProducts.length < 100) {
+        const supabaseProducts = await SupabaseService.searchProductsByName(query, currentOffset);
+        
+        // Convert SupabaseProduct to Product format
+        const products: Product[] = supabaseProducts.map(supabaseProduct => ({
+          // Prefer UPC over EAN13 for better compatibility
+          id: supabaseProduct.upc || supabaseProduct.ean13 || '',
+          barcode: supabaseProduct.upc || supabaseProduct.ean13 || '',
+          name: supabaseProduct.product_name || 'Unknown Product',
+          brand: supabaseProduct.brand,
+          ingredients: supabaseProduct.ingredients ? 
+            supabaseProduct.ingredients.split(',').map(ing => ing.trim()) : [],
+          veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
+          imageUrl: supabaseProduct.imageurl,
+          issues: supabaseProduct.issues,
+          lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
+          classificationMethod: 'product-level' as const
+        }));
+        
+        allProducts.push(...products);
+        
+        // If we got less than pageSize results, we've reached the end
+        hasMorePages = products.length >= pageSize;
+        currentOffset += pageSize;
+      }
       
-      // Convert SupabaseProduct to Product format
-      const allProducts: Product[] = supabaseProducts.map(supabaseProduct => ({
-        // Prefer UPC over EAN13 for better compatibility
-        id: supabaseProduct.upc || supabaseProduct.ean13 || '',
-        barcode: supabaseProduct.upc || supabaseProduct.ean13 || '',
-        name: supabaseProduct.product_name || 'Unknown Product',
-        brand: supabaseProduct.brand,
-        ingredients: supabaseProduct.ingredients ? 
-          supabaseProduct.ingredients.split(',').map(ing => ing.trim()) : [],
-        veganStatus: SupabaseService.mapClassificationToVeganStatus(supabaseProduct.classification),
-        imageUrl: supabaseProduct.imageurl,
-        issues: supabaseProduct.issues,
-        lastScanned: supabaseProduct.lastupdated ? new Date(supabaseProduct.lastupdated) : undefined,
-        classificationMethod: 'product-level' as const
-      }));
-
       // Deduplicate products based on name and brand
-      // This handles cases where the same product exists with both UPC and EAN13
       const productMap = new Map<string, Product>();
       allProducts.forEach(product => {
         const key = `${product.name?.toLowerCase() || ''}_${product.brand?.toLowerCase() || ''}`;
@@ -140,28 +152,19 @@ export default function SearchScreen() {
           productMap.set(key, product);
         }
       });
-      const products = Array.from(productMap.values());
+      const deduplicatedProducts = Array.from(productMap.values());
       
-      // Get total count - use actual deduplicated count for accuracy
-      const totalCount = products.length;
+      // Store all results and paginate client-side (25 per page)
+      setAllProductResults(deduplicatedProducts);
+      const clientPageSize = 25;
+      const firstPageResults = deduplicatedProducts.slice(0, clientPageSize);
       
-      if (page === 1) {
-        setProductResults(products);
-        setCurrentPage(1);
-        // For now, show the count of results we have. TODO: Get actual database total from backend
-        setTotalResults(products.length);
-        // Check if there are more pages - if we got 25 results, there might be more
-        setHasNextPage(products.length >= 25);
-      } else {
-        setProductResults(prev => [...prev, ...products]);
-        setCurrentPage(page);
-        // Update total to show we have at least this many
-        setTotalResults(prev => prev + products.length);
-        // Check if there are more pages - if we got 25 results, there might be more
-        setHasNextPage(products.length >= 25);
-      }
+      setProductResults(firstPageResults);
+      setCurrentPage(1);
+      setTotalResults(deduplicatedProducts.length);
+      setHasNextPage(deduplicatedProducts.length > clientPageSize);
       
-      if (products.length === 0 && page === 1) {
+      if (deduplicatedProducts.length === 0) {
         Alert.alert('No Results', `No products found for "${query}". Try a different search term.`);
       }
     } catch (err: any) {
@@ -260,10 +263,16 @@ export default function SearchScreen() {
   };
 
   const handleLoadMore = () => {
-    if (!isLoading && hasNextPage) {
-      setIsLoading(true);
-      searchProducts(searchQuery, currentPage + 1);
-      setIsLoading(false);
+    if (!isLoading && hasNextPage && allProductResults.length > 0) {
+      const pageSize = 25;
+      const nextPage = currentPage + 1;
+      const startIndex = (nextPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const nextPageResults = allProductResults.slice(startIndex, endIndex);
+      
+      setProductResults(prev => [...prev, ...nextPageResults]);
+      setCurrentPage(nextPage);
+      setHasNextPage(endIndex < allProductResults.length);
     }
   };
 
@@ -303,6 +312,7 @@ export default function SearchScreen() {
     setIngredientHasNextPage(false);
     setIngredientTotalResults(0);
     setProductResults([]);
+    setAllProductResults([]);
     setCurrentPage(1);
     setHasNextPage(false);
     setTotalResults(0);
@@ -400,7 +410,7 @@ export default function SearchScreen() {
         
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsHeader}>
-            {totalResults} product{totalResults !== 1 ? 's' : ''} found{hasNextPage ? ' (showing ' + productResults.length + ')' : ''}
+            {totalResults} product{totalResults !== 1 ? 's' : ''} found
           </Text>
           
           <FlatList
@@ -414,15 +424,8 @@ export default function SearchScreen() {
             )}
             style={styles.resultsList}
             contentContainerStyle={styles.resultsListContent}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
             ListFooterComponent={
-              isLoading && productResults.length > 0 ? (
-                <View style={styles.loadMoreContainer}>
-                  <ActivityIndicator size="small" color="#007AFF" />
-                  <Text style={styles.loadMoreText}>Loading more...</Text>
-                </View>
-              ) : hasNextPage ? (
+              hasNextPage ? (
                 <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
                   <Text style={styles.loadMoreButtonText}>Load More Results</Text>
                 </TouchableOpacity>
