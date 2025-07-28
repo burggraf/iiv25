@@ -70,3 +70,8 @@ vendor/
 build.ipa
 local-ios-*
 upload-to-testflight.sh
+
+# Website build artifacts (ignore website/public/assets since they're copied from main project)
+website/node_modules/
+website/.wrangler/
+website/dist/

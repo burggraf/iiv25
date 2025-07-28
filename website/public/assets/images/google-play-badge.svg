@@ -1,0 +1,36 @@
+<svg width="135" height="40" viewBox="0 0 135 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="135" height="40" rx="8" fill="black"/>
+<path d="M8.842 7.892c-.414 0-.75.336-.75.75v22.716c0 .414.336.75.75.75h.108c.414 0 .75-.336.75-.75V8.642c0-.414-.336-.75-.75-.75h-.108z" fill="url(#paint0_linear)"/>
+<path d="M20.842 14.392l-8.5-8.5c-.293-.293-.768-.293-1.061 0l8.5 8.5 1.061-0z" fill="url(#paint1_linear)"/>
+<path d="M20.842 25.608l-8.5 8.5c.293.293.768.293 1.061 0l8.5-8.5-1.061 0z" fill="url(#paint2_linear)"/>
+<path d="M21.903 19.331l-1.061 1.061 8.5 8.5c.293-.293.293-.768 0-1.061l-7.439-8.5z" fill="url(#paint3_linear)"/>
+<defs>
+<linearGradient id="paint0_linear" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#00A0FF"/>
+<stop offset="0.007" stop-color="#00A1FF"/>
+<stop offset="0.26" stop-color="#00BEFF"/>
+<stop offset="0.512" stop-color="#00D2FF"/>
+<stop offset="0.76" stop-color="#00DFFF"/>
+<stop offset="1" stop-color="#00E3FF"/>
+</linearGradient>
+<linearGradient id="paint1_linear" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#FFE000"/>
+<stop offset="0.409" stop-color="#FFBD00"/>
+<stop offset="0.775" stop-color="#FFA500"/>
+<stop offset="1" stop-color="#FF9C00"/>
+</linearGradient>
+<linearGradient id="paint2_linear" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#FF3A44"/>
+<stop offset="1" stop-color="#C31162"/>
+</linearGradient>
+<linearGradient id="paint3_linear" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#32A071"/>
+<stop offset="0.069" stop-color="#2DA771"/>
+<stop offset="0.476" stop-color="#15CF74"/>
+<stop offset="0.801" stop-color="#06E775"/>
+<stop offset="1" stop-color="#00F076"/>
+</linearGradient>
+</defs>
+<text x="40" y="13" fill="white" font-family="Arial, sans-serif" font-size="9" font-weight="300">GET IT ON</text>
+<text x="40" y="28" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="600">Google Play</text>
+</svg>

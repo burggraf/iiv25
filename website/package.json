@@ -1,0 +1,14 @@
+{
+  "name": "isitvegan-website",
+  "version": "1.0.0",
+  "description": "Static website for Is It Vegan mobile app",
+  "scripts": {
+    "build": "echo 'No build step required for static site'",
+    "dev": "npx http-server public -p 3000 -o",
+    "deploy": "./deploy.sh"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "private": true
+}

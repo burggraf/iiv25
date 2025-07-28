@@ -1,0 +1,23 @@
+name = "isitvegan-contact-form"
+main = "contact.js"
+compatibility_date = "2024-01-01"
+
+# Add your email service API keys as secrets:
+# wrangler secret put RESEND_API_KEY --env production
+# wrangler secret put MAILGUN_API_KEY --env production
+# wrangler secret put MAILGUN_DOMAIN --env production
+# wrangler secret put SENDGRID_API_KEY --env production
+
+# Optional: KV namespace for rate limiting
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
+
+[env.production]
+name = "isitvegan-contact-form-prod"
+route = "isitvegan.net/api/contact"
+vars = { CONTACT_EMAIL = "support@isitvegan.net" }
+
+[env.staging]
+name = "isitvegan-contact-form-staging"

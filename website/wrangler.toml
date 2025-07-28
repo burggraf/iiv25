@@ -1,0 +1,17 @@
+name = "isitvegan-website"
+compatibility_date = "2024-01-01"
+
+# Main website (Cloudflare Pages)
+pages_build_output_dir = "public"
+
+[env.production]
+name = "isitvegan-website"
+
+[vars]
+ENVIRONMENT = "production"
+CONTACT_EMAIL = "support@isitvegan.net"
+
+# Contact form worker
+[[env.production.services]]
+binding = "CONTACT_WORKER"
+service = "isitvegan-contact-form"
