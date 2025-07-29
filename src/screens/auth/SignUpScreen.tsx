@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import React, { useEffect, useState } from 'react'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
 	Alert,
 	Dimensions,
@@ -22,6 +23,7 @@ const { height: screenHeight } = Dimensions.get('window')
 export default function SignUpScreen() {
 	const router = useRouter()
 	const { signUp, signInWithGoogle, user } = useAuth()
+	const insets = useSafeAreaInsets()
 
 	const [formState, setFormState] = useState<
 		SignUpCredentials & { isLoading: boolean; error: string | null }
@@ -130,17 +132,18 @@ export default function SignUpScreen() {
 
 	return (
 		<KeyboardAvoidingView
-			style={styles.container}
-			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+			style={[styles.container, { paddingTop: insets.top - 10 }]}
+			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+			keyboardVerticalOffset={0}>
 			<StatusBar style='dark' />
 			<ScrollView
-				contentContainerStyle={styles.scrollContent}
+				contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 50) + 100 }]}
 				keyboardShouldPersistTaps='handled'
 				showsVerticalScrollIndicator={false}>
 				<View style={styles.header}>
 					<Logo size={80} />
 					<Text style={styles.title}>Create Account</Text>
-					<Text style={styles.subtitle}>Join thousands of users making informed vegan choices</Text>
+					<Text style={styles.subtitle}>Is It Vegan? Just scan and find out!</Text>
 				</View>
 
 				<View style={styles.form}>
@@ -240,8 +243,7 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 		justifyContent: 'center',
 		paddingHorizontal: 20,
-		paddingVertical: 40,
-		minHeight: screenHeight * 0.9,
+		paddingVertical: 20,
 	},
 	header: {
 		alignItems: 'center',
@@ -266,7 +268,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 	inputContainer: {
-		marginBottom: 10,
+		marginBottom: -5,
 	},
 	inputText: {
 		fontSize: 16,

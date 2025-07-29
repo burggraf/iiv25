@@ -19,41 +19,35 @@ export class EmailConfirmationService {
         throw new Error('User is not authenticated');
       }
 
-      // Call the send-email-confirmation edge function
-      const { data, error } = await supabase.functions.invoke('send-email-confirmation', {
-        body: {}, // Send empty object as body
+      // Get the Supabase function URL
+      const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email-confirmation`;
+      
+      // Call the send-email-confirmation edge function using fetch for better error handling
+      const response = await fetch(functionUrl, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({}),
       });
 
-      if (error) {
-        console.error('Email confirmation error:', error);
+      // Parse the response body
+      const responseData = await response.json();
+
+      // Check if the response was not successful
+      if (!response.ok) {
+        console.error('Email confirmation error response:', responseData);
         
-        // Try to extract specific error message from the edge function response
-        let errorMessage = 'Failed to send email confirmation';
-        
-        if (error.message) {
-          // Check if the error message contains specific error responses
-          if (error.message.includes('email already verified')) {
-            errorMessage = 'email already verified';
-          } else if (error.message.includes('please wait 10 minutes')) {
-            errorMessage = 'please wait 10 minutes before sending another confirmation email';
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
+        // Extract the specific error message from the response
+        if (responseData && responseData.error) {
+          throw new Error(responseData.error);
+        } else {
+          throw new Error(`HTTP ${response.status}: Failed to send email confirmation`);
         }
-        
-        throw new Error(errorMessage);
       }
 
-      // Check if the response data contains an error (in case it's in the data object)
-      if (data && data.error) {
-        console.error('Email confirmation data error:', data.error);
-        throw new Error(data.error);
-      }
-
-      console.log('Email confirmation sent successfully:', data);
+      console.log('Email confirmation sent successfully:', responseData);
     } catch (error) {
       console.error('EmailConfirmationService error:', error);
       throw error;
