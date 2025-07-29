@@ -9,6 +9,7 @@ import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
 import { SubscriptionService } from '../services/subscriptionService'
 import deviceIdService from '../services/deviceIdService'
+import { EmailConfirmationService } from '../services/emailConfirmationService'
 
 // Required for web only
 WebBrowser.maybeCompleteAuthSession()
@@ -283,6 +284,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 			if (error) {
 				handleAuthError(error)
+			}
+
+			// Send email confirmation after successful signup
+			try {
+				console.log('Sending email confirmation after signup...')
+				await EmailConfirmationService.sendEmailConfirmation()
+				console.log('Email confirmation sent successfully')
+			} catch (emailError) {
+				// Don't fail the signup if email confirmation fails
+				console.error('Failed to send email confirmation:', emailError)
 			}
 		} catch (error) {
 			handleAuthError(error as Error)

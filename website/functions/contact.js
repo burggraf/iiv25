@@ -4,123 +4,182 @@
 
 export default {
   async fetch(request, env) {
-    // Handle CORS preflight requests
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
-    }
-
-    // Only allow POST requests
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', {
-        status: 405,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'text/plain',
-        },
-      });
-    }
-
-    try {
-      // Parse the request body
-      const data = await request.json();
-      
-      // Validate required fields
-      const { name, email, subject, message } = data;
-      if (!name || !email || !subject || !message) {
-        return new Response('Missing required fields', {
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'text/plain',
-          },
-        });
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return new Response('Invalid email format', {
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'text/plain',
-          },
-        });
-      }
-
-      // Rate limiting: Check if this IP has sent too many requests recently
-      const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const rateLimitKey = `contact_rate_limit:${clientIP}`;
-      
-      // Simple rate limiting using KV (if available)
-      if (env.RATE_LIMIT_KV) {
-        const currentCount = await env.RATE_LIMIT_KV.get(rateLimitKey);
-        if (currentCount && parseInt(currentCount) >= 5) {
-          return new Response('Rate limit exceeded. Please try again later.', {
-            status: 429,
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Content-Type': 'text/plain',
-            },
-          });
-        }
-      }
-
-      // Sanitize inputs to prevent injection attacks
-      const sanitizedData = {
-        name: sanitizeInput(name),
-        email: sanitizeInput(email),
-        subject: sanitizeInput(subject),
-        message: sanitizeInput(message),
-      };
-
-      // Create email content
-      const emailSubject = `[IsItVegan Contact] ${sanitizedData.subject}`;
-      const emailBody = createEmailBody(sanitizedData, clientIP, request.headers.get('User-Agent'));
-
-      // Send email using Cloudflare's email service or external service
-      const emailSent = await sendEmail(emailSubject, emailBody, sanitizedData.email, env);
-
-      if (emailSent) {
-        // Update rate limit counter
-        if (env.RATE_LIMIT_KV) {
-          const currentCount = await env.RATE_LIMIT_KV.get(rateLimitKey);
-          const newCount = currentCount ? parseInt(currentCount) + 1 : 1;
-          await env.RATE_LIMIT_KV.put(rateLimitKey, newCount.toString(), { expirationTtl: 3600 }); // 1 hour
-        }
-
-        return new Response('Message sent successfully', {
-          status: 200,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'text/plain',
-          },
-        });
-      } else {
-        throw new Error('Failed to send email');
-      }
-
-    } catch (error) {
-      console.error('Contact form error:', error);
-      
-      return new Response('Internal server error', {
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'text/plain',
-        },
-      });
+    const url = new URL(request.url);
+    
+    // Route to appropriate handler based on pathname
+    if (url.pathname === '/confirm-email') {
+      return handleEmailConfirmation(request, env);
+    } else if (url.pathname === '/api/contact') {
+      return handleContactForm(request, env);
+    } else {
+      return new Response('Not found', { status: 404 });
     }
   },
 };
+
+// Handle email confirmation links
+async function handleEmailConfirmation(request, env) {
+  const url = new URL(request.url);
+  
+  if (request.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405 });
+  }
+  
+  const user_id = url.searchParams.get('user_id');
+  const token = url.searchParams.get('token');
+  
+  if (!user_id || !token) {
+    return Response.redirect('net.isitvegan.free://email-error', 302);
+  }
+  
+  try {
+    // Call Supabase verify-email-confirmation function
+    const response = await fetch(`${env.SUPABASE_URL}/functions/v1/verify-email-confirmation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ user_id, token })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      // Redirect to success page in your app
+      return Response.redirect('net.isitvegan.free://email-confirmed', 302);
+    } else if (result.error === 'Token expired') {
+      // Redirect to expired page in your app
+      return Response.redirect('net.isitvegan.free://email-expired', 302);
+    } else {
+      // Redirect to error page in your app
+      return Response.redirect('net.isitvegan.free://email-error', 302);
+    }
+    
+  } catch (error) {
+    console.error('Email confirmation error:', error);
+    return Response.redirect('net.isitvegan.free://email-error', 302);
+  }
+}
+
+// Handle contact form submissions
+async function handleContactForm(request, env) {
+  // Handle CORS preflight requests
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+
+  // Only allow POST requests
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'text/plain',
+      },
+    });
+  }
+
+  try {
+    // Parse the request body
+    const data = await request.json();
+    
+    // Validate required fields
+    const { name, email, subject, message } = data;
+    if (!name || !email || !subject || !message) {
+      return new Response('Missing required fields', {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'text/plain',
+        },
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response('Invalid email format', {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'text/plain',
+        },
+      });
+    }
+
+    // Rate limiting: Check if this IP has sent too many requests recently
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimitKey = `contact_rate_limit:${clientIP}`;
+    
+    // Simple rate limiting using KV (if available)
+    if (env.RATE_LIMIT_KV) {
+      const currentCount = await env.RATE_LIMIT_KV.get(rateLimitKey);
+      if (currentCount && parseInt(currentCount) >= 5) {
+        return new Response('Rate limit exceeded. Please try again later.', {
+          status: 429,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Content-Type': 'text/plain',
+          },
+        });
+      }
+    }
+
+    // Sanitize inputs to prevent injection attacks
+    const sanitizedData = {
+      name: sanitizeInput(name),
+      email: sanitizeInput(email),
+      subject: sanitizeInput(subject),
+      message: sanitizeInput(message),
+    };
+
+    // Create email content
+    const emailSubject = `[IsItVegan Contact] ${sanitizedData.subject}`;
+    const emailBody = createEmailBody(sanitizedData, clientIP, request.headers.get('User-Agent'));
+
+    // Send email using Cloudflare's email service or external service
+    const emailSent = await sendEmail(emailSubject, emailBody, sanitizedData.email, env);
+
+    if (emailSent) {
+      // Update rate limit counter
+      if (env.RATE_LIMIT_KV) {
+        const currentCount = await env.RATE_LIMIT_KV.get(rateLimitKey);
+        const newCount = currentCount ? parseInt(currentCount) + 1 : 1;
+        await env.RATE_LIMIT_KV.put(rateLimitKey, newCount.toString(), { expirationTtl: 3600 }); // 1 hour
+      }
+
+      return new Response('Message sent successfully', {
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'text/plain',
+        },
+      });
+    } else {
+      throw new Error('Failed to send email');
+    }
+
+  } catch (error) {
+    console.error('Contact form error:', error);
+    
+    return new Response('Internal server error', {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'text/plain',
+      },
+    });
+  }
+}
 
 // Sanitize input to prevent XSS and injection attacks
 function sanitizeInput(input) {

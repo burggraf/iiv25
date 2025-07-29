@@ -7,6 +7,7 @@ compatibility_date = "2024-01-01"
 # wrangler secret put MAILGUN_API_KEY --env production
 # wrangler secret put MAILGUN_DOMAIN --env production
 # wrangler secret put SENDGRID_API_KEY --env production
+# wrangler secret put SUPABASE_ANON_KEY --env production
 
 # Optional: KV namespace for rate limiting
 # [[kv_namespaces]]
@@ -16,8 +17,11 @@ compatibility_date = "2024-01-01"
 
 [env.production]
 name = "isitvegan-contact-form-prod"
-route = "isitvegan.net/api/contact"
-vars = { CONTACT_EMAIL = "support@isitvegan.net" }
+routes = [
+  "isitvegan.net/api/contact",
+  "isitvegan.net/confirm-email"
+]
+vars = { CONTACT_EMAIL = "support@isitvegan.net", SUPABASE_URL = "https://wlatnzsnrlwykkriovwd.supabase.co" }
 
 [env.staging]
 name = "isitvegan-contact-form-staging"
