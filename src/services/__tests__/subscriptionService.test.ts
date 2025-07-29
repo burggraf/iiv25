@@ -56,6 +56,7 @@ describe('SubscriptionService', () => {
         is_active: true,
         expires_at: undefined,
         device_id: deviceId,
+        email_is_verified: false,
       });
     });
 

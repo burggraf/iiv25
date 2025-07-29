@@ -23,6 +23,7 @@ import {
 	SubscriptionStatus,
 	UsageStats,
 } from '../services/subscriptionService'
+import { EmailConfirmationService } from '../services/emailConfirmationService'
 
 interface UserAccountModalProps {
 	visible: boolean
@@ -38,6 +39,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
 	const [showManageSubscription, setShowManageSubscription] = useState(false)
+	const [isVerifyingEmail, setIsVerifyingEmail] = useState(false)
 
 	useEffect(() => {
 		if (visible && user && deviceId) {
@@ -72,6 +74,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 				subscription_level: 'free',
 				is_active: true,
 				device_id: deviceId || undefined,
+				email_is_verified: false,
 			})
 		}
 	}
@@ -94,6 +97,28 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 		loadSubscriptionStatus()
 		loadUsageStats()
 		onSubscriptionChanged?.()
+	}
+
+	const handleVerifyEmail = async () => {
+		try {
+			setIsVerifyingEmail(true)
+			await EmailConfirmationService.sendEmailConfirmation()
+			
+			Alert.alert(
+				'Check Your Email',
+				'We\'ve sent a verification link to your email address. Please check your inbox and spam folder. Click the link to verify your email.',
+				[{ text: 'OK', style: 'default' }]
+			)
+		} catch (error) {
+			console.error('Failed to send email verification:', error)
+			Alert.alert(
+				'Error',
+				'Failed to send verification email. Please try again later.',
+				[{ text: 'OK', style: 'default' }]
+			)
+		} finally {
+			setIsVerifyingEmail(false)
+		}
 	}
 
 	const handleSignOut = async () => {
@@ -151,10 +176,31 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 								</Text>
 							</View>
 							{user?.email && (
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Email:</Text>
-									<Text style={styles.cardValue}>{user.email}</Text>
-								</View>
+								<>
+									<View style={styles.cardRow}>
+										<Text style={styles.cardLabel}>Email:</Text>
+										<Text style={styles.cardValue}>{user.email}</Text>
+									</View>
+									<View style={styles.cardRow}>
+										<Text style={styles.cardLabel}></Text>
+										{subscriptionStatus?.email_is_verified ? (
+											<Text style={[styles.cardValue, { color: '#4CAF50', fontSize: 12 }]}>
+												verified email
+											</Text>
+										) : (
+											<TouchableOpacity 
+												onPress={handleVerifyEmail}
+												disabled={isVerifyingEmail}
+												style={styles.verifyEmailLink}>
+												{isVerifyingEmail ? (
+													<ActivityIndicator size="small" color="#007AFF" />
+												) : (
+													<Text style={styles.verifyEmailText}>verify your email address</Text>
+												)}
+											</TouchableOpacity>
+										)}
+									</View>
+								</>
 							)}
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Device ID:</Text>
@@ -416,5 +462,15 @@ const styles = StyleSheet.create({
 	},
 	bottomPadding: {
 		height: 32,
+	},
+	verifyEmailLink: {
+		flex: 2,
+		alignItems: 'flex-end',
+	},
+	verifyEmailText: {
+		color: '#007AFF',
+		fontSize: 12,
+		textDecorationLine: 'underline',
+		fontWeight: '500',
 	},
 })

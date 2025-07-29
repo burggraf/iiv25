@@ -5,6 +5,7 @@ export interface SubscriptionStatus {
   is_active: boolean;
   expires_at?: string;
   device_id?: string;
+  email_is_verified?: boolean;
 }
 
 export interface UsageStats {
@@ -45,6 +46,7 @@ export class SubscriptionService {
         is_active: true,
         expires_at: undefined,
         device_id: deviceId,
+        email_is_verified: false,
       };
     } catch (err) {
       console.error('Failed to get subscription status:', err);

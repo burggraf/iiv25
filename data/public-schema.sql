@@ -1432,6 +1432,7 @@ DECLARE
     final_subscription_level TEXT;
     final_expires_at TIMESTAMP WITH TIME ZONE;
     final_is_active BOOLEAN;
+    email_is_verified BOOLEAN;
 BEGIN
     -- Convert device_id_param to UUID
     BEGIN
@@ -1443,7 +1444,8 @@ BEGIN
                 'subscription_level', 'free',
                 'is_active', true,
                 'device_id', device_id_param,
-                'expires_at', null
+                'expires_at', null,
+                'email_is_verified', false
             );
     END;
     
@@ -1458,6 +1460,19 @@ BEGIN
         LIMIT 1;
         
         current_user_id := linked_user_id;
+    END IF;
+    
+    -- Check email verification status
+    email_is_verified := FALSE;
+    IF current_user_id IS NOT NULL THEN
+        SELECT (ec.email_confirmed_at IS NOT NULL) INTO email_is_verified
+        FROM public.email_confirmations ec
+        WHERE ec.id = current_user_id;
+        
+        -- If no record found, email is not verified
+        IF email_is_verified IS NULL THEN
+            email_is_verified := FALSE;
+        END IF;
     END IF;
     
     -- ALWAYS check profiles table first if we have a user ID
@@ -1496,7 +1511,8 @@ BEGIN
                 'subscription_level', 'free',
                 'is_active', true,
                 'device_id', device_id_param,
-                'expires_at', null
+                'expires_at', null,
+                'email_is_verified', email_is_verified
             );
         END IF;
         
@@ -1512,7 +1528,8 @@ BEGIN
                 'subscription_level', 'free',
                 'is_active', false,
                 'device_id', device_id_param,
-                'expires_at', user_expires_at
+                'expires_at', user_expires_at,
+                'email_is_verified', email_is_verified
             );
         END IF;
         
@@ -1527,7 +1544,8 @@ BEGIN
         'subscription_level', final_subscription_level,
         'is_active', final_is_active,
         'device_id', device_id_param,
-        'expires_at', final_expires_at
+        'expires_at', final_expires_at,
+        'email_is_verified', email_is_verified
     );
 END;
 $$;
@@ -2807,6 +2825,18 @@ COMMENT ON COLUMN "public"."actionlog"."deviceid" IS 'UUID identifying the devic
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."email_confirmations" (
+    "id" "uuid" NOT NULL,
+    "token" "text",
+    "confirmation_sent_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "email_confirmed_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."email_confirmations" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."ingredients" (
     "title" character varying(255) NOT NULL,
     "class" character varying(255),
@@ -2885,6 +2915,16 @@ ALTER TABLE ONLY "public"."actionlog"
 
 
 
+ALTER TABLE ONLY "public"."email_confirmations"
+    ADD CONSTRAINT "email_confirmations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."email_confirmations"
+    ADD CONSTRAINT "email_confirmations_token_key" UNIQUE ("token");
+
+
+
 ALTER TABLE ONLY "public"."ingredients"
     ADD CONSTRAINT "ingredients_title_unique" UNIQUE ("title");
 
@@ -2931,6 +2971,14 @@ CREATE INDEX "idx_actionlog_userid" ON "public"."actionlog" USING "btree" ("user
 
 
 CREATE INDEX "idx_actionlog_userid_type_created" ON "public"."actionlog" USING "btree" ("userid", "type", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_email_confirmations_sent_at" ON "public"."email_confirmations" USING "btree" ("confirmation_sent_at");
+
+
+
+CREATE INDEX "idx_email_confirmations_token" ON "public"."email_confirmations" USING "btree" ("token");
 
 
 
@@ -2986,12 +3034,20 @@ CREATE OR REPLACE TRIGGER "trigger_user_subscription_updated_at" BEFORE UPDATE O
 
 
 
+ALTER TABLE ONLY "public"."email_confirmations"
+    ADD CONSTRAINT "email_confirmations_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
 ALTER TABLE "public"."actionlog" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."email_confirmations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."ingredients" ENABLE ROW LEVEL SECURITY;
@@ -3308,6 +3364,12 @@ GRANT ALL ON FUNCTION "public"."webhook_update_subscription"("device_id_param" "
 GRANT ALL ON TABLE "public"."actionlog" TO "anon";
 GRANT ALL ON TABLE "public"."actionlog" TO "authenticated";
 GRANT ALL ON TABLE "public"."actionlog" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."email_confirmations" TO "anon";
+GRANT ALL ON TABLE "public"."email_confirmations" TO "authenticated";
+GRANT ALL ON TABLE "public"."email_confirmations" TO "service_role";
 
 
 
