@@ -164,7 +164,7 @@
                 if (response.ok && data.success) {
                     showSuccess(data.message);
                 } else {
-                    showError(data.error || data.message || 'Confirmation failed');
+                    showError(data.message || data.error || 'Confirmation failed');
                 }
             } catch (error) {
                 console.error('Confirmation error:', error);
