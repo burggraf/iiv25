@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Your Is It Vegan? Account</title>
+    <style>
+        /* Reset and base styles */
+        body,
+        table,
+        td,
+        p,
+        a,
+        li,
+        blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+
+        table,
+        td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+
+        /* Main styles */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #95bf0a 0%, #00a32c 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            display: block;
+        }
+
+        .app-name {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .welcome-title {
+            color: #2d3748;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0 0 20px 0;
+            text-align: center;
+        }
+
+        .welcome-text {
+            color: #4a5568;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 0 25px 0;
+        }
+
+        .confirmation-section {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 25px 0;
+            text-align: center;
+        }
+
+        .confirm-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #95bf0a 0%, #00a32c 100%);
+            color: #ffffff !important;
+            padding: 16px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(149, 191, 10, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .confirm-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(149, 191, 10, 0.4);
+        }
+
+        .features-section {
+            margin: 30px 0;
+        }
+
+        .features-title {
+            color: #2d3748;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 0 0 20px 0;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f7fafc;
+            border-radius: 6px;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .feature-text {
+            color: #4a5568;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .footer {
+            background-color: #2d3748;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .footer-links {
+            margin: 20px 0;
+        }
+
+        .footer-link {
+            color: #a0aec0;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+
+        .footer-link:hover {
+            color: #95bf0a;
+        }
+
+        .footer-text {
+            color: #718096;
+            font-size: 12px;
+            margin: 10px 0 0 0;
+        }
+
+        .app-badges {
+            margin: 20px 0;
+        }
+
+        .app-badge {
+            display: inline-block;
+            margin: 5px 10px;
+            vertical-align: middle;
+        }
+
+        .app-badge img {
+            height: 40px;
+            width: 135px;
+            object-fit: contain;
+        }
+
+        .coming-soon-badge {
+            position: relative;
+            display: inline-block;
+            margin: 5px 10px;
+            vertical-align: middle;
+        }
+
+        .coming-soon-badge img {
+            height: 40px;
+            width: 135px;
+            opacity: 0.6;
+            object-fit: contain;
+        }
+
+        .coming-soon-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(149, 191, 10, 0.9);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        /* Mobile responsiveness */
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+
+            .confirmation-section {
+                padding: 20px;
+            }
+
+            .app-name {
+                font-size: 24px;
+            }
+
+            .welcome-title {
+                font-size: 20px;
+            }
+
+            .feature-item {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .feature-icon {
+                margin: 0 0 10px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <img src="https://isitvegan.net/assets/images/app-icon.svg" alt="Is It Vegan? App Icon" class="app-icon"
+                width="80" height="80">
+            <h1 class="app-name">Is It Vegan?</h1>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <h2 class="welcome-title">Welcome to Is It Vegan! 🌱</h2>
+
+            <p class="welcome-text">
+                We&apos;re so glad you&apos;re here! Whether you&apos;re new to plant-based living or a seasoned pro, Is
+                It Vegan is here to make your shopping decisions effortless.
+            </p>
+
+            <!-- Confirmation Section -->
+            <div class="confirmation-section">
+                <p style="color: #4a5568; font-size: 16px; margin: 0 0 20px 0;">
+                    Please confirm your email address:
+                </p>
+                <a href="{{ .ConfirmationURL }}" class="confirm-button">
+                    Confirm My Email Address
+                </a>
+            </div>
+
+            <!-- Features Section -->
+            <div class="features-section">
+                <h3 class="features-title">What you can do with Is It Vegan?</h3>
+
+                <div class="feature-item">
+                    <div class="feature-icon">📱</div>
+                    <p class="feature-text">
+                        <strong>Instant Barcode Scanning:</strong> Simply scan any product barcode to instantly discover
+                        if it&apos;s vegan
+                    </p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">🔍</div>
+                    <p class="feature-text">
+                        <strong>Manual Product Search:</strong> Look up products by name when you don't have the barcode
+                        handy
+                    </p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">📚</div>
+                    <p class="feature-text">
+                        <strong>Comprehensive Database:</strong> Search for info on any product in our extensive
+                        database, or just scan the ingredients for any product not found immediately
+                    </p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">⏱️</div>
+                    <p class="feature-text">
+                        <strong>Scan History:</strong> Keep track of all your scanned products for quick reference
+                    </p>
+                </div>
+            </div>
+
+            <p class="welcome-text">
+                Once you confirm your email, you'll be ready to start making informed choices about the products you
+                consume. Happy scanning! 🌿
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="app-badges">
+                <a href="https://apps.apple.com/app/is-it-vegan/id6670373863" class="app-badge">
+                    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                        alt="Download on the App Store">
+                </a>
+                <div class="coming-soon-badge">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
+                        alt="Get it on Google Play">
+                    <div class="coming-soon-text">COMING SOON</div>
+                </div>
+            </div>
+
+            <div class="footer-links">
+                <a href="https://isitvegan.net" class="footer-link">Website</a>
+                <a href="https://isitvegan.net/privacy" class="footer-link">Privacy Policy</a>
+            </div>
+
+            <p class="footer-text">
+                © 2025 Conner Burggraf, Is It Vegan? All rights reserved.<br>
+                Is It Vegan? Just scan and find out!
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>
