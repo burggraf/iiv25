@@ -12,6 +12,7 @@ import {
 	View,
 } from 'react-native'
 import { Button, Input } from 'react-native-elements'
+
 import Logo from '../../components/Logo'
 import { useAuth } from '../../context/AuthContext'
 import { SignUpCredentials } from '../../types/auth'
