@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
+import Constants from 'expo-constants'
 
 import Logo from './Logo'
 import ManageSubscriptionModal from './ManageSubscriptionModal'
@@ -189,7 +190,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 						<View style={styles.card}>
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Status:</Text>
-								<Text style={[styles.cardValue, { color: user ? '#4CAF50' : '#FF6B35' }]}>
+								<Text style={[styles.cardValue, { color: user ? '#4CAF50' : '#FF3B30' }]}>
 									{user ? (isAnonymous ? 'Anonymous User' : 'Signed In') : 'Not Signed In'}
 								</Text>
 							</View>
@@ -201,22 +202,24 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 									</View>
 									<View style={styles.cardRow}>
 										<Text style={styles.cardLabel}></Text>
-										{subscriptionStatus?.email_is_verified ? (
-											<Text style={[styles.cardValue, { color: '#4CAF50', fontSize: 12 }]}>
-												verified email
-											</Text>
-										) : (
-											<TouchableOpacity 
-												onPress={handleVerifyEmail}
-												disabled={isVerifyingEmail}
-												style={styles.verifyEmailLink}>
-												{isVerifyingEmail ? (
-													<ActivityIndicator size="small" color="#007AFF" />
-												) : (
-													<Text style={styles.verifyEmailText}>verify your email address</Text>
-												)}
-											</TouchableOpacity>
-										)}
+										<View style={styles.verifyEmailContainer}>
+											{subscriptionStatus?.email_is_verified ? (
+												<Text style={[styles.verifyEmailText, { color: '#4CAF50', textDecorationLine: 'none' }]}>
+													✓ verified email
+												</Text>
+											) : (
+												<TouchableOpacity 
+													onPress={handleVerifyEmail}
+													disabled={isVerifyingEmail}
+													style={styles.verifyEmailLink}>
+													{isVerifyingEmail ? (
+														<ActivityIndicator size="small" color="#007AFF" />
+													) : (
+														<Text style={styles.verifyEmailText}>verify your email address</Text>
+													)}
+												</TouchableOpacity>
+											)}
+										</View>
 									</View>
 								</>
 							)}
@@ -237,8 +240,8 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 									style={[
 										styles.cardValue,
 										{
-											color: isPremium ? '#4CAF50' : '#FF6B35',
-											fontWeight: 'bold',
+											color: isPremium ? '#4CAF50' : '#FF9500',
+											fontWeight: '700',
 										},
 									]}>
 									{subscriptionStatus
@@ -248,72 +251,18 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 										: 'Loading...'}
 								</Text>
 							</View>
-							{subscriptionStatus?.expires_at && (
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Expires:</Text>
-									<Text style={styles.cardValue}>
-										{SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)}
-									</Text>
-								</View>
-							)}
-						</View>
-					</View>
-
-					{/* Usage Statistics */}
-					{usageStats && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Today&apos;s Usage</Text>
-							<View style={styles.card}>
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Product Lookups:</Text>
-									<Text
-										style={[
-											styles.cardValue,
-											{
-												color: isPremium
-													? '#4CAF50'
-													: usageStats.product_lookups_today >= usageStats.product_lookups_limit
-													? '#F44336'
-													: '#333',
-											},
-										]}>
-										{isPremium
-											? 'Unlimited'
-											: `${usageStats.product_lookups_today}/${usageStats.product_lookups_limit}`}
-									</Text>
-								</View>
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Ingredient Searches:</Text>
-									<Text
-										style={[
-											styles.cardValue,
-											{
-												color: isPremium
-													? '#4CAF50'
-													: usageStats.searches_today >= usageStats.searches_limit
-													? '#F44336'
-													: '#333',
-											},
-										]}>
-										{isPremium
-											? 'Unlimited'
-											: `${usageStats.searches_today}/${usageStats.searches_limit}`}
-									</Text>
-								</View>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Expires:</Text>
+								<Text style={styles.cardValue}>
+									{subscriptionStatus?.expires_at 
+										? SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)
+										: 'never'
+									}
+								</Text>
 							</View>
 						</View>
-					)}
-
-					{/* Subscription Management */}
-					<View style={styles.section}>
-						<TouchableOpacity 
-							style={styles.actionButton} 
-							onPress={() => setShowManageSubscription(true)}>
-							<Text style={styles.actionButtonText}>
-								Manage Subscription
-							</Text>
-						</TouchableOpacity>
 					</View>
+
 
 					{/* Account Actions */}
 					<View style={styles.section}>
@@ -330,7 +279,6 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 							</TouchableOpacity>
 						)}
 
-
 						{user && (
 							<TouchableOpacity
 								style={[styles.actionButton, styles.signOutButton]}
@@ -343,6 +291,14 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 								)}
 							</TouchableOpacity>
 						)}
+
+						<TouchableOpacity 
+							style={styles.actionButton} 
+							onPress={() => setShowManageSubscription(true)}>
+							<Text style={styles.actionButtonText}>
+								Manage Subscription
+							</Text>
+						</TouchableOpacity>
 					</View>
 
 					{/* App Information */}
@@ -351,7 +307,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 						<View style={styles.card}>
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Version:</Text>
-								<Text style={styles.cardValue}>4.0.0</Text>
+								<Text style={styles.cardValue}>{Constants.expoConfig?.version || '4.0.1'}</Text>
 							</View>
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Platform:</Text>
@@ -377,24 +333,29 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: 'white',
+		backgroundColor: '#f7f7f7',
 	},
 	header: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		paddingVertical: 12,
-		paddingHorizontal: 16,
+		paddingVertical: 16,
+		paddingHorizontal: 20,
 		backgroundColor: 'white',
-		borderBottomWidth: 1,
-		borderBottomColor: '#eee',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 3,
 	},
 	closeButton: {
 		padding: 8,
-		width: 40,
-		height: 40,
+		width: 44,
+		height: 44,
 		justifyContent: 'center',
 		alignItems: 'center',
+		borderRadius: 22,
+		backgroundColor: '#f0f0f0',
 	},
 	headerContent: {
 		flexDirection: 'row',
@@ -403,92 +364,111 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	placeholder: {
-		width: 40,
+		width: 44,
 	},
 	appTitle: {
-		fontSize: 18,
-		fontWeight: 'bold',
-		marginLeft: 8,
-		color: '#333',
+		fontSize: 20,
+		fontWeight: '700',
+		marginLeft: 12,
+		color: '#1a1a1a',
 	},
 	content: {
 		flex: 1,
-		padding: 16,
+		padding: 20,
 	},
 	section: {
-		marginBottom: 24,
+		marginBottom: 28,
 	},
 	sectionTitle: {
-		fontSize: 18,
-		fontWeight: 'bold',
-		color: '#333',
-		marginBottom: 8,
+		fontSize: 22,
+		fontWeight: '700',
+		color: '#1a1a1a',
+		marginBottom: 16,
+		flexShrink: 1,
 	},
 	sectionSubtitle: {
-		fontSize: 14,
+		fontSize: 16,
 		color: '#666',
 		marginBottom: 16,
-		lineHeight: 20,
+		lineHeight: 22,
 	},
 	card: {
-		backgroundColor: '#f8f9fa',
-		borderRadius: 12,
-		padding: 16,
+		backgroundColor: 'white',
+		borderRadius: 16,
+		padding: 20,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.08,
+		shadowRadius: 8,
+		elevation: 3,
 		borderWidth: 1,
-		borderColor: '#e9ecef',
+		borderColor: '#f0f0f0',
 	},
 	cardRow: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: 8,
+		alignItems: 'flex-start',
+		marginBottom: 12,
+		minHeight: 24,
 	},
 	cardLabel: {
-		fontSize: 14,
+		fontSize: 16,
 		color: '#666',
 		fontWeight: '500',
-		flex: 1,
+		width: 120,
+		flexShrink: 0,
+		marginRight: 16,
 	},
 	cardValue: {
-		fontSize: 14,
-		color: '#333',
+		fontSize: 16,
+		color: '#1a1a1a',
 		fontWeight: '600',
-		flex: 2,
-		textAlign: 'right',
+		flex: 1,
+		flexWrap: 'wrap',
 	},
 	deviceId: {
-		fontSize: 10,
+		fontSize: 12,
 		fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+		color: '#888',
+		flexWrap: 'wrap',
 	},
 	actionButton: {
 		backgroundColor: '#007AFF',
-		borderRadius: 12,
-		padding: 16,
+		borderRadius: 16,
+		padding: 18,
 		alignItems: 'center',
 		marginBottom: 12,
+		shadowColor: '#007AFF',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.2,
+		shadowRadius: 8,
+		elevation: 4,
 	},
 	actionButtonText: {
 		color: 'white',
-		fontSize: 16,
-		fontWeight: '600',
+		fontSize: 18,
+		fontWeight: '700',
 	},
 	signOutButton: {
-		backgroundColor: '#F44336',
+		backgroundColor: '#FF3B30',
+		shadowColor: '#FF3B30',
 	},
 	signOutButtonText: {
 		color: 'white',
 	},
 	bottomPadding: {
-		height: 32,
+		height: 40,
+	},
+	verifyEmailContainer: {
+		flex: 1,
+		alignItems: 'flex-start',
 	},
 	verifyEmailLink: {
-		flex: 2,
-		alignItems: 'flex-end',
+		alignItems: 'flex-start',
 	},
 	verifyEmailText: {
 		color: '#007AFF',
-		fontSize: 12,
+		fontSize: 14,
 		textDecorationLine: 'underline',
-		fontWeight: '500',
+		fontWeight: '600',
 	},
 })

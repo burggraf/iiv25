@@ -452,67 +452,18 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 										: 'Loading...'}
 								</Text>
 							</View>
-							{subscriptionStatus?.expires_at && (
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Expires:</Text>
-									<Text style={styles.cardValue}>
-										{SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)}
-									</Text>
-								</View>
-							)}
 							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Status:</Text>
-								<Text style={[styles.cardValue, { color: isPremium ? '#4CAF50' : '#666' }]}>
-									{isPremium ? 'Active' : 'Free Plan'}
+								<Text style={styles.cardLabel}>Expires:</Text>
+								<Text style={styles.cardValue}>
+									{subscriptionStatus?.expires_at 
+										? SubscriptionService.formatExpirationDate(subscriptionStatus.expires_at)
+										: 'never'
+									}
 								</Text>
 							</View>
 						</View>
 					</View>
 
-					{/* Usage Statistics */}
-					{usageStats && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Today&apos;s Usage</Text>
-							<View style={styles.card}>
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Product Lookups:</Text>
-									<Text
-										style={[
-											styles.cardValue,
-											{
-												color: isPremium
-													? '#4CAF50'
-													: usageStats.product_lookups_today >= usageStats.product_lookups_limit
-													? '#F44336'
-													: '#333',
-											},
-										]}>
-										{isPremium
-											? 'Unlimited'
-											: `${usageStats.product_lookups_today}/${usageStats.product_lookups_limit}`}
-									</Text>
-								</View>
-								<View style={styles.cardRow}>
-									<Text style={styles.cardLabel}>Ingredient Searches:</Text>
-									<Text
-										style={[
-											styles.cardValue,
-											{
-												color: isPremium
-													? '#4CAF50'
-													: usageStats.searches_today >= usageStats.searches_limit
-													? '#F44336'
-													: '#333',
-											},
-										]}>
-										{isPremium
-											? 'Unlimited'
-											: `${usageStats.searches_today}/${usageStats.searches_limit}`}
-									</Text>
-								</View>
-							</View>
-						</View>
-					)}
 
 
 					{/* Available Plans */}
