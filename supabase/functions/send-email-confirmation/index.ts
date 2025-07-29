@@ -64,6 +64,43 @@ Deno.serve(async (req) => {
     
     const user_email = user.email;
     
+    // Check if email is already verified or recently sent
+    const { data: existingRecord, error: queryError } = await supabaseAdmin
+      .from('email_confirmations')
+      .select('email_confirmed_at, confirmation_sent_at')
+      .eq('id', user_id)
+      .single();
+    
+    if (queryError && queryError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Database query error:', queryError);
+      return new Response(JSON.stringify({ error: 'Database error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Check if email is already verified
+    if (existingRecord && existingRecord.email_confirmed_at) {
+      return new Response(JSON.stringify({ error: 'email already verified' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Check rate limiting (10 minutes = 600,000 milliseconds)
+    if (existingRecord && existingRecord.confirmation_sent_at) {
+      const sentAt = new Date(existingRecord.confirmation_sent_at).getTime();
+      const now = new Date().getTime();
+      const timeDiff = now - sentAt;
+      
+      if (timeDiff < 600000) { // Less than 10 minutes
+        return new Response(JSON.stringify({ error: 'please wait 10 minutes before sending another confirmation email' }), { 
+          status: 429,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
     // Generate cryptographically secure confirmation token
     const confirmationToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
     

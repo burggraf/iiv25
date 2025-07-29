@@ -111,11 +111,29 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 			)
 		} catch (error) {
 			console.error('Failed to send email verification:', error)
-			Alert.alert(
-				'Error',
-				'Failed to send verification email. Please try again later.',
-				[{ text: 'OK', style: 'default' }]
-			)
+			
+			// Handle specific error messages
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+			
+			if (errorMessage === 'email already verified') {
+				Alert.alert(
+					'Email Already Verified',
+					'Your email is already verified! No further action is needed.',
+					[{ text: 'OK', style: 'default' }]
+				)
+			} else if (errorMessage === 'please wait 10 minutes before sending another confirmation email') {
+				Alert.alert(
+					'Please Wait',
+					'Please wait 10 minutes before requesting another verification email.',
+					[{ text: 'OK', style: 'default' }]
+				)
+			} else {
+				Alert.alert(
+					'Error',
+					'Failed to send verification email. Please try again later.',
+					[{ text: 'OK', style: 'default' }]
+				)
+			}
 		} finally {
 			setIsVerifyingEmail(false)
 		}

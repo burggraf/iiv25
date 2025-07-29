@@ -29,7 +29,28 @@ export class EmailConfirmationService {
 
       if (error) {
         console.error('Email confirmation error:', error);
-        throw new Error(`Failed to send email confirmation: ${error.message}`);
+        
+        // Try to extract specific error message from the edge function response
+        let errorMessage = 'Failed to send email confirmation';
+        
+        if (error.message) {
+          // Check if the error message contains specific error responses
+          if (error.message.includes('email already verified')) {
+            errorMessage = 'email already verified';
+          } else if (error.message.includes('please wait 10 minutes')) {
+            errorMessage = 'please wait 10 minutes before sending another confirmation email';
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Check if the response data contains an error (in case it's in the data object)
+      if (data && data.error) {
+        console.error('Email confirmation data error:', data.error);
+        throw new Error(data.error);
       }
 
       console.log('Email confirmation sent successfully:', data);
