@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createEmailConfirmationJWT } from '../_shared/jwt-utils.ts';
 
 // NOTE: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are automatically 
 // available in all Supabase Edge Functions - no manual setup required
@@ -83,8 +84,11 @@ Deno.serve(async (req) => {
       });
     }
     
+    // Create JWT token containing user_id and confirmation token
+    const jwtToken = await createEmailConfirmationJWT(user_id, confirmationToken);
+    
     // Send email via SendPulse  
-    const confirmationUrl = `https://isitvegan.net/confirm-email?user_id=${user_id}&token=${confirmationToken}`;
+    const confirmationUrl = `https://isitvegan.net/confirm-email?token=${jwtToken}`;
     
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

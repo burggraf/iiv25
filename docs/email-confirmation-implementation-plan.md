@@ -16,6 +16,7 @@ This document outlines the implementation of a custom email confirmation system 
 - ✅ Website-based confirmation page for email links
 - ✅ Secure edge function implementation with SERVICE_ROLE_KEY
 - ✅ Client-side integration that calls confirmation after successful signup
+- ✅ JWT-based security to prevent user ID exposure in URLs
 
 ## Implementation Details
 
@@ -47,16 +48,18 @@ CREATE INDEX idx_email_confirmations_sent_at ON email_confirmations(confirmation
 2. Supabase creates user account
 3. Client automatically calls `EmailConfirmationService.sendEmailConfirmation()`
 4. Service calls `send-email-confirmation` edge function with JWT token
-5. Edge function gets OAuth2 token from SendPulse
-6. Edge function sends email with confirmation link
-7. Email contains link: `https://isitvegan.net/confirm-email?user_id=...&token=...`
+5. Edge function creates JWT token containing encrypted user_id and confirmation token
+6. Edge function gets OAuth2 token from SendPulse
+7. Edge function sends email with secure confirmation link
+8. Email contains link: `https://isitvegan.net/confirm-email?token={JWT_TOKEN}`
 
 **Flow 2: Email Confirmation Processing**
 1. User clicks email link → Goes to website confirmation page
-2. JavaScript extracts `user_id` and `token` from URL parameters
+2. JavaScript extracts JWT `token` from URL parameters
 3. Page calls `verify-email-confirmation` edge function (no auth required)
-4. Edge function validates token and updates database
-5. User sees success/error message on website
+4. Edge function verifies JWT signature and extracts user_id and confirmation token
+5. Edge function validates token and updates database
+6. User sees success/error message on website
 
 ## Edge Functions
 
@@ -66,14 +69,16 @@ CREATE INDEX idx_email_confirmations_sent_at ON email_confirmations(confirmation
 
 **Key Features:**
 - ✅ Uses JWT token from Authorization header (no user_id parameter needed)
+- ✅ Creates secure JWT token containing encrypted user_id and confirmation token
 - ✅ OAuth2 authentication with SendPulse API
 - ✅ Automatically gets current user from JWT
 - ✅ Generates cryptographically secure tokens
 - ✅ Proper error handling and CORS headers
+- ✅ Uses shared JWT utility library for consistent token handling
 
 **Deployment:**
 ```bash
-npx supabase functions deploy send-email-confirmation
+supabase functions deploy send-email-confirmation
 ```
 
 ### 2. `verify-email-confirmation` Function

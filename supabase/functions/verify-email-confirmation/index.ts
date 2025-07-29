@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyEmailConfirmationJWT } from '../_shared/jwt-utils.ts';
 
 // NOTE: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are automatically 
 // available in all Supabase Edge Functions - no manual setup required
@@ -18,7 +19,7 @@ Deno.serve(async (req) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     });
   }
@@ -37,15 +38,32 @@ Deno.serve(async (req) => {
 
   try {
     console.log('Processing POST request');
-    const { user_id, token } = await req.json();
-    console.log('Parsed user_id:', user_id, 'token length:', token?.length);
+    const { token } = await req.json();
+    console.log('Received JWT token length:', token?.length);
+    
+    // Verify and decode the JWT token
+    const payload = await verifyEmailConfirmationJWT(token);
+    if (!payload) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid or expired token' 
+      }), { 
+        status: 400,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+    
+    const { user_id, token: confirmationToken } = payload;
+    console.log('Decoded user_id:', user_id, 'confirmation token length:', confirmationToken?.length);
     
     // Get confirmation record using SERVICE_ROLE_KEY (bypasses RLS)
     const { data, error } = await supabaseAdmin
       .from('email_confirmations')
       .select('*')
       .eq('id', user_id)
-      .eq('token', token)
+      .eq('token', confirmationToken)
       .single();
     
     if (error || !data) {
