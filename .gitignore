@@ -70,8 +70,12 @@ vendor/
 build.ipa
 local-ios-*
 upload-to-testflight.sh
+upload-to-appstore.sh
 
 # Website build artifacts (ignore website/public/assets since they're copied from main project)
 website/node_modules/
 website/.wrangler/
 website/dist/
+
+# apple login
+generate_apple_token/script.js
