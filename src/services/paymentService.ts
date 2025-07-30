@@ -468,6 +468,65 @@ export class PaymentService {
   }
 
   /**
+   * Get the current active subscription product ID with proper hierarchy
+   * Returns the highest priority active subscription: Lifetime > Annual > Semiannual > Quarterly > Monthly
+   */
+  static async getCurrentSubscriptionProductId(): Promise<string | null> {
+    try {
+      if (!this.isInitialized) {
+        console.log('PaymentService: Not initialized, cannot get current subscription');
+        return null;
+      }
+
+      const purchases = await getAvailablePurchases();
+      console.log('PaymentService: Found purchases for current subscription check:', purchases);
+      
+      let highestPrioritySubscription: { productId: string; priority: number } | null = null;
+      
+      // Define subscription priority hierarchy (higher number = higher priority)
+      const subscriptionPriority: Record<string, number> = {
+        [SUBSCRIPTION_PRODUCT_IDS.MONTHLY]: 1,
+        [SUBSCRIPTION_PRODUCT_IDS.QUARTERLY]: 2,
+        [SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL]: 3,
+        [SUBSCRIPTION_PRODUCT_IDS.ANNUAL]: 4,
+        [SUBSCRIPTION_PRODUCT_IDS.LIFETIME]: 5, // Highest priority
+      };
+      
+      // Process each purchase and find the highest priority active subscription
+      for (const purchase of purchases) {
+        const subscriptionInfo = this.getSubscriptionInfo(purchase.productId);
+        
+        if (subscriptionInfo) {
+          // Check if subscription is active (lifetime is always active, others check expiration)
+          const isActive = subscriptionInfo.duration === -1 || this.isSubscriptionActive(purchase);
+          
+          if (isActive) {
+            const priority = subscriptionPriority[purchase.productId] || 0;
+            
+            console.log(`PaymentService: Found active subscription ${purchase.productId} with priority ${priority}`);
+            
+            // Keep the subscription with highest priority
+            if (!highestPrioritySubscription || priority > highestPrioritySubscription.priority) {
+              highestPrioritySubscription = {
+                productId: purchase.productId,
+                priority: priority,
+              };
+              console.log(`PaymentService: New highest priority subscription: ${purchase.productId}`);
+            }
+          }
+        }
+      }
+      
+      const result = highestPrioritySubscription?.productId || null;
+      console.log('PaymentService: Current active subscription product ID:', result);
+      return result;
+    } catch (error: any) {
+      console.error('PaymentService: Failed to get current subscription:', error);
+      return null;
+    }
+  }
+
+  /**
    * Restore previous purchases
    */
   static async restorePurchases(deviceId: string): Promise<RestoreResult> {
@@ -484,7 +543,7 @@ export class PaymentService {
       const activeSubscriptions: string[] = [];
       let latestSubscription: { productId: string; expiresAt?: Date } | null = null;
       
-      // Process each purchase and find the one with the latest expiration date
+      // Process each purchase and find the one with the latest expiration date  
       for (const purchase of purchases) {
         const subscriptionInfo = this.getSubscriptionInfo(purchase.productId);
         

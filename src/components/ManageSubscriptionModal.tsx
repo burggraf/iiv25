@@ -45,13 +45,29 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 	const [isPurchasing, setIsPurchasing] = useState(false)
 	const [isRestoring, setIsRestoring] = useState(false)
 	const [isCancelling, setIsCancelling] = useState(false)
+	const [currentProductId, setCurrentProductId] = useState<string | null>(null)
+	const [isLoadingCurrentProduct, setIsLoadingCurrentProduct] = useState(false)
 
 	useEffect(() => {
 		if (visible && user && deviceId) {
+			// Reset current product ID when modal opens
+			setCurrentProductId(null)
+			setIsLoadingCurrentProduct(false)
+			
 			loadSubscriptionData()
 			initializePaymentService()
 		}
 	}, [visible, user, deviceId])
+
+	// Load current product ID when payment service becomes initialized and we have subscription data
+	useEffect(() => {
+		const isPremiumUser = subscriptionStatus?.subscription_level === 'standard' || 
+		                     subscriptionStatus?.subscription_level === 'premium'
+		
+		if (isPaymentInitialized && visible && subscriptionStatus && isPremiumUser) {
+			loadCurrentProductId()
+		}
+	}, [isPaymentInitialized, visible, subscriptionStatus])
 
 	// Cleanup payment service on unmount
 	useEffect(() => {
@@ -67,6 +83,12 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 			loadSubscriptionStatus(),
 			loadUsageStats()
 		])
+		
+		// Load current product ID only if payment service is already initialized
+		// If not initialized, initializePaymentService will call loadCurrentProductId later
+		if (isPaymentInitialized) {
+			await loadCurrentProductId()
+		}
 	}
 
 	const loadSubscriptionStatus = async () => {
@@ -100,6 +122,25 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 			setUsageStats(stats)
 		} catch (error) {
 			console.error('Failed to load usage stats:', error)
+		}
+	}
+
+	const loadCurrentProductId = async () => {
+		try {
+			if (!isPaymentInitialized) {
+				console.log('Payment service not initialized, skipping current product ID load')
+				return
+			}
+
+			setIsLoadingCurrentProduct(true)
+			const productId = await PaymentService.getCurrentSubscriptionProductId()
+			setCurrentProductId(productId)
+			console.log('Loaded current product ID:', productId)
+		} catch (error) {
+			console.error('Failed to load current product ID:', error)
+			setCurrentProductId(null)
+		} finally {
+			setIsLoadingCurrentProduct(false)
 		}
 	}
 
@@ -201,7 +242,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 						]
 					)
 
-					// Refresh subscription status
+					// Refresh subscription status and current product ID
 					setTimeout(() => {
 						loadSubscriptionData()
 						onSubscriptionChanged?.()
@@ -213,7 +254,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 						[{ text: 'OK' }]
 					)
 
-					// Refresh subscription status after a short delay
+					// Refresh subscription status and current product ID after a short delay
 					setTimeout(() => {
 						loadSubscriptionData()
 						onSubscriptionChanged?.()
@@ -297,7 +338,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 						[{ text: 'OK' }]
 					)
 
-					// Refresh subscription status
+					// Refresh subscription status and current product ID
 					loadSubscriptionData()
 					onSubscriptionChanged?.()
 				} else {
@@ -325,8 +366,6 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 	const isPremium =
 		subscriptionStatus?.subscription_level === 'standard' ||
 		subscriptionStatus?.subscription_level === 'premium'
-
-	const currentProductId = getCurrentProductId()
 	
 	// Sort products by price from highest to lowest
 	const sortedProducts = [...availableProducts].sort((a, b) => {
@@ -338,35 +377,6 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 		return priceB - priceA
 	})
 
-	function getCurrentProductId(): string | null {
-		if (!isPremium) return null
-		
-		// For lifetime subscriptions (no expiration date)
-		if (!subscriptionStatus?.expires_at) {
-			return SUBSCRIPTION_PRODUCT_IDS.LIFETIME
-		}
-		
-		// Calculate remaining time to make best guess about subscription type
-		const now = new Date()
-		const expiresAt = new Date(subscriptionStatus.expires_at)
-		const remainingMs = expiresAt.getTime() - now.getTime()
-		const remainingDays = Math.round(remainingMs / (1000 * 60 * 60 * 24))
-		
-		// Use remaining days to infer the subscription type
-		// This is approximate since we don't know exactly when it was purchased
-		if (remainingDays > 300) return SUBSCRIPTION_PRODUCT_IDS.ANNUAL      // Annual subscription
-		if (remainingDays > 150) return SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL  // 6-month subscription  
-		if (remainingDays > 60)  return SUBSCRIPTION_PRODUCT_IDS.QUARTERLY   // 3-month subscription
-		if (remainingDays > 0)   return SUBSCRIPTION_PRODUCT_IDS.MONTHLY     // Monthly subscription
-		
-		// If expired, still try to determine what it was based on how recently it expired
-		const expiredDaysAgo = Math.abs(remainingDays)
-		if (expiredDaysAgo < 40)  return SUBSCRIPTION_PRODUCT_IDS.MONTHLY     // Recently expired monthly
-		if (expiredDaysAgo < 100) return SUBSCRIPTION_PRODUCT_IDS.QUARTERLY   // Recently expired quarterly
-		if (expiredDaysAgo < 200) return SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL  // Recently expired 6-month
-		
-		return SUBSCRIPTION_PRODUCT_IDS.ANNUAL // Default to annual for old expired subs
-	}
 
 	function getMonthlyPrice(product: PaymentProduct): string {
 		// Extract numeric price from localizedPrice (e.g., "$9.99" -> 9.99)
