@@ -136,8 +136,8 @@ export function AppProvider({ children }: AppProviderProps) {
         newHistory = [productWithTimestamp, ...prev];
       }
       
-      // Keep only last 100 items
-      return newHistory.slice(0, 100);
+      // Keep only last 500 items
+      return newHistory.slice(0, 500);
     });
 
     setHistoryItems(prev => {
@@ -166,8 +166,8 @@ export function AppProvider({ children }: AppProviderProps) {
         ];
       }
       
-      // Keep only last 100 items
-      const limitedHistoryItems = newHistoryItems.slice(0, 100);
+      // Keep only last 500 items
+      const limitedHistoryItems = newHistoryItems.slice(0, 500);
       
       // Save to storage
       saveHistoryItems(limitedHistoryItems);
