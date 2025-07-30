@@ -307,7 +307,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 						<View style={styles.card}>
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Version:</Text>
-								<Text style={styles.cardValue}>{Constants.expoConfig?.version || '4.0.1'}</Text>
+								<Text style={styles.cardValue}>{Constants.expoConfig?.version || '4.0.0'}</Text>
 							</View>
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Platform:</Text>

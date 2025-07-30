@@ -2,7 +2,7 @@
   "expo": {
     "name": "Is It Vegan?",
     "slug": "isitvegan",
-    "version": "4.0.1",
+    "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "net.isitvegan.free",
