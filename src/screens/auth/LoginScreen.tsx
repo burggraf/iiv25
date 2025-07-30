@@ -150,7 +150,7 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        <View style={styles.form}>
+        <View style={[styles.form, styles.formCompact]}>
           <Input
             placeholder="Email"
             value={formState.email}
@@ -171,7 +171,7 @@ export default function LoginScreen() {
             secureTextEntry
             leftIcon={{ type: 'feather', name: 'lock', color: '#14A44A' }}
             inputStyle={styles.inputText}
-            containerStyle={styles.inputContainer}
+            containerStyle={[styles.inputContainer, styles.passwordInputContainer]}
             errorMessage={formState.error && !formState.error.includes('email') ? formState.error : undefined}
           />
 
@@ -184,40 +184,51 @@ export default function LoginScreen() {
             titleStyle={styles.primaryButtonText}
           />
 
-          <TouchableOpacity
-            onPress={navigateToForgotPassword}
-            style={styles.forgotPasswordButton}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
+          <View style={styles.linkRow}>
+            <TouchableOpacity
+              onPress={navigateToSignUp}
+              style={styles.leftLink}
+            >
+              <Text style={styles.linkText}>Sign Up</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={navigateToForgotPassword}
+              style={styles.rightLink}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
+            <Text style={styles.dividerText}>or sign in with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          <Button
-            title="Continue with Google"
-            onPress={handleGoogleSignIn}
-            loading={formState.isLoading}
-            disabled={formState.isLoading}
-            buttonStyle={[styles.secondaryButton, styles.googleButton]}
-            titleStyle={styles.secondaryButtonText}
-            icon={{ type: 'font-awesome', name: 'google', color: '#666', size: 18 }}
-          />
-
-          {Platform.OS === 'ios' && (
+          <View style={styles.socialButtonRow}>
             <Button
-              title="Continue with Apple"
-              onPress={handleAppleSignIn}
+              title="Google"
+              onPress={handleGoogleSignIn}
               loading={formState.isLoading}
               disabled={formState.isLoading}
-              buttonStyle={[styles.secondaryButton, styles.appleButton]}
+              buttonStyle={[styles.secondaryButton, styles.socialButton]}
+              containerStyle={styles.socialButton}
               titleStyle={styles.secondaryButtonText}
-              icon={{ type: 'font-awesome', name: 'apple', color: '#666', size: 18 }}
+              icon={{ type: 'font-awesome', name: 'google', color: '#666', size: 18 }}
             />
-          )}
+            {Platform.OS === 'ios' && (
+              <Button
+                title="Apple"
+                onPress={handleAppleSignIn}
+                loading={formState.isLoading}
+                disabled={formState.isLoading}
+                buttonStyle={[styles.secondaryButton, styles.socialButton]}
+                containerStyle={styles.socialButton}
+                titleStyle={styles.secondaryButtonText}
+                icon={{ type: 'font-awesome', name: 'apple', color: '#666', size: 18 }}
+              />
+            )}
+          </View>
 
           <Button
             title="Skip Login"
@@ -260,7 +271,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -280,12 +291,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  formCompact: {
+    marginTop: -35,
+  },
   inputContainer: {
-    marginBottom: 10,
+    marginBottom: 0,
+  },
+  passwordInputContainer: {
+    marginTop: -10,
   },
   inputText: {
     fontSize: 16,
     color: '#333',
+    paddingLeft: 8,
   },
   primaryButton: {
     backgroundColor: '#14A44A',
@@ -308,17 +326,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 12,
   },
-  googleButton: {
+  socialButtonRow: {
+    flexDirection: 'row',
     marginBottom: 16,
+    gap: 8,
   },
-  appleButton: {
-    marginBottom: 16,
+  socialButton: {
+    flex: 1,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
   },
   secondaryButtonText: {
     color: '#666',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: 4,
   },
   tertiaryButton: {
     backgroundColor: 'transparent',
@@ -336,9 +359,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  forgotPasswordButton: {
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    marginHorizontal: 15,
+  },
+  leftLink: {
+    alignItems: 'flex-start',
+  },
+  rightLink: {
+    alignItems: 'flex-end',
   },
   forgotPasswordText: {
     color: '#14A44A',
@@ -348,7 +380,7 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 6,
   },
   dividerLine: {
     flex: 1,
