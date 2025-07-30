@@ -12,6 +12,7 @@ export interface AuthContextValue extends AuthState {
   signUp: (email: string, password: string, options?: { data?: Record<string, any> }) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   signInAnonymously: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;

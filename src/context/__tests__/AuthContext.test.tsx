@@ -31,7 +31,7 @@ const TestComponent: React.FC = () => {
     signIn,
     signOut,
     resetPassword,
-    updateProfile,
+    updatePassword,
     signInAnonymously,
   } = useAuth();
 
@@ -71,7 +71,7 @@ const TestComponent: React.FC = () => {
       
       <TouchableOpacity
         testID="update-profile-button"
-        onPress={() => updateProfile({ display_name: 'Test User' })}
+        onPress={() => updatePassword('newpassword')}
       >
         <Text>Update Profile</Text>
       </TouchableOpacity>

@@ -13,6 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "net.isitvegan.free",
       "buildNumber": "29",
+      "appleTeamId": "WP9H848GC5",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
         "NSMicrophoneUsageDescription": "This app does not use the microphone.",
@@ -80,6 +81,7 @@
           "cameraPermission": "Allow Is It Vegan to access your camera to scan product barcodes."
         }
       ],
+      "expo-apple-authentication",
       "./plugins/android-iap-config.js"
     ],
     "experiments": {

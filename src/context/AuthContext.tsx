@@ -10,6 +10,9 @@ import * as Linking from 'expo-linking'
 import { SubscriptionService } from '../services/subscriptionService'
 import deviceIdService from '../services/deviceIdService'
 import { EmailConfirmationService } from '../services/emailConfirmationService'
+import * as AppleAuthentication from 'expo-apple-authentication'
+import * as Crypto from 'expo-crypto'
+import { Platform } from 'react-native'
 
 // Required for web only
 WebBrowser.maybeCompleteAuthSession()
@@ -370,6 +373,109 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		}
 	}
 
+	const signInWithApple = async (): Promise<void> => {
+		try {
+			// Check if Apple Authentication is available (iOS only)
+			if (Platform.OS !== 'ios') {
+				throw new Error('Apple Sign In is only available on iOS')
+			}
+
+			const isAvailable = await AppleAuthentication.isAvailableAsync()
+			console.log('Apple Sign-In availability:', isAvailable)
+			
+			if (!isAvailable) {
+				throw new Error('Apple Sign In is not available on this device')
+			}
+
+			// Check what Apple authentication methods are supported
+			try {
+				const supportedTypes = await AppleAuthentication.getCredentialStateAsync('test')
+				console.log('Apple credential state test:', supportedTypes)
+			} catch (credError) {
+				console.log('Apple credential state check failed:', credError)
+			}
+
+			console.log('Starting Apple authentication...')
+			console.log('Bundle ID:', 'net.isitvegan.free')
+			console.log('Platform:', Platform.OS)
+			console.log('Team ID (should be in build):', 'WP9H848GC5')
+
+			// Request Apple authentication WITHOUT nonce for now
+			console.log('Calling AppleAuthentication.signInAsync...')
+			const credential = await AppleAuthentication.signInAsync({
+				requestedScopes: [
+					AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+					AppleAuthentication.AppleAuthenticationScope.EMAIL,
+				],
+				state: 'init',
+			})
+
+			console.log('🎉 APPLE AUTH SUCCESS!')
+			console.log('Credential user:', credential.user)
+			console.log('Credential state:', credential.state)
+			console.log('Credential realUserStatus:', credential.realUserStatus)
+			console.log('Has identity token:', !!credential.identityToken)
+
+			if (!credential.identityToken) {
+				throw new Error('No identity token received from Apple')
+			}
+
+			// Sign in with Supabase using the identity token (without nonce)
+			console.log('Signing in with Supabase using Apple identity token...')
+			const { data, error } = await supabase.auth.signInWithIdToken({
+				provider: 'apple',
+				token: credential.identityToken,
+			})
+
+			if (error) {
+				console.error('Supabase Apple auth error:', error)
+				handleAuthError(error)
+				return
+			}
+
+			console.log('Apple + Supabase sign-in successful:', data.user?.id)
+
+			// Handle user profile data (Apple only provides this on first sign-in)
+			if (credential.fullName && data.user) {
+				const firstName = credential.fullName.givenName
+				const lastName = credential.fullName.familyName
+				
+				if (firstName || lastName) {
+					console.log('Updating user profile with Apple name data')
+					const displayName = [firstName, lastName].filter(Boolean).join(' ')
+					
+					try {
+						await supabase.auth.updateUser({
+							data: {
+								full_name: displayName,
+								first_name: firstName,
+								last_name: lastName,
+							}
+						})
+					} catch (updateError) {
+						console.error('Failed to update user profile with Apple data:', updateError)
+						// Don't fail the sign-in if profile update fails
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Apple sign-in error:', error)
+			console.error('Apple sign-in error details:', {
+				message: error instanceof Error ? error.message : 'Unknown error',
+				name: error instanceof Error ? error.name : 'Unknown',
+				code: (error as any)?.code,
+				userInfo: (error as any)?.userInfo
+			})
+			
+			if (error instanceof Error && error.message.includes('user_cancelled_authorize')) {
+				console.log('User cancelled Apple sign-in')
+				// Don't throw error for user cancellation
+				return
+			}
+			handleAuthError(error as Error)
+		}
+	}
+
 	const signInAnonymously = async (): Promise<void> => {
 		try {
 			const { error } = await supabase.auth.signInAnonymously()
@@ -427,6 +533,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		signUp,
 		signOut,
 		signInWithGoogle,
+		signInWithApple,
 		signInAnonymously,
 		resetPassword,
 		updatePassword,

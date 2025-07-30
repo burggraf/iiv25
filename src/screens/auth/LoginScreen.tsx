@@ -21,7 +21,7 @@ const { height: screenHeight } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, signInAnonymously, user } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple, signInAnonymously, user } = useAuth();
   
   const [formState, setFormState] = useState<AuthFormState>({
     email: '',
@@ -84,6 +84,23 @@ export default function LoginScreen() {
         ...prev,
         isLoading: false,
         error: error instanceof Error ? error.message : 'Google sign in failed',
+      }));
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setFormState(prev => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      await signInWithApple();
+      // Reset loading state after successful sign in
+      setFormState(prev => ({ ...prev, isLoading: false }));
+      // Navigation will be handled by auth state change
+    } catch (error) {
+      setFormState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Apple sign in failed',
       }));
     }
   };
@@ -190,6 +207,18 @@ export default function LoginScreen() {
             icon={{ type: 'font-awesome', name: 'google', color: '#666', size: 18 }}
           />
 
+          {Platform.OS === 'ios' && (
+            <Button
+              title="Continue with Apple"
+              onPress={handleAppleSignIn}
+              loading={formState.isLoading}
+              disabled={formState.isLoading}
+              buttonStyle={[styles.secondaryButton, styles.appleButton]}
+              titleStyle={styles.secondaryButtonText}
+              icon={{ type: 'font-awesome', name: 'apple', color: '#666', size: 18 }}
+            />
+          )}
+
           <Button
             title="Skip Login"
             onPress={handleSkipLogin}
@@ -280,6 +309,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   googleButton: {
+    marginBottom: 16,
+  },
+  appleButton: {
     marginBottom: 16,
   },
   secondaryButtonText: {

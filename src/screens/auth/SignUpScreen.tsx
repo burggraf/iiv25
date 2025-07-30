@@ -22,7 +22,7 @@ const { height: screenHeight } = Dimensions.get('window')
 
 export default function SignUpScreen() {
 	const router = useRouter()
-	const { signUp, signInWithGoogle, user } = useAuth()
+	const { signUp, signInWithGoogle, signInWithApple, user } = useAuth()
 	const insets = useSafeAreaInsets()
 
 	const [formState, setFormState] = useState<
@@ -126,6 +126,23 @@ export default function SignUpScreen() {
 		}
 	}
 
+	const handleAppleSignUp = async () => {
+		setFormState((prev) => ({ ...prev, isLoading: true, error: null }))
+
+		try {
+			await signInWithApple()
+			// Reset loading state after successful sign up
+			setFormState((prev) => ({ ...prev, isLoading: false }))
+			// Navigation will be handled by auth state change
+		} catch (error) {
+			setFormState((prev) => ({
+				...prev,
+				isLoading: false,
+				error: error instanceof Error ? error.message : 'Apple sign up failed',
+			}))
+		}
+	}
+
 	const navigateToLogin = () => {
 		router.push('/auth/login')
 	}
@@ -220,6 +237,18 @@ export default function SignUpScreen() {
 						icon={{ type: 'font-awesome', name: 'google', color: '#666', size: 18 }}
 					/>
 
+					{Platform.OS === 'ios' && (
+						<Button
+							title='Continue with Apple'
+							onPress={handleAppleSignUp}
+							loading={formState.isLoading}
+							disabled={formState.isLoading}
+							buttonStyle={[styles.secondaryButton, styles.appleButton]}
+							titleStyle={styles.secondaryButtonText}
+							icon={{ type: 'font-awesome', name: 'apple', color: '#666', size: 18 }}
+						/>
+					)}
+
 					<View style={styles.footer}>
 						<Text style={styles.footerText}>
 							Already have an account?{' '}
@@ -296,6 +325,9 @@ const styles = StyleSheet.create({
 		marginBottom: 12,
 	},
 	googleButton: {
+		marginBottom: 16,
+	},
+	appleButton: {
 		marginBottom: 30,
 	},
 	secondaryButtonText: {
