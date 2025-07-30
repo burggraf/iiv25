@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Alert, RefreshControl, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { SupabaseService } from '../services/supabaseService';
@@ -14,16 +15,8 @@ export default function HistoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
-
-  // Initialize display products from cached data
-  useEffect(() => {
-    setDisplayProducts(scanHistory);
-    
-    // Background refresh of recent items (if online and has items)
-    if (historyItems.length > 0) {
-      refreshLatestItems();
-    }
-  }, [scanHistory, historyItems, refreshLatestItems]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
   // Convert Supabase products to our Product format
   const convertSupabaseToProduct = useCallback((supabaseProduct: any, originalBarcode: string): Product => {
@@ -83,6 +76,25 @@ export default function HistoryScreen() {
     }
   }, [historyItems, convertSupabaseToProduct, updateHistoryProduct]);
 
+  // Debounce search query
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Initialize display products from cached data
+  useEffect(() => {
+    setDisplayProducts(scanHistory);
+    
+    // Background refresh of recent items (if online and has items)
+    if (historyItems.length > 0) {
+      refreshLatestItems();
+    }
+  }, [scanHistory, historyItems, refreshLatestItems]);
+
   // Manual refresh (pull-to-refresh)
   const onRefresh = useCallback(async () => {
     if (historyItems.length === 0) return;
@@ -106,6 +118,24 @@ export default function HistoryScreen() {
   const handleProductUpdated = (updatedProduct: Product) => {
     // Update the selected product state to reflect changes
     setSelectedProduct(updatedProduct);
+  };
+
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    if (!debouncedSearchQuery) {
+      return displayProducts;
+    }
+
+    const query = debouncedSearchQuery.toLowerCase();
+    return displayProducts.filter(product => {
+      const productName = product.name?.toLowerCase() || '';
+      const brand = product.brand?.toLowerCase() || '';
+      return productName.includes(query) || brand.includes(query);
+    });
+  }, [displayProducts, debouncedSearchQuery]);
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
   };
 
   const handleClearHistory = () => {
@@ -164,9 +194,43 @@ export default function HistoryScreen() {
       {/* History List */}
       {displayProducts.length > 0 && (
         <>
+          {/* Search Bar - only show if more than 8 items */}
+          {displayProducts.length > 8 && (
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons 
+                  name="search" 
+                  size={20} 
+                  color="#999" 
+                  style={styles.searchIcon} 
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search products..."
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearSearchButton}
+                    onPress={handleClearSearch}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+
           <View style={styles.listHeader}>
             <Text style={styles.historyCount}>
-              {displayProducts.length} product{displayProducts.length !== 1 ? 's' : ''} scanned
+              {debouncedSearchQuery ? 
+                `${filteredProducts.length} of ${displayProducts.length} products` :
+                `${displayProducts.length} product${displayProducts.length !== 1 ? 's' : ''} scanned`
+              }
             </Text>
             <TouchableOpacity onPress={handleClearHistory}>
               <Text style={styles.clearButton}>Clear All</Text>
@@ -174,7 +238,7 @@ export default function HistoryScreen() {
           </View>
 
           <FlatList
-            data={displayProducts}
+            data={filteredProducts}
             keyExtractor={(item) => `${item.barcode}-${item.lastScanned?.getTime()}`}
             renderItem={({ item }) => (
               <HistoryItem
@@ -266,5 +330,33 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
+  },
+  searchContainer: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    height: 50,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    height: '100%',
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    padding: 4,
   },
 });
