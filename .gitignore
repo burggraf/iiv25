@@ -79,3 +79,5 @@ website/dist/
 
 # apple login
 generate_apple_token/script.js
+
+/local-android-development-build.sh
