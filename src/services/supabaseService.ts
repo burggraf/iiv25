@@ -170,10 +170,17 @@ export class SupabaseService {
    */
   static async getProductByBarcode(barcode: string): Promise<SupabaseProduct | null> {
     try {
+      // Validate barcode input
+      const validatedBarcode = this.validateBarcode(barcode);
+      if (!validatedBarcode) {
+        console.warn(`Invalid barcode provided to getProductByBarcode: ${barcode}`);
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .or(`upc.eq.${barcode},ean13.eq.${barcode}`)
+        .or(`upc.eq.${validatedBarcode},ean13.eq.${validatedBarcode}`)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -189,6 +196,27 @@ export class SupabaseService {
   }
 
   /**
+   * Validate and sanitize barcode input
+   * @param barcode - Raw barcode string
+   * @returns Sanitized barcode or null if invalid
+   */
+  private static validateBarcode(barcode: string): string | null {
+    if (!barcode || typeof barcode !== 'string') {
+      return null;
+    }
+
+    const trimmed = barcode.trim();
+    
+    // UPC/EAN barcodes should be 8-14 digits only
+    if (!/^\d{8,14}$/.test(trimmed)) {
+      console.warn(`Invalid barcode format: ${trimmed}`);
+      return null;
+    }
+
+    return trimmed;
+  }
+
+  /**
    * Get multiple products by their barcodes in a single query
    * @param barcodes - Array of UPC/EAN13 codes to lookup
    * @returns Promise with array of products found
@@ -199,14 +227,24 @@ export class SupabaseService {
     }
 
     try {
-      // Build OR query for multiple barcodes
-      const orConditions = barcodes.map(barcode => `upc.eq.${barcode},ean13.eq.${barcode}`).join(',');
+      // Validate and sanitize all barcodes
+      const validBarcodes = barcodes
+        .map(barcode => this.validateBarcode(barcode))
+        .filter((barcode): barcode is string => barcode !== null);
+
+      if (validBarcodes.length === 0) {
+        console.warn('No valid barcodes provided');
+        return [];
+      }
+
+      // Build OR query for multiple barcodes using validated input
+      const orConditions = validBarcodes.map(barcode => `upc.eq.${barcode},ean13.eq.${barcode}`).join(',');
       
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .or(orConditions)
-        .limit(barcodes.length);
+        .limit(validBarcodes.length);
 
       if (error) {
         console.error('Error getting products by barcodes:', error);
@@ -236,11 +274,14 @@ export class SupabaseService {
     };
   }> {
     try {
-      let searchBarcode = barcode.trim();
-      
-      if (!searchBarcode) {
+      // Validate barcode input first
+      const validatedBarcode = this.validateBarcode(barcode);
+      if (!validatedBarcode) {
+        console.warn(`Invalid barcode provided to searchProductByBarcode: ${barcode}`);
         return { product: null, isRateLimited: false };
       }
+      
+      let searchBarcode = validatedBarcode;
 
       // Normalize barcode format: prefer UPC (without leading zero)
       // Convert EAN13 with leading zero to UPC format for consistent lookup
