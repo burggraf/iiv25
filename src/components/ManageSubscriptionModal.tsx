@@ -402,21 +402,17 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 	}
 
 	function getBillingText(product: PaymentProduct): string {
-		// Extract numeric price for display
-		const price = parseFloat(product.localizedPrice.replace(/[^0-9.]/g, '')) || 0
-		const currencySymbol = product.localizedPrice.replace(/[0-9.,]/g, '').charAt(0) || '$'
-		
 		if (product.productId === SUBSCRIPTION_PRODUCT_IDS.ANNUAL) {
-			return `${currencySymbol}${price.toFixed(2)} billed annually`
+			return `billed annually`
 		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL) {
-			return `${currencySymbol}${price.toFixed(2)} billed every 6 months`
+			return `billed every 6 months`
 		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.QUARTERLY) {
-			return `${currencySymbol}${price.toFixed(2)} billed every 3 months`
+			return `billed every 3 months`
 		} else if (product.productId === SUBSCRIPTION_PRODUCT_IDS.LIFETIME) {
-			return `${currencySymbol}${price.toFixed(2)} one-time payment`
+			return `one-time payment`
 		} else {
 			// Monthly
-			return `${currencySymbol}${price.toFixed(2)} billed monthly`
+			return `billed monthly`
 		}
 	}
 
@@ -516,8 +512,11 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 
 										{/* Price section */}
 										<View style={styles.priceSection}>
-											<Text style={styles.priceAmount}>{getMonthlyPrice(product)}</Text>
+											<Text style={styles.priceAmount}>{product.localizedPrice}</Text>
 											<Text style={styles.priceDuration}>{getBillingText(product)}</Text>
+											{getMonthlyPrice(product) && (
+												<Text style={styles.monthlyEquivalent}>{getMonthlyPrice(product)}</Text>
+											)}
 										</View>
 
 										{/* Divider line */}
@@ -890,9 +889,16 @@ const styles = StyleSheet.create({
 		color: '#333',
 	},
 	priceDuration: {
+		fontSize: 16,
+		color: '#333',
+		marginTop: 4,
+		fontWeight: '600',
+	},
+	monthlyEquivalent: {
 		fontSize: 14,
 		color: '#666',
 		marginTop: 2,
+		fontStyle: 'italic',
 	},
 	divider: {
 		height: 1,
