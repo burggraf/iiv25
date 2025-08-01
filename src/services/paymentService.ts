@@ -17,6 +17,7 @@ import {
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 import { SubscriptionService } from './subscriptionService';
+import { SubscriptionCacheService } from './subscriptionCacheService';
 
 // Product IDs for different subscription tiers
 export const SUBSCRIPTION_PRODUCT_IDS = {
@@ -393,6 +394,10 @@ export class PaymentService {
       // Update subscription in database using the stored device ID
       await this.updateSubscriptionFromPurchase(purchase, subscriptionInfo, this.currentDeviceId);
       
+      // Clear cached subscription data since we have a new purchase
+      await SubscriptionCacheService.clearCache();
+      console.log('PaymentService: Cleared subscription cache after successful purchase');
+      
       // Clear the device ID after successful processing
       this.currentDeviceId = null;
       
@@ -468,8 +473,37 @@ export class PaymentService {
   }
 
   /**
+   * Get the current active subscription product ID with caching
+   * First checks local cache, then falls back to App Store if needed
+   */
+  static async getCurrentSubscriptionProductIdCached(): Promise<string | null> {
+    try {
+      // First, try to get from cache
+      const cachedResult = await SubscriptionCacheService.getCachedSubscriptionData();
+      if (cachedResult !== null) {
+        console.log('PaymentService: Using cached subscription product ID:', cachedResult);
+        return cachedResult;
+      }
+
+      console.log('PaymentService: No cached data, fetching from App Store');
+      
+      // If no cache or expired, fetch from App Store and cache the result
+      const result = await this.getCurrentSubscriptionProductId();
+      
+      // Cache the result for future use
+      await SubscriptionCacheService.cacheSubscriptionData(result);
+      
+      return result;
+    } catch (error) {
+      console.error('PaymentService: Failed to get cached subscription product ID:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get the current active subscription product ID with proper hierarchy
    * Returns the highest priority active subscription: Lifetime > Annual > Semiannual > Quarterly > Monthly
+   * This method always queries the App Store directly (use getCurrentSubscriptionProductIdCached for cached version)
    */
   static async getCurrentSubscriptionProductId(): Promise<string | null> {
     try {
@@ -600,6 +634,10 @@ export class PaymentService {
             latestSubscription.expiresAt,
             true
           );
+          
+          // Clear cached subscription data since we've restored purchases
+          await SubscriptionCacheService.clearCache();
+          console.log('PaymentService: Cleared subscription cache after successful restore');
         }
       }
       

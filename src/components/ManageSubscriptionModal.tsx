@@ -133,7 +133,7 @@ export default function ManageSubscriptionModal({ visible, onClose, onSubscripti
 			}
 
 			setIsLoadingCurrentProduct(true)
-			const productId = await PaymentService.getCurrentSubscriptionProductId()
+			const productId = await PaymentService.getCurrentSubscriptionProductIdCached()
 			setCurrentProductId(productId)
 			console.log('Loaded current product ID:', productId)
 		} catch (error) {
