@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Is It Vegan? - Instant Barcode Scanning for Vegan Living</title>
-    <meta name="description" content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients. Download the Is It Vegan app now.">
+    <meta name="description"
+        content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients. Download the Is It Vegan app now.">
     <meta name="keywords" content="vegan, vegetarian, barcode scanner, food ingredients, plant-based, animal products">
-    
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://isitvegan.net/">
     <meta property="og:title" content="Is It Vegan? - Instant Barcode Scanning">
-    <meta property="og:description" content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients.">
+    <meta property="og:description"
+        content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients.">
     <meta property="og:image" content="https://isitvegan.net/assets/images/app-icon-1024.png">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://isitvegan.net/">
     <meta property="twitter:title" content="Is It Vegan? - Instant Barcode Scanning">
-    <meta property="twitter:description" content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients.">
+    <meta property="twitter:description"
+        content="Scan any product barcode to instantly discover if it's vegan, vegetarian, or contains animal ingredients.">
     <meta property="twitter:image" content="https://isitvegan.net/assets/images/app-icon-1024.png">
 
     <!-- Favicons -->
@@ -31,43 +35,204 @@
     <link rel="stylesheet" href="/src/styles/main.css">
     <style>
         /* Backup inline styles in case external CSS fails */
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 0; }
-        .header { position: fixed; top: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid #e2e8f0; z-index: 1000; height: 70px; overflow: visible !important; }
-        .nav-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 70px; position: relative; overflow: visible !important; }
-        .nav-logo { display: flex; align-items: center; gap: 8px; }
-        .logo { height: 32px; }
-        .logo-text { font-weight: 600; font-size: 20px; color: #0a7ea4; }
-        .nav-links { display: flex; gap: 32px; }
-        .nav-link { text-decoration: none; color: #11181C; font-weight: 500; }
-        .nav-toggle { display: none; flex-direction: column; background: none; border: none; cursor: pointer; padding: 8px; }
-        .nav-toggle span { width: 25px; height: 3px; background: #11181C; margin: 2px 0; }
-        .hero { padding: 140px 24px 80px; background: linear-gradient(135deg, #e6f3f7 0%, #ffffff 100%); }
-        .hero-container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-        .hero-title { font-size: 48px; font-weight: 700; line-height: 1.1; color: #11181C; margin-bottom: 24px; }
-        .hero-subtitle { font-size: 20px; color: #687076; margin-bottom: 16px; line-height: 1.6; }
-        .hero-subtext { font-size: 16px; color: #0a7ea4; font-weight: 600; margin-bottom: 32px; }
-        .hero-buttons { display: flex; flex-direction: column; gap: 20px; }
-        .btn { display: inline-flex; align-items: center; padding: 20px 40px; border-radius: 16px; text-decoration: none; font-weight: 600; transition: 0.25s; overflow: visible; }
-        .btn-primary { background: #0a7ea4; color: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .btn-secondary { background: white; border: 2px solid #e2e8f0; color: #11181C; }
-        .store-badge { height: 60px; }
-        .btn-disabled { opacity: 0.6; cursor: not-allowed; position: relative; overflow: visible; }
-        .coming-soon { position: absolute; top: -10px; right: -10px; background-color: #0a7ea4; color: white; font-size: 11px; font-weight: 600; padding: 3px 6px; border-radius: 3px; white-space: nowrap; z-index: 10; }
-        .hero-phone { max-width: 300px; height: auto; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.1)); transform: rotate(-5deg); }
-        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e2e8f0;
+            z-index: 1000;
+            height: 70px;
+            overflow: visible !important;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 70px;
+            position: relative;
+            overflow: visible !important;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo {
+            height: 32px;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 20px;
+            color: #0a7ea4;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: #11181C;
+            font-weight: 500;
+        }
+
+        .nav-toggle {
+            display: none;
+            flex-direction: column;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .nav-toggle span {
+            width: 25px;
+            height: 3px;
+            background: #11181C;
+            margin: 2px 0;
+        }
+
+        .hero {
+            padding: 140px 24px 80px;
+            background: linear-gradient(135deg, #e6f3f7 0%, #ffffff 100%);
+        }
+
+        .hero-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .hero-title {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1.1;
+            color: #11181C;
+            margin-bottom: 24px;
+        }
+
+        .hero-subtitle {
+            font-size: 20px;
+            color: #687076;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .hero-subtext {
+            font-size: 16px;
+            color: #0a7ea4;
+            font-weight: 600;
+            margin-bottom: 32px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 20px 40px;
+            border-radius: 16px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: 0.25s;
+            overflow: visible;
+        }
+
+        .btn-primary {
+            background: #0a7ea4;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-secondary {
+            background: white;
+            border: 2px solid #e2e8f0;
+            color: #11181C;
+        }
+
+        .store-badge {
+            height: 60px;
+        }
+
+        .btn-disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            position: relative;
+            overflow: visible;
+        }
+
+        .coming-soon {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: #0a7ea4;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 6px;
+            border-radius: 3px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        .hero-phone {
+            max-width: 300px;
+            height: auto;
+            filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.1));
+            transform: rotate(-5deg);
+        }
+
         @media (max-width: 768px) {
-            .hero-container { grid-template-columns: 1fr; gap: 32px; text-align: center; }
-            .hero-title { font-size: 36px; }
-            .nav-links { display: none; }
-            .nav-toggle { display: flex; }
+            .hero-container {
+                grid-template-columns: 1fr;
+                gap: 32px;
+                text-align: center;
+            }
+
+            .hero-title {
+                font-size: 36px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .nav-toggle {
+                display: flex;
+            }
         }
     </style>
-    
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <!-- Header -->
     <header class="header">
@@ -98,11 +263,14 @@
         <div class="hero-container">
             <div class="hero-content">
                 <h1 class="hero-title">Just scan to find out!</h1>
-                <p class="hero-subtitle">Discover if any food product is vegan or vegetarian within seconds with our barcode scanner!</p>
+                <p class="hero-subtitle">Discover if any food product is vegan or vegetarian within seconds with our
+                    barcode scanner!</p>
                 <p class="hero-subtext">Now works on ingredients in over 100 languages!</p>
                 <div class="hero-buttons">
-                    <a href="https://apps.apple.com/app/is-it-vegan/id6671396750" class="btn btn-primary" target="_blank" rel="noopener">
-                        <img src="/assets/images/app-store-badge.svg" alt="Download on the App Store" class="store-badge">
+                    <a href="https://apps.apple.com/app/id673006541" class="btn btn-primary" target="_blank"
+                        rel="noopener">
+                        <img src="/assets/images/app-store-badge.svg" alt="Download on the App Store"
+                            class="store-badge">
                     </a>
                     <div class="btn btn-secondary btn-disabled">
                         <img src="/assets/images/google-play-badge.svg" alt="Get it on Google Play" class="store-badge">
@@ -134,7 +302,8 @@
                 <div class="feature-card">
                     <div class="feature-icon">🔍</div>
                     <h3 class="feature-title">Detailed Analysis</h3>
-                    <p class="feature-description">All non-vegan ingredients are identified and clearly categorized to make shopping simple.</p>
+                    <p class="feature-description">All non-vegan ingredients are identified and clearly categorized to
+                        make shopping simple.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📚</div>
@@ -195,7 +364,11 @@
                         <span class="faq-icon">+</span>
                     </button>
                     <div class="faq-answer">
-                        <p>Our app uses multiple data sources including Open Food Facts and our proprietary database of over 400,000 products. We employ advanced ingredient analysis to provide highly accurate vegan classifications. In addition, users can now update ingredients lists in real time by taking a picture, to ensure that your product always contains the most current information.</p>
+                        <p>Our app uses multiple data sources including Open Food Facts and our proprietary database of
+                            over 400,000 products. We employ advanced ingredient analysis to provide highly accurate
+                            vegan classifications. In addition, users can now update ingredients lists in real time by
+                            taking a picture, to ensure that your product always contains the most current information.
+                        </p>
                     </div>
                 </div>
 
@@ -205,7 +378,9 @@
                         <span class="faq-icon">+</span>
                     </button>
                     <div class="faq-answer">
-                        <p>When a product isn't in our database, the app will prompt you to take a photo of the label. Our app will analyze the photo and automatically add the product and ingredient information to our database.</p>
+                        <p>When a product isn't in our database, the app will prompt you to take a photo of the label.
+                            Our app will analyze the photo and automatically add the product and ingredient information
+                            to our database.</p>
                     </div>
                 </div>
 
@@ -215,7 +390,9 @@
                         <span class="faq-icon">+</span>
                     </button>
                     <div class="faq-answer">
-                        <p>Yes! The app caches previously scanned products for offline use. While you'll need an internet connection for new product lookups, your scan history and previously viewed products will always be available offline.</p>
+                        <p>Yes! The app caches previously scanned products for offline use. While you'll need an
+                            internet connection for new product lookups, your scan history and previously viewed
+                            products will always be available offline.</p>
                     </div>
                 </div>
 
@@ -225,7 +402,8 @@
                         <span class="faq-icon">+</span>
                     </button>
                     <div class="faq-answer">
-                        <p>The app is free to download and use. For unlimited product scans and searches, there are premium options available through in-app purchase as low as $1.99.</p>
+                        <p>The app is free to download and use. For unlimited product scans and searches, there are
+                            premium options available through in-app purchase as low as $1.99.</p>
                     </div>
                 </div>
 
@@ -235,7 +413,9 @@
                         <span class="faq-icon">+</span>
                     </button>
                     <div class="faq-answer">
-                        <p>Absolutely! We welcome user feedback to improve our database accuracy. You can report errors or suggest corrections directly through the app or by contacting our support team using the form below.</p>
+                        <p>Absolutely! We welcome user feedback to improve our database accuracy. You can report errors
+                            or suggest corrections directly through the app or by contacting our support team using the
+                            form below.</p>
                     </div>
                 </div>
             </div>
@@ -249,7 +429,8 @@
             <div class="contact-container">
                 <div class="contact-info">
                     <h3>Have Questions or Feedback?</h3>
-                    <p>We'd love to hear from you! Whether you have suggestions, found a bug, or just want to say hello, drop us a message and we'll get back to you as soon as possible.</p>
+                    <p>We'd love to hear from you! Whether you have suggestions, found a bug, or just want to say hello,
+                        drop us a message and we'll get back to you as soon as possible.</p>
                 </div>
                 <form class="contact-form" id="contactForm">
                     <div class="form-group">
@@ -273,7 +454,8 @@
                     </div>
                     <div class="form-group">
                         <label for="message" class="form-label">Message</label>
-                        <textarea id="message" name="message" class="form-input form-textarea" rows="5" required></textarea>
+                        <textarea id="message" name="message" class="form-input form-textarea" rows="5"
+                            required></textarea>
                     </div>
                     <button type="submit" class="btn btn-primary form-submit">Send Message</button>
                     <div class="form-status" id="formStatus"></div>
@@ -293,7 +475,8 @@
                 <div class="footer-links">
                     <div class="footer-section">
                         <h4 class="footer-title">App</h4>
-                        <a href="https://apps.apple.com/app/is-it-vegan/id6671396750" class="footer-link" target="_blank" rel="noopener">iOS App Store</a>
+                        <a href="https://apps.apple.com/app/id673006541" class="footer-link" target="_blank"
+                            rel="noopener">iOS App Store</a>
                         <span class="footer-link footer-link-disabled">Android (Coming Soon)</span>
                     </div>
                     <div class="footer-section">
@@ -312,15 +495,15 @@
 
     <!-- Scripts -->
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const navToggle = document.querySelector('.nav-toggle');
-            
+
             if (navToggle) {
                 let mobileMenu = null;
-                
-                navToggle.addEventListener('click', function() {
+
+                navToggle.addEventListener('click', function () {
                     navToggle.classList.toggle('active');
-                    
+
                     if (mobileMenu) {
                         // Close menu
                         document.body.removeChild(mobileMenu);
@@ -339,7 +522,7 @@
                             border-bottom: 1px solid #e2e8f0;
                             z-index: 1001;
                         `;
-                        
+
                         // Add menu items
                         const menuItems = [
                             { href: '#features', text: 'Features' },
@@ -348,7 +531,7 @@
                             { href: '#contact', text: 'Contact' },
                             { href: '/privacy.html', text: 'Privacy' }
                         ];
-                        
+
                         menuItems.forEach(item => {
                             const link = document.createElement('a');
                             link.href = item.href;
@@ -369,13 +552,13 @@
                             };
                             mobileMenu.appendChild(link);
                         });
-                        
+
                         document.body.appendChild(mobileMenu);
                     }
                 });
-                
+
                 // Close menu when clicking outside
-                document.addEventListener('click', function(e) {
+                document.addEventListener('click', function (e) {
                     if (mobileMenu && !navToggle.contains(e.target) && !mobileMenu.contains(e.target)) {
                         document.body.removeChild(mobileMenu);
                         mobileMenu = null;
@@ -387,4 +570,5 @@
     </script>
     <script src="/src/js/main.js"></script>
 </body>
+
 </html>
