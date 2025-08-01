@@ -13,11 +13,6 @@ const mockAsyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 describe('SubscriptionCacheService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(Date, 'now').mockReturnValue(1000000000); // Fixed timestamp for testing
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   describe('getCachedSubscriptionData', () => {
@@ -30,27 +25,12 @@ describe('SubscriptionCacheService', () => {
       expect(mockAsyncStorage.getItem).toHaveBeenCalledWith('subscription_cache');
     });
 
-    it('should return null and clear cache when data is expired', async () => {
-      const expiredData = {
+    it('should return cached subscription data when available', async () => {
+      const cachedData = {
         currentProductId: 'test_product',
-        timestamp: 1000000000 - (25 * 60 * 60 * 1000), // 25 hours ago (expired)
         noSubscription: false
       };
-      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(expiredData));
-
-      const result = await SubscriptionCacheService.getCachedSubscriptionData();
-
-      expect(result).toBeNull();
-      expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('subscription_cache');
-    });
-
-    it('should return cached data when valid and not expired', async () => {
-      const validData = {
-        currentProductId: 'test_product',
-        timestamp: 1000000000 - (1 * 60 * 60 * 1000), // 1 hour ago (valid)
-        noSubscription: false
-      };
-      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(validData));
+      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(cachedData));
 
       const result = await SubscriptionCacheService.getCachedSubscriptionData();
 
@@ -60,7 +40,6 @@ describe('SubscriptionCacheService', () => {
     it('should return null for cached "no subscription" state', async () => {
       const noSubData = {
         currentProductId: null,
-        timestamp: 1000000000 - (1 * 60 * 60 * 1000), // 1 hour ago (valid)
         noSubscription: true
       };
       mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(noSubData));
@@ -80,14 +59,13 @@ describe('SubscriptionCacheService', () => {
   });
 
   describe('cacheSubscriptionData', () => {
-    it('should cache subscription data with current timestamp', async () => {
+    it('should cache subscription data persistently', async () => {
       await SubscriptionCacheService.cacheSubscriptionData('test_product');
 
       expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
         'subscription_cache',
         JSON.stringify({
           currentProductId: 'test_product',
-          timestamp: 1000000000,
           noSubscription: false
         })
       );
@@ -100,7 +78,6 @@ describe('SubscriptionCacheService', () => {
         'subscription_cache',
         JSON.stringify({
           currentProductId: null,
-          timestamp: 1000000000,
           noSubscription: true
         })
       );
@@ -138,26 +115,12 @@ describe('SubscriptionCacheService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false when cached data is expired', async () => {
-      const expiredData = {
+    it('should return true when cached data exists', async () => {
+      const cachedData = {
         currentProductId: 'test_product',
-        timestamp: 1000000000 - (25 * 60 * 60 * 1000), // 25 hours ago (expired)
         noSubscription: false
       };
-      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(expiredData));
-
-      const result = await SubscriptionCacheService.hasCachedData();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return true when cached data is valid and not expired', async () => {
-      const validData = {
-        currentProductId: 'test_product',
-        timestamp: 1000000000 - (1 * 60 * 60 * 1000), // 1 hour ago (valid)
-        noSubscription: false
-      };
-      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(validData));
+      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(cachedData));
 
       const result = await SubscriptionCacheService.hasCachedData();
 

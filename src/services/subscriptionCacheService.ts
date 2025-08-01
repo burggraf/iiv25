@@ -2,16 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface CachedSubscriptionData {
   currentProductId: string | null;
-  timestamp: number;
   noSubscription?: boolean; // flag to indicate when we've checked and found no subscription
 }
 
 export class SubscriptionCacheService {
   private static readonly CACHE_KEY = 'subscription_cache';
-  private static readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   /**
-   * Get cached subscription data if available and not expired
+   * Get cached subscription data if available
    */
   static async getCachedSubscriptionData(): Promise<string | null> {
     try {
@@ -23,15 +21,6 @@ export class SubscriptionCacheService {
       }
 
       const parsed: CachedSubscriptionData = JSON.parse(cachedData);
-      const now = Date.now();
-      
-      // Check if cache has expired
-      if (now - parsed.timestamp > this.CACHE_TTL) {
-        console.log('SubscriptionCacheService: Cache expired, removing');
-        await this.clearCache();
-        return null;
-      }
-
       console.log('SubscriptionCacheService: Using cached subscription data:', parsed.currentProductId);
       return parsed.currentProductId;
     } catch (error) {
@@ -41,13 +30,12 @@ export class SubscriptionCacheService {
   }
 
   /**
-   * Cache subscription data with timestamp
+   * Cache subscription data persistently (until manually cleared)
    */
   static async cacheSubscriptionData(currentProductId: string | null): Promise<void> {
     try {
       const cacheData: CachedSubscriptionData = {
         currentProductId,
-        timestamp: Date.now(),
         noSubscription: currentProductId === null
       };
 
@@ -71,21 +59,12 @@ export class SubscriptionCacheService {
   }
 
   /**
-   * Check if we have valid cached data (without returning the actual data)
+   * Check if we have cached data (without returning the actual data)
    */
   static async hasCachedData(): Promise<boolean> {
     try {
       const cachedData = await AsyncStorage.getItem(this.CACHE_KEY);
-      
-      if (!cachedData) {
-        return false;
-      }
-
-      const parsed: CachedSubscriptionData = JSON.parse(cachedData);
-      const now = Date.now();
-      
-      // Check if cache has expired
-      return (now - parsed.timestamp) <= this.CACHE_TTL;
+      return cachedData !== null;
     } catch (error) {
       console.error('SubscriptionCacheService: Error checking cache:', error);
       return false;

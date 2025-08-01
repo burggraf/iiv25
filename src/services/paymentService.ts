@@ -473,8 +473,9 @@ export class PaymentService {
   }
 
   /**
-   * Get the current active subscription product ID with caching
-   * First checks local cache, then falls back to App Store if needed
+   * Get the current active subscription product ID with persistent caching
+   * First checks local cache, then falls back to App Store if needed.
+   * Cache persists until manually cleared via purchases or restore operations.
    */
   static async getCurrentSubscriptionProductIdCached(): Promise<string | null> {
     try {
