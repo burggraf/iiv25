@@ -16,19 +16,29 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 // Mock React Native modules
-jest.mock('react-native', () => ({
-  Alert: {
-    alert: jest.fn(),
-  },
-  Platform: {
-    OS: 'ios',
-  },
-  NativeModules: {
-    RNIapAmazonModule: {},
-    RNIapModule: {},
-    RNIapIosModule: {},
-  },
-}));
+jest.mock('react-native', () => {
+  const RN = jest.requireActual('react-native');
+  return {
+    ...RN,
+    Alert: {
+      alert: jest.fn(),
+    },
+    Platform: {
+      OS: 'ios',
+      select: jest.fn(),
+    },
+    Dimensions: {
+      get: jest.fn(() => ({ width: 375, height: 812 })),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    },
+    NativeModules: {
+      RNIapAmazonModule: {},
+      RNIapModule: {},
+      RNIapIosModule: {},
+    },
+  };
+});
 
 // Mock the services - Note: Individual test files should mock services as needed
 // jest.mock('./src/services/productLookupService', () => ({

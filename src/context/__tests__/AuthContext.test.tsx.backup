@@ -31,23 +31,7 @@ const mockSupabase = {
 };
 
 jest.mock('../../services/supabaseClient', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(),
-      onAuthStateChange: jest.fn(),
-      signUp: jest.fn(),
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      resetPasswordForEmail: jest.fn(),
-      updateUser: jest.fn(),
-      signInAnonymously: jest.fn(),
-      signInWithOAuth: jest.fn(),
-      signInWithIdToken: jest.fn(),
-      refreshSession: jest.fn(),
-      exchangeCodeForSession: jest.fn(),
-      setSession: jest.fn(),
-    },
-  },
+  supabase: mockSupabase,
 }));
 
 // Mock additional services

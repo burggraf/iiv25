@@ -29,9 +29,11 @@ jest.mock('../deviceIdService', () => ({
 
 jest.mock('../productImageUrlService', () => ({
   ProductImageUrlService: {
-    resolveImageUrl: jest.fn().mockReturnValue('https://example.com/image.jpg'),
+    resolveImageUrl: jest.fn(),
   },
 }));
+
+const mockProductImageUrlService = jest.requireMock('../productImageUrlService').ProductImageUrlService;
 
 // Mock React Native polyfills and environment
 jest.mock('../../utils/rn-polyfill', () => ({}));
@@ -73,6 +75,9 @@ describe('ProductLookupService', () => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'log').mockImplementation(() => {});
+    
+    // Default mock behavior - return image URL
+    mockProductImageUrlService.resolveImageUrl.mockReturnValue('https://example.com/image.jpg');
   });
 
   afterEach(() => {
@@ -431,6 +436,324 @@ describe('ProductLookupService', () => {
       expect(result.product).toBeNull();
       expect(result.error).toBe(`Product not found for barcode: ${veryLongBarcode}`);
       expect(result.isRateLimited).toBe(false);
+    });
+  });
+
+  describe('Image handling scenarios', () => {
+    it('should fetch image from OpenFoodFacts when database has no image', async () => {
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        brand: mockProduct.brand,
+        ingredients: mockProduct.ingredients?.join(', '),
+        classification: 'vegan',
+        imageurl: undefined, // No image in database
+      };
+
+      const mockOFFProduct = {
+        ...mockProduct,
+        imageUrl: 'https://example.com/off-image.jpg',
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.VEGAN);
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.imageUrl).toBe('https://example.com/image.jpg'); // resolved via ProductImageUrlService mock
+      expect(mockOpenFoodFactsService.getProductByBarcode).toHaveBeenCalledWith(mockBarcode);
+    });
+
+    it('should handle image fetch error gracefully', async () => {
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        brand: mockProduct.brand,
+        ingredients: mockProduct.ingredients?.join(', '),
+        classification: 'vegan',
+        imageurl: undefined,
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.VEGAN);
+      mockOpenFoodFactsService.getProductByBarcode.mockRejectedValue(new Error('Image fetch failed'));
+      
+      // Mock resolveImageUrl to return undefined when no image available
+      mockProductImageUrlService.resolveImageUrl.mockReturnValue(undefined);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.imageUrl).toBeUndefined();
+      expect(result.error).toBeNull();
+    });
+
+    it('should handle OpenFoodFacts returning no image', async () => {
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        brand: mockProduct.brand,
+        ingredients: mockProduct.ingredients?.join(', '),
+        classification: 'vegan',
+        imageurl: undefined,
+      };
+
+      const mockOFFProduct = {
+        ...mockProduct,
+        imageUrl: undefined,
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.VEGAN);
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+      
+      // Mock resolveImageUrl to return undefined when no image available
+      mockProductImageUrlService.resolveImageUrl.mockReturnValue(undefined);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.imageUrl).toBeUndefined();
+    });
+  });
+
+  describe('Undetermined classification handling', () => {
+    it('should handle undetermined classification with existing ingredients', async () => {
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        brand: mockProduct.brand,
+        ingredients: 'water, salt, sugar',
+        classification: 'undetermined',
+        imageurl: 'https://example.com/image.jpg',
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.UNKNOWN);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.veganStatus).toBe(VeganStatus.UNKNOWN);
+      expect(result.product?.ingredients).toEqual(['water', 'salt', 'sugar']);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Product already has ingredients on file'));
+    });
+
+    it('should handle undetermined classification with no ingredients', async () => {
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        brand: mockProduct.brand,
+        ingredients: '',
+        classification: 'undetermined',
+        imageurl: 'https://example.com/image.jpg',
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.UNKNOWN);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.veganStatus).toBe(VeganStatus.UNKNOWN);
+      expect(result.product?.ingredients).toEqual([]);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('No ingredients found - scan option will be available'));
+    });
+  });
+
+  describe('Async product creation scenarios', () => {
+    it('should trigger async product creation for OpenFoodFacts products with ingredients', async () => {
+      const mockOFFProduct = {
+        ...mockProduct,
+        ingredients: ['water', 'salt'],
+        classificationMethod: 'text-based' as const,
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toEqual(mockOFFProduct);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Product has ingredients - creating with classification'));
+    });
+
+    it('should trigger basic product creation for OpenFoodFacts products without ingredients', async () => {
+      const mockOFFProduct = {
+        ...mockProduct,
+        ingredients: [],
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: null,
+        isRateLimited: false,
+      });
+
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toEqual(mockOFFProduct);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Product has no ingredients - creating basic record'));
+    });
+  });
+
+  describe('Edge function calls', () => {
+    it('should make edge function calls for async operations', async () => {
+      const { supabase } = jest.requireMock('../supabaseClient');
+      
+      // Test update product image async call
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        classification: 'vegan',
+        imageurl: undefined,
+      };
+
+      const mockOFFProduct = {
+        ...mockProduct,
+        imageUrl: 'https://example.com/image.jpg',
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.VEGAN);
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+
+      supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null });
+
+      await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      // Give async operations time to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('update-product-image-from-off', {
+        body: { upc: mockBarcode }
+      });
+    });
+
+    it('should handle edge function errors gracefully', async () => {
+      const { supabase } = jest.requireMock('../supabaseClient');
+      
+      const mockSupabaseProduct = {
+        ean13: mockBarcode,
+        product_name: mockProduct.name,
+        classification: 'vegan',
+        imageurl: undefined,
+      };
+
+      const mockOFFProduct = {
+        ...mockProduct,
+        imageUrl: 'https://example.com/image.jpg',
+      };
+
+      mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+        product: mockSupabaseProduct,
+        isRateLimited: false,
+      });
+
+      mockSupabaseService.getProductVeganStatus.mockReturnValue(VeganStatus.VEGAN);
+      mockOpenFoodFactsService.getProductByBarcode.mockResolvedValue(mockOFFProduct);
+
+      supabase.functions.invoke.mockResolvedValue({ data: null, error: { message: 'Function failed' } });
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeDefined();
+      expect(result.error).toBeNull(); // Edge function errors should not affect main flow
+    });
+  });
+
+  describe('Classification mapping', () => {
+    it('should map database classifications correctly through the service', async () => {
+      const testCases = [
+        { classification: 'vegan', expected: VeganStatus.VEGAN },
+        { classification: 'vegetarian', expected: VeganStatus.VEGETARIAN },
+        { classification: 'non-vegetarian', expected: VeganStatus.NOT_VEGETARIAN },
+        { classification: 'undetermined', expected: VeganStatus.UNKNOWN },
+        { classification: 'invalid', expected: VeganStatus.UNKNOWN },
+        { classification: undefined, expected: VeganStatus.UNKNOWN },
+      ];
+
+      for (const testCase of testCases) {
+        const mockSupabaseProduct = {
+          ean13: mockBarcode,
+          product_name: mockProduct.name,
+          classification: testCase.classification,
+        };
+
+        mockSupabaseService.searchProductByBarcode.mockResolvedValue({
+          product: mockSupabaseProduct,
+          isRateLimited: false,
+        });
+
+        mockSupabaseService.getProductVeganStatus.mockReturnValue(testCase.expected);
+
+        const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+        expect(result.product?.veganStatus).toBe(testCase.expected);
+        
+        jest.clearAllMocks();
+      }
+    });
+  });
+
+  describe('Error boundary testing', () => {
+    it('should handle service errors gracefully and fall back appropriately', async () => {
+      // Service errors are handled gracefully, not thrown to main catch
+      mockSupabaseService.searchProductByBarcode.mockRejectedValue(new Error('Database error'));
+      mockOpenFoodFactsService.getProductByBarcode.mockRejectedValue(new Error('API error'));
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toBe(`Product not found for barcode: ${mockBarcode}`);
+      expect(result.isRateLimited).toBe(false);
+    });
+
+    it('should handle both service failures gracefully', async () => {
+      // Both services fail but should not crash the main function
+      mockSupabaseService.searchProductByBarcode.mockRejectedValue(new Error('DB down'));
+      mockOpenFoodFactsService.getProductByBarcode.mockRejectedValue(new Error('API down'));
+
+      const result = await ProductLookupService.lookupProductByBarcode(mockBarcode);
+
+      expect(result.product).toBeNull();
+      expect(result.error).toBe(`Product not found for barcode: ${mockBarcode}`);
+      expect(result.isRateLimited).toBe(false);
+      
+      // Should log the individual service errors but not the main catch block
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Supabase lookup error'));
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('OpenFoodFacts lookup error'));
     });
   });
 });
