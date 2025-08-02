@@ -10,6 +10,7 @@ jest.mock('react-native-iap', () => ({
   endConnection: jest.fn(),
   getProducts: jest.fn(),
   requestSubscription: jest.fn(),
+  requestPurchase: jest.fn(),
   purchaseUpdatedListener: jest.fn(),
   purchaseErrorListener: jest.fn(),
   finishTransaction: jest.fn(),
@@ -52,11 +53,11 @@ describe('PaymentService', () => {
 
   describe('Product IDs', () => {
     it('should have correct subscription product IDs', () => {
-      expect(SUBSCRIPTION_PRODUCT_IDS.MONTHLY).toBe('isitvegan_premium_monthly');
-      expect(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY).toBe('isitvegan_premium_quarterly');
-      expect(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL).toBe('isitvegan_premium_semiannual');
-      expect(SUBSCRIPTION_PRODUCT_IDS.ANNUAL).toBe('isitvegan_premium_annual');
-      expect(SUBSCRIPTION_PRODUCT_IDS.LIFETIME).toBe('isitvegan_premium_lifetime');
+      expect(SUBSCRIPTION_PRODUCT_IDS.MONTHLY).toBe('iiv_standard_monthly');
+      expect(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY).toBe('iiv_standard_quarterly');
+      expect(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL).toBe('iiv_standard_semiannual');
+      expect(SUBSCRIPTION_PRODUCT_IDS.ANNUAL).toBe('iiv_standard_annual');
+      expect(SUBSCRIPTION_PRODUCT_IDS.LIFETIME).toBe('iiv_standard_lifetime');
     });
   });
 
@@ -138,8 +139,18 @@ describe('PaymentService', () => {
       const result = await PaymentService.initialize();
 
       expect(result).toBe(true);
-      expect(mockRNIap.getProducts).toHaveBeenCalledWith({
-        skus: Object.values(SUBSCRIPTION_PRODUCT_IDS),
+      // On Android, products are loaded separately for subscriptions and IAP
+      expect(mockRNIap.getProducts).toHaveBeenCalledTimes(2);
+      expect(mockRNIap.getProducts).toHaveBeenNthCalledWith(1, {
+        skus: [
+          SUBSCRIPTION_PRODUCT_IDS.MONTHLY,
+          SUBSCRIPTION_PRODUCT_IDS.QUARTERLY,
+          SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL,
+          SUBSCRIPTION_PRODUCT_IDS.ANNUAL,
+        ],
+      });
+      expect(mockRNIap.getProducts).toHaveBeenNthCalledWith(2, {
+        skus: [SUBSCRIPTION_PRODUCT_IDS.LIFETIME],
       });
     });
   });
@@ -167,6 +178,8 @@ describe('PaymentService', () => {
 
   describe('loadProducts', () => {
     it('should load and format products correctly', async () => {
+      (Platform as any).OS = 'ios'; // Use iOS for simpler single call
+      
       const mockProducts: Product[] = [
         {
           productId: SUBSCRIPTION_PRODUCT_IDS.MONTHLY,
@@ -176,13 +189,6 @@ describe('PaymentService', () => {
           localizedPrice: '$1.99',
           currency: 'USD',
           type: 'iap',
-          // introductoryPrice: '', // This property doesn't exist on Product type
-          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
-          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
         {
@@ -193,13 +199,6 @@ describe('PaymentService', () => {
           localizedPrice: '$19.99',
           currency: 'USD',
           type: 'iap',
-          // introductoryPrice: '', // This property doesn't exist on Product type
-          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
-          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];
@@ -309,7 +308,8 @@ describe('PaymentService', () => {
       const deviceId = 'test-device-id';
       const productId = SUBSCRIPTION_PRODUCT_IDS.LIFETIME;
 
-      mockRNIap.requestSubscription.mockRejectedValue(new Error('Purchase failed'));
+      // For LIFETIME products, it calls requestPurchase
+      mockRNIap.requestPurchase.mockRejectedValue(new Error('Purchase failed'));
 
       const result = await PaymentService.purchaseSubscription(productId, deviceId);
 
@@ -462,6 +462,8 @@ describe('PaymentService', () => {
     });
 
     it('should load products if cache is empty', async () => {
+      (Platform as any).OS = 'ios'; // Use iOS to avoid double getProducts calls
+      
       const mockProducts: Product[] = [
         {
           productId: SUBSCRIPTION_PRODUCT_IDS.ANNUAL,
@@ -470,14 +472,7 @@ describe('PaymentService', () => {
           price: '$9.99',
           localizedPrice: '$9.99',
           currency: 'USD',
-          type: 'iap', // Use 'iap' instead of 'subs' for subscription products
-          // introductoryPrice: '', // This property doesn't exist on Product type
-          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
-          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
-          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
-          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
+          type: 'iap',
           countryCode: 'US',
         },
       ];
@@ -537,27 +532,27 @@ describe('PaymentService', () => {
       const getSubscriptionInfo = (PaymentService as any).getSubscriptionInfo;
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.MONTHLY)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 30,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 90,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 180,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.ANNUAL)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 365,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.LIFETIME)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: -1,
       });
 
