@@ -32,6 +32,9 @@ describe('ProductCreationService', () => {
       callback();
       return {} as any;
     });
+    
+    // Ensure ProductImageUploadService.processProductImage returns a proper Promise
+    mockProductImageUploadService.processProductImage.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -145,11 +148,22 @@ describe('ProductCreationService', () => {
       const uploadError = new Error('Upload failed');
       mockProductImageUploadService.processProductImage.mockRejectedValue(uploadError);
 
+      // Let the setTimeout execute its callback in real time for this test
+      const originalSetTimeout = global.setTimeout;
+      jest.spyOn(global, 'setTimeout').mockImplementation((callback: Function, delay?: number) => {
+        // Execute immediately but still return promise
+        Promise.resolve().then(() => callback());
+        return {} as any;
+      });
+
       await ProductCreationService.createProductFromPhoto(
         mockImageBase64,
         mockUpc,
         mockImageUri
       );
+
+      // Wait for Promise chain to complete
+      await new Promise(resolve => originalSetTimeout(resolve, 10));
 
       expect(mockProductImageUploadService.processProductImage).toHaveBeenCalled();
       expect(console.error).toHaveBeenCalledWith(

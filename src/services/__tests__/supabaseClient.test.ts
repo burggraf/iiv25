@@ -1,12 +1,17 @@
-import { AppState, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
-
 // Mock dependencies before importing the module
+const mockAppStateAddEventListener = jest.fn();
+const mockAppStateRemoveEventListener = jest.fn();
+const mockCreateClient = jest.fn();
+const mockAsyncStorage = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+};
+
 jest.mock('react-native', () => ({
   AppState: {
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
+    addEventListener: mockAppStateAddEventListener,
+    removeEventListener: mockAppStateRemoveEventListener,
   },
   Platform: {
     OS: 'ios',
@@ -15,19 +20,34 @@ jest.mock('react-native', () => ({
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
-  default: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-  },
+  default: mockAsyncStorage,
 }));
 
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(),
+  createClient: mockCreateClient,
 }));
 
 jest.mock('../../utils/rn-polyfill', () => ({}));
 jest.mock('react-native-url-polyfill/auto', () => ({}));
+
+// Clear the global mock from jest-setup.js for this specific test file
+jest.unmock('../supabaseClient');
+
+import { AppState, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+
+// Helper to clear module cache and require fresh module
+function requireFreshModule() {
+  // Clear the module from require cache, including dependencies
+  const modulePath = require.resolve('../supabaseClient');
+  const polyfillPath = require.resolve('../../utils/rn-polyfill');
+  
+  delete require.cache[modulePath];
+  delete require.cache[polyfillPath];
+  
+  return require('../supabaseClient');
+}
 
 // Mock environment variables
 const mockEnv = {
@@ -46,11 +66,28 @@ describe('supabaseClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
+    // Reset Platform OS to default
+    (Platform as any).OS = 'ios';
+    
     // Mock environment variables
     process.env.EXPO_PUBLIC_SUPABASE_URL = mockEnv.EXPO_PUBLIC_SUPABASE_URL;
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = mockEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
     
-    (createClient as jest.Mock).mockReturnValue(mockSupabaseInstance);
+    // Reset the mock implementation to default success
+    mockCreateClient.mockReturnValue(mockSupabaseInstance);
+    
+    // Clear module cache to ensure fresh imports
+    const modulePath = require.resolve('../supabaseClient');
+    delete require.cache[modulePath];
+    try {
+      const polyfillPath = require.resolve('../../utils/rn-polyfill');
+      delete require.cache[polyfillPath];
+    } catch (e) {
+      // Polyfill might not exist, ignore
+    }
+    
+    // Clear window mock
+    delete (global as any).window;
   });
 
   afterEach(() => {
@@ -64,44 +101,46 @@ describe('supabaseClient', () => {
 
   describe('Environment validation', () => {
     it('should throw error when SUPABASE_URL is missing', () => {
+      // Set environment variables
       delete process.env.EXPO_PUBLIC_SUPABASE_URL;
+      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = mockEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       
       expect(() => {
-        jest.resetModules();
-        require('../supabaseClient');
+        requireFreshModule();
       }).toThrow('Missing Supabase environment variables. Please check your .env file.');
     });
 
     it('should throw error when SUPABASE_ANON_KEY is missing', () => {
+      // Set environment variables
+      process.env.EXPO_PUBLIC_SUPABASE_URL = mockEnv.EXPO_PUBLIC_SUPABASE_URL;
       delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       
       expect(() => {
-        jest.resetModules();
-        require('../supabaseClient');
+        requireFreshModule();
       }).toThrow('Missing Supabase environment variables. Please check your .env file.');
     });
 
     it('should throw error when both environment variables are missing', () => {
+      // Set environment variables
       delete process.env.EXPO_PUBLIC_SUPABASE_URL;
       delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       
       expect(() => {
-        jest.resetModules();
-        require('../supabaseClient');
+        requireFreshModule();
       }).toThrow('Missing Supabase environment variables. Please check your .env file.');
     });
   });
 
   describe('Client initialization', () => {
     it('should create Supabase client with correct configuration', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(createClient).toHaveBeenCalledWith(
+      expect(mockCreateClient).toHaveBeenCalledWith(
         mockEnv.EXPO_PUBLIC_SUPABASE_URL,
         mockEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY,
         {
           auth: {
-            storage: expect.any(Object),
+            storage: mockAsyncStorage,
             autoRefreshToken: true,
             persistSession: true,
             detectSessionInUrl: false, // Platform.OS is 'ios' by default
@@ -119,7 +158,7 @@ describe('supabaseClient', () => {
     });
 
     it('should export supabase client instance', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
       expect(supabase).toBeDefined();
       expect(supabase.auth.startAutoRefresh).toBeDefined();
@@ -134,14 +173,14 @@ describe('supabaseClient', () => {
       });
 
       it('should use AsyncStorage for React Native platforms', () => {
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
         
-        expect(createClient).toHaveBeenCalledWith(
+        expect(mockCreateClient).toHaveBeenCalledWith(
           expect.any(String),
           expect.any(String),
           expect.objectContaining({
             auth: expect.objectContaining({
-              storage: AsyncStorage,
+              storage: mockAsyncStorage,
             }),
           })
         );
@@ -164,25 +203,27 @@ describe('supabaseClient', () => {
 
       afterEach(() => {
         delete (global as any).window;
+        // Reset Platform OS back to default
+        (Platform as any).OS = 'ios';
       });
 
       it('should use localStorage adapter for web platform', () => {
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
         
-        const createClientCall = (createClient as jest.Mock).mock.calls[0];
+        const createClientCall = mockCreateClient.mock.calls[0];
         const config = createClientCall[2];
         const storage = config.auth.storage;
         
-        expect(storage).not.toBe(AsyncStorage);
+        expect(storage).not.toBe(mockAsyncStorage);
         expect(typeof storage.getItem).toBe('function');
         expect(typeof storage.setItem).toBe('function');
         expect(typeof storage.removeItem).toBe('function');
       });
 
       it('should configure detectSessionInUrl for web platform', () => {
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
         
-        expect(createClient).toHaveBeenCalledWith(
+        expect(mockCreateClient).toHaveBeenCalledWith(
           expect.any(String),
           expect.any(String),
           expect.objectContaining({
@@ -194,9 +235,9 @@ describe('supabaseClient', () => {
       });
 
       it('should handle localStorage operations correctly', async () => {
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
         
-        const createClientCall = (createClient as jest.Mock).mock.calls[0];
+        const createClientCall = mockCreateClient.mock.calls[0];
         const config = createClientCall[2];
         const storage = config.auth.storage;
         
@@ -218,9 +259,9 @@ describe('supabaseClient', () => {
       it('should handle missing window object gracefully', async () => {
         delete (global as any).window;
         
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
         
-        const createClientCall = (createClient as jest.Mock).mock.calls[0];
+        const createClientCall = mockCreateClient.mock.calls[0];
         const config = createClientCall[2];
         const storage = config.auth.storage;
         
@@ -242,9 +283,9 @@ describe('supabaseClient', () => {
     });
 
     it('should register AppState listener for non-web platforms', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(AppState.addEventListener).toHaveBeenCalledWith(
+      expect(mockAppStateAddEventListener).toHaveBeenCalledWith(
         'change',
         expect.any(Function)
       );
@@ -252,16 +293,17 @@ describe('supabaseClient', () => {
 
     it('should not register AppState listener for web platform', () => {
       (Platform as any).OS = 'web';
+      jest.clearAllMocks(); // Clear previous calls from other tests
       
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(AppState.addEventListener).not.toHaveBeenCalled();
+      expect(mockAppStateAddEventListener).not.toHaveBeenCalled();
     });
 
     it('should start auto refresh when app becomes active', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      const listenerCall = (AppState.addEventListener as jest.Mock).mock.calls[0];
+      const listenerCall = mockAppStateAddEventListener.mock.calls[0];
       const stateChangeHandler = listenerCall[1];
       
       // Simulate app becoming active
@@ -272,9 +314,9 @@ describe('supabaseClient', () => {
     });
 
     it('should stop auto refresh when app becomes inactive', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      const listenerCall = (AppState.addEventListener as jest.Mock).mock.calls[0];
+      const listenerCall = mockAppStateAddEventListener.mock.calls[0];
       const stateChangeHandler = listenerCall[1];
       
       // Simulate app becoming inactive
@@ -285,9 +327,9 @@ describe('supabaseClient', () => {
     });
 
     it('should stop auto refresh when app goes to background', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      const listenerCall = (AppState.addEventListener as jest.Mock).mock.calls[0];
+      const listenerCall = mockAppStateAddEventListener.mock.calls[0];
       const stateChangeHandler = listenerCall[1];
       
       // Simulate app going to background
@@ -298,9 +340,9 @@ describe('supabaseClient', () => {
     });
 
     it('should handle multiple state changes correctly', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      const listenerCall = (AppState.addEventListener as jest.Mock).mock.calls[0];
+      const listenerCall = mockAppStateAddEventListener.mock.calls[0];
       const stateChangeHandler = listenerCall[1];
       
       // Test sequence: active -> background -> active
@@ -317,9 +359,9 @@ describe('supabaseClient', () => {
 
   describe('Configuration validation', () => {
     it('should configure PKCE flow correctly', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(createClient).toHaveBeenCalledWith(
+      expect(mockCreateClient).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
         expect.objectContaining({
@@ -331,9 +373,9 @@ describe('supabaseClient', () => {
     });
 
     it('should enable auto refresh and persist session', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(createClient).toHaveBeenCalledWith(
+      expect(mockCreateClient).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
         expect.objectContaining({
@@ -346,9 +388,9 @@ describe('supabaseClient', () => {
     });
 
     it('should set correct client headers', () => {
-      const { supabase } = require('../supabaseClient');
+      const { supabase } = requireFreshModule();
       
-      expect(createClient).toHaveBeenCalledWith(
+      expect(mockCreateClient).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
         expect.objectContaining({
@@ -364,13 +406,12 @@ describe('supabaseClient', () => {
 
   describe('Error handling', () => {
     it('should handle createClient errors gracefully', () => {
-      (createClient as jest.Mock).mockImplementation(() => {
+      mockCreateClient.mockImplementation(() => {
         throw new Error('Failed to create client');
       });
       
       expect(() => {
-        jest.resetModules();
-        require('../supabaseClient');
+        requireFreshModule();
       }).toThrow('Failed to create client');
     });
 
@@ -380,8 +421,7 @@ describe('supabaseClient', () => {
       process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = '';
       
       expect(() => {
-        jest.resetModules();
-        require('../supabaseClient');
+        requireFreshModule();
       }).toThrow('Missing Supabase environment variables. Please check your .env file.');
     });
   });
@@ -390,15 +430,17 @@ describe('supabaseClient', () => {
     it('should import required polyfills', () => {
       // The module should import without errors, indicating polyfills are loaded
       expect(() => {
-        const { supabase } = require('../supabaseClient');
+        const { supabase } = requireFreshModule();
       }).not.toThrow();
     });
 
     it('should be importable multiple times', () => {
-      const { supabase: supabase1 } = require('../supabaseClient');
+      const { supabase: supabase1 } = requireFreshModule();
+      // Clear and require again to test caching
+      const modulePath = require.resolve('../supabaseClient');
       const { supabase: supabase2 } = require('../supabaseClient');
       
-      // Should return the same instance
+      // Should return the same instance (cached)
       expect(supabase1).toBe(supabase2);
     });
   });
