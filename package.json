@@ -90,6 +90,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
+    "jest-transform-stub": "^2.0.0",
     "react-test-renderer": "^19.0.0",
     "ts-jest": "^29.4.0",
     "typescript": "~5.8.3"

@@ -141,7 +141,7 @@ export class ProductImageUploadService {
         console.error('Error uploading to Supabase:', uploadError);
         return {
           success: false,
-          error: `Upload failed: ${uploadError.message}`
+          error: `Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`
         };
       }
 

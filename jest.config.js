@@ -13,6 +13,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss)$': 'identity-obj-proxy',
+    '\\.(png|jpg|jpeg|gif|svg)$': 'jest-transform-stub',
   },
   transform: {
     '^.+\\.(ts|tsx)$': [
@@ -26,7 +27,7 @@ module.exports = {
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|expo|@expo|@supabase|@testing-library)/)',
+    'node_modules/(?!(react-native|@react-native|expo|@expo|@supabase|@testing-library|expo-image|expo-av|expo-haptics|expo-camera|expo-image-manipulator)/)',
   ],
   collectCoverage: false,
   coverageDirectory: 'coverage',

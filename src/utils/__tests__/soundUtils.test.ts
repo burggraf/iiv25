@@ -1,6 +1,5 @@
-import { playSuccessSound, playErrorSound, playWarningSound } from '../soundUtils';
+import { SoundUtils } from '../soundUtils';
 import { Audio } from 'expo-av';
-import { Haptics } from 'expo-haptics';
 
 // Mock expo-av
 jest.mock('expo-av', () => ({
@@ -12,20 +11,10 @@ jest.mock('expo-av', () => ({
   },
 }));
 
-// Mock expo-haptics
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: {
-    Light: 'light',
-    Medium: 'medium',
-    Heavy: 'heavy',
-  },
-}));
+const mockCreateAsync = (Audio.Sound.createAsync as jest.Mock);
+const mockSetAudioModeAsync = (Audio.setAudioModeAsync as jest.Mock);
 
-const mockAudio = Audio as jest.Mocked<typeof Audio>;
-const mockHaptics = Haptics as jest.Mocked<typeof Haptics>;
-
-describe('soundUtils', () => {
+describe('SoundUtils', () => {
   const mockSound = {
     playAsync: jest.fn(),
     unloadAsync: jest.fn(),
@@ -34,208 +23,166 @@ describe('soundUtils', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAudio.Sound.createAsync.mockResolvedValue({ sound: mockSound, status: {} } as any);
-    mockAudio.setAudioModeAsync.mockResolvedValue();
-    mockHaptics.impactAsync.mockResolvedValue();
+    // Reset initialization state
+    (SoundUtils as any).isInitialized = false;
+    
+    mockCreateAsync.mockResolvedValue({ sound: mockSound, status: {} } as any);
+    mockSetAudioModeAsync.mockResolvedValue(undefined);
     mockSound.playAsync.mockResolvedValue({} as any);
     mockSound.unloadAsync.mockResolvedValue({} as any);
     mockSound.setVolumeAsync.mockResolvedValue({} as any);
   });
 
-  describe('playSuccessSound', () => {
-    it('should play success sound and haptic feedback', async () => {
-      await playSuccessSound();
+  describe('initializeBeepSound', () => {
+    it('should initialize audio mode correctly', async () => {
+      await SoundUtils.initializeBeepSound();
 
-      expect(mockAudio.setAudioModeAsync).toHaveBeenCalledWith({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-      expect(mockAudio.Sound.createAsync).toHaveBeenCalled();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.5);
-      expect(mockSound.playAsync).toHaveBeenCalled();
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-      expect(mockHaptics.impactAsync).toHaveBeenCalledWith(mockHaptics.ImpactFeedbackStyle.Light);
-    });
-
-    it('should handle audio creation failure gracefully', async () => {
-      mockAudio.Sound.createAsync.mockRejectedValue(new Error('Audio creation failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await playSuccessSound();
-
-      expect(console.warn).toHaveBeenCalledWith('Failed to play success sound:', expect.any(Error));
-      expect(mockHaptics.impactAsync).toHaveBeenCalledWith(mockHaptics.ImpactFeedbackStyle.Light);
-
-      jest.restoreAllMocks();
-    });
-
-    it('should handle sound play failure gracefully', async () => {
-      mockSound.playAsync.mockRejectedValue(new Error('Play failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await playSuccessSound();
-
-      expect(console.warn).toHaveBeenCalledWith('Failed to play success sound:', expect.any(Error));
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-
-      jest.restoreAllMocks();
-    });
-
-    it('should handle haptic feedback failure gracefully', async () => {
-      mockHaptics.impactAsync.mockRejectedValue(new Error('Haptic failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await playSuccessSound();
-
-      expect(mockSound.playAsync).toHaveBeenCalled();
-      expect(console.warn).toHaveBeenCalledWith('Failed to play haptic feedback:', expect.any(Error));
-
-      jest.restoreAllMocks();
-    });
-  });
-
-  describe('playErrorSound', () => {
-    it('should play error sound and haptic feedback', async () => {
-      await playErrorSound();
-
-      expect(mockAudio.setAudioModeAsync).toHaveBeenCalledWith({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-      expect(mockAudio.Sound.createAsync).toHaveBeenCalled();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.3);
-      expect(mockSound.playAsync).toHaveBeenCalled();
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-      expect(mockHaptics.impactAsync).toHaveBeenCalledWith(mockHaptics.ImpactFeedbackStyle.Medium);
-    });
-
-    it('should handle all failures gracefully', async () => {
-      mockAudio.Sound.createAsync.mockRejectedValue(new Error('Audio failed'));
-      mockHaptics.impactAsync.mockRejectedValue(new Error('Haptic failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await playErrorSound();
-
-      expect(console.warn).toHaveBeenCalledWith('Failed to play error sound:', expect.any(Error));
-      expect(console.warn).toHaveBeenCalledWith('Failed to play haptic feedback:', expect.any(Error));
-
-      jest.restoreAllMocks();
-    });
-  });
-
-  describe('playWarningSound', () => {
-    it('should play warning sound and haptic feedback', async () => {
-      await playWarningSound();
-
-      expect(mockAudio.setAudioModeAsync).toHaveBeenCalledWith({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-      expect(mockAudio.Sound.createAsync).toHaveBeenCalled();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.4);
-      expect(mockSound.playAsync).toHaveBeenCalled();
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-      expect(mockHaptics.impactAsync).toHaveBeenCalledWith(mockHaptics.ImpactFeedbackStyle.Light);
-    });
-
-    it('should handle warning sound playback failure', async () => {
-      mockSound.playAsync.mockRejectedValue(new Error('Warning play failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await playWarningSound();
-
-      expect(console.warn).toHaveBeenCalledWith('Failed to play warning sound:', expect.any(Error));
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-
-      jest.restoreAllMocks();
-    });
-  });
-
-  describe('Volume levels', () => {
-    it('should set correct volume for success sound', async () => {
-      await playSuccessSound();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.5);
-    });
-
-    it('should set correct volume for error sound', async () => {
-      await playErrorSound();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.3);
-    });
-
-    it('should set correct volume for warning sound', async () => {
-      await playWarningSound();
-      expect(mockSound.setVolumeAsync).toHaveBeenCalledWith(0.4);
-    });
-  });
-
-  describe('Audio mode configuration', () => {
-    it('should configure audio mode for iOS silent mode', async () => {
-      await playSuccessSound();
-
-      expect(mockAudio.setAudioModeAsync).toHaveBeenCalledWith({
-        playsInSilentModeIOS: true,
+      expect(mockSetAudioModeAsync).toHaveBeenCalledWith({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
         staysActiveInBackground: false,
       });
     });
 
-    it('should handle audio mode configuration failure', async () => {
-      mockAudio.setAudioModeAsync.mockRejectedValue(new Error('Audio mode failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should not initialize twice', async () => {
+      await SoundUtils.initializeBeepSound();
+      await SoundUtils.initializeBeepSound();
 
-      await playSuccessSound();
+      expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
+    });
 
-      // Should continue despite audio mode failure
-      expect(mockAudio.Sound.createAsync).toHaveBeenCalled();
+    it('should handle initialization errors gracefully', async () => {
+      mockSetAudioModeAsync.mockRejectedValue(new Error('Audio init failed'));
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      await SoundUtils.initializeBeepSound();
+
+      expect(console.log).toHaveBeenCalledWith('Error initializing audio:', expect.any(Error));
 
       jest.restoreAllMocks();
     });
   });
 
-  describe('Sound cleanup', () => {
-    it('should unload sound after playing', async () => {
-      await playSuccessSound();
+  describe('playBeep', () => {
+    it('should play beep sound correctly', async () => {
+      await SoundUtils.playBeep();
 
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
+      expect(mockSetAudioModeAsync).toHaveBeenCalled();
+      expect(mockCreateAsync).toHaveBeenCalledWith(
+        { uri: expect.stringContaining('data:audio/wav;base64,') },
+        {
+          shouldPlay: true,
+          volume: 0.3,
+          isLooping: false,
+        }
+      );
     });
 
-    it('should unload sound even if play fails', async () => {
-      mockSound.playAsync.mockRejectedValue(new Error('Play failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should initialize audio if not already initialized', async () => {
+      await SoundUtils.playBeep();
 
-      await playSuccessSound();
+      expect(mockSetAudioModeAsync).toHaveBeenCalled();
+      expect(mockCreateAsync).toHaveBeenCalled();
+    });
 
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
+    it('should handle beep sound creation failure gracefully', async () => {
+      mockCreateAsync.mockRejectedValue(new Error('Sound creation failed'));
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      await SoundUtils.playBeep();
+
+      expect(console.log).toHaveBeenCalledWith('Error playing beep sound:', expect.any(Error));
 
       jest.restoreAllMocks();
     });
 
-    it('should handle unload failure gracefully', async () => {
+    it('should unload sound after delay', async () => {
+      jest.useFakeTimers();
+
+      await SoundUtils.playBeep();
+
+      // Fast-forward time
+      jest.advanceTimersByTime(500);
+
+      await Promise.resolve(); // Let any pending promises resolve
+
+      expect(mockSound.unloadAsync).toHaveBeenCalled();
+
+      jest.useRealTimers();
+    });
+
+    it('should handle sound unload errors gracefully', async () => {
+      jest.useFakeTimers();
       mockSound.unloadAsync.mockRejectedValue(new Error('Unload failed'));
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await playSuccessSound();
+      await SoundUtils.playBeep();
 
-      expect(mockSound.unloadAsync).toHaveBeenCalled();
-      // Should not throw or crash
+      // Fast-forward time
+      jest.advanceTimersByTime(500);
 
+      await Promise.resolve(); // Let any pending promises resolve
+
+      expect(console.log).toHaveBeenCalledWith('Error unloading beep sound:', expect.any(Error));
+
+      jest.useRealTimers();
       jest.restoreAllMocks();
     });
   });
 
-  describe('Concurrent sound playing', () => {
-    it('should handle multiple concurrent sound plays', async () => {
+  describe('cleanup', () => {
+    it('should reset initialization state', async () => {
+      // Initialize first
+      await SoundUtils.initializeBeepSound();
+      
+      // Cleanup
+      await SoundUtils.cleanup();
+      
+      // Should initialize again since state was reset
+      await SoundUtils.initializeBeepSound();
+      
+      expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('generateBeepDataUri', () => {
+    it('should generate a valid data URI for beep sound', async () => {
+      await SoundUtils.playBeep();
+
+      const createAsyncCall = mockCreateAsync.mock.calls[0];
+      const audioSource = createAsyncCall[0] as { uri: string };
+      
+      expect(audioSource.uri).toMatch(/^data:audio\/wav;base64,/);
+      expect(audioSource.uri.length).toBeGreaterThan(50); // Should have meaningful content
+    });
+  });
+
+  describe('multiple concurrent beep calls', () => {
+    it('should handle multiple concurrent beep calls without errors', async () => {
       const promises = [
-        playSuccessSound(),
-        playErrorSound(),
-        playWarningSound(),
+        SoundUtils.playBeep(),
+        SoundUtils.playBeep(),
+        SoundUtils.playBeep(),
       ];
 
       await Promise.all(promises);
 
-      expect(mockAudio.Sound.createAsync).toHaveBeenCalledTimes(3);
-      expect(mockSound.playAsync).toHaveBeenCalledTimes(3);
-      expect(mockSound.unloadAsync).toHaveBeenCalledTimes(3);
-      expect(mockHaptics.impactAsync).toHaveBeenCalledTimes(3);
+      expect(mockCreateAsync).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('audio configuration', () => {
+    it('should set correct audio parameters', async () => {
+      await SoundUtils.playBeep();
+
+      const createAsyncCall = mockCreateAsync.mock.calls[0];
+      const audioConfig = createAsyncCall[1];
+      
+      expect(audioConfig).toEqual({
+        shouldPlay: true,
+        volume: 0.3,
+        isLooping: false,
+      });
     });
   });
 });
