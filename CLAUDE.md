@@ -134,3 +134,12 @@ src/
 - `/src/types/index.ts`: Complete type definitions
 - `/src/context/AuthContext.tsx`: Authentication state management
 - `app.json` & `eas.json`: Build and deployment configuration
+
+## Available Claude Agents
+
+- **react-native-specialist**: Mobile development, barcode scanning, cross-platform features
+- **api-integration-specialist**: Supabase, Open Food Facts API, payment integrations  
+- **testing-specialist**: Jest testing and quality assurance
+- **deployment-specialist**: EAS builds and app store submissions
+
+Usage: `> Use [agent-name] to [describe task]`
