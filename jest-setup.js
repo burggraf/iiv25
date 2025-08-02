@@ -23,14 +23,19 @@ jest.mock('react-native', () => ({
   Platform: {
     OS: 'ios',
   },
-}));
-
-// Mock the services
-jest.mock('./src/services/productLookupService', () => ({
-  ProductLookupService: {
-    lookupProductByBarcode: jest.fn(),
+  NativeModules: {
+    RNIapAmazonModule: {},
+    RNIapModule: {},
+    RNIapIosModule: {},
   },
 }));
+
+// Mock the services - Note: Individual test files should mock services as needed
+// jest.mock('./src/services/productLookupService', () => ({
+//   ProductLookupService: {
+//     lookupProductByBarcode: jest.fn(),
+//   },
+// }));
 
 jest.mock('./src/services/supabaseClient', () => ({
   supabase: {
@@ -51,5 +56,45 @@ jest.mock('./src/services/supabaseClient', () => ({
       invoke: jest.fn(),
     },
     rpc: jest.fn(),
+  },
+}));
+
+// Mock react-native-iap
+jest.mock('react-native-iap', () => ({
+  initConnection: jest.fn(),
+  endConnection: jest.fn(),
+  getProducts: jest.fn(),
+  requestSubscription: jest.fn(),
+  purchaseUpdatedListener: jest.fn(),
+  purchaseErrorListener: jest.fn(),
+  finishTransaction: jest.fn(),
+  getAvailablePurchases: jest.fn(),
+  clearTransactionIOS: jest.fn(),
+}));
+
+// Mock expo-constants
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    appOwnership: 'standalone',
+    debugMode: false,
+    experienceUrl: '',
+    expoVersion: '1.0.0',
+    installationId: 'test-installation-id',
+    isDevice: true,
+    manifest: {},
+    platform: {
+      ios: {
+        buildNumber: '1',
+        bundleIdentifier: 'com.test.app',
+        platform: 'ios',
+        userInterfaceIdiom: 'phone',
+        systemVersion: '15.0',
+      },
+    },
+    sessionId: 'test-session-id',
+    statusBarHeight: 20,
+    systemFonts: [],
+    systemVersion: '15.0',
   },
 }));

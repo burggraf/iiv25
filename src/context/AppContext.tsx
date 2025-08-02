@@ -71,7 +71,7 @@ export function AppProvider({ children }: AppProviderProps) {
           }));
           setHistoryItems(historyWithDates);
           // Also set scanHistory for backward compatibility
-          setScanHistory(historyWithDates.map(item => item.cachedProduct));
+          setScanHistory(historyWithDates.map((item: HistoryItem) => item.cachedProduct));
         } else {
           // Old format - Product[] - migrate to new format
           const historyWithDates = history.map((item: any) => ({

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import { BarcodeScanner } from '../../components/BarcodeScanner';
-import { ProductResult } from '../../components/ProductResult';
+import BarcodeScanner from '../../components/BarcodeScanner';
+import ProductResult from '../../components/ProductResult';
 import { ProductLookupService } from '../../services/productLookupService';
 import { VeganStatus, Product } from '../../types';
 import { AuthProvider } from '../../context/AuthContext';
@@ -143,6 +143,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
@@ -150,7 +151,7 @@ describe('Scanner Flow Integration', () => {
         }
 
         if (product && showResult) {
-          return <ProductResult product={product} />;
+          return <ProductResult product={product} onBack={() => setScanning(true)} />;
         }
 
         return null;
@@ -214,13 +215,14 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
           );
         }
 
-        return product ? <ProductResult product={product} /> : null;
+        return product ? <ProductResult product={product} onBack={() => {}} /> : null;
       };
 
       renderWithProviders(<TestVegetarianFlow />);
@@ -234,7 +236,7 @@ describe('Scanner Flow Integration', () => {
       });
 
       // Re-render with the product
-      renderWithProviders(<ProductResult product={mockVegetarianProduct} />);
+      renderWithProviders(<ProductResult product={mockVegetarianProduct} onBack={() => {}} />);
 
       // Verify vegetarian product display
       expect(screen.getByText('Cheese Pizza')).toBeTruthy();
@@ -254,7 +256,7 @@ describe('Scanner Flow Integration', () => {
         isRateLimited: false,
       });
 
-      renderWithProviders(<ProductResult product={mockNonVegetarianProduct} />);
+      renderWithProviders(<ProductResult product={mockNonVegetarianProduct} onBack={() => {}} />);
 
       // Verify non-vegetarian product display
       expect(screen.getByText('Beef Jerky')).toBeTruthy();
@@ -295,6 +297,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
@@ -342,6 +345,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
@@ -385,6 +389,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
@@ -427,6 +432,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={() => setScanning(false)}
             />
@@ -479,6 +485,7 @@ describe('Scanner Flow Integration', () => {
         if (scanning) {
           return (
             <BarcodeScanner
+              isVisible={true}
               onBarcodeScanned={handleBarcodeScanned}
               onClose={handleClose}
             />

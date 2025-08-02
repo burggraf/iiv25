@@ -71,13 +71,13 @@ describe('PaymentService', () => {
           localizedPrice: '$1.99',
           currency: 'USD',
           type: 'iap',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];
@@ -115,17 +115,17 @@ describe('PaymentService', () => {
           productId: SUBSCRIPTION_PRODUCT_IDS.ANNUAL,
           title: 'Annual Premium',
           price: '$9.99',
-          type: 'subs',
+          type: 'iap', // Use 'iap' instead of 'subs' for subscription products
           description: 'Annual subscription',
           localizedPrice: '$9.99',
           currency: 'USD',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];
@@ -176,13 +176,13 @@ describe('PaymentService', () => {
           localizedPrice: '$1.99',
           currency: 'USD',
           type: 'iap',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
         {
@@ -193,13 +193,13 @@ describe('PaymentService', () => {
           localizedPrice: '$19.99',
           currency: 'USD',
           type: 'iap',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];
@@ -247,14 +247,14 @@ describe('PaymentService', () => {
           price: '$4.99',
           localizedPrice: '$4.99',
           currency: 'USD',
-          type: 'subs',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          type: 'iap', // Use 'iap' instead of 'subs' for subscription products
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];
@@ -341,13 +341,13 @@ describe('PaymentService', () => {
         {
           productId: SUBSCRIPTION_PRODUCT_IDS.ANNUAL,
           transactionId: 'txn-123',
-          transactionDate: Date.now().toString(),
+          transactionDate: Date.now(), // Should be a number, not a string
           transactionReceipt: 'receipt-123',
           purchaseToken: 'token-123',
           dataAndroid: '{}',
           signatureAndroid: 'signature',
           isAcknowledgedAndroid: true,
-          originalTransactionDateIOS: '',
+          originalTransactionDateIOS: Date.now(), // Should be a number, not a string
           originalTransactionIdentifierIOS: '',
           developerPayloadAndroid: '',
           obfuscatedAccountIdAndroid: '',
@@ -357,13 +357,13 @@ describe('PaymentService', () => {
         {
           productId: SUBSCRIPTION_PRODUCT_IDS.LIFETIME,
           transactionId: 'txn-456',
-          transactionDate: Date.now().toString(),
+          transactionDate: Date.now(), // Should be a number, not a string
           transactionReceipt: 'receipt-456',
           purchaseToken: 'token-456',
           dataAndroid: '{}',
           signatureAndroid: 'signature',
           isAcknowledgedAndroid: true,
-          originalTransactionDateIOS: '',
+          originalTransactionDateIOS: Date.now(), // Should be a number, not a string
           originalTransactionIdentifierIOS: '',
           developerPayloadAndroid: '',
           obfuscatedAccountIdAndroid: '',
@@ -470,14 +470,14 @@ describe('PaymentService', () => {
           price: '$9.99',
           localizedPrice: '$9.99',
           currency: 'USD',
-          type: 'subs',
-          introductoryPrice: '',
-          introductoryPriceAsAmountIOS: '',
-          introductoryPricePaymentModeIOS: '',
-          introductoryPriceNumberOfPeriodsIOS: '',
-          introductoryPriceSubscriptionPeriodIOS: '',
-          subscriptionPeriodNumberIOS: '',
-          subscriptionPeriodUnitIOS: '',
+          type: 'iap', // Use 'iap' instead of 'subs' for subscription products
+          // introductoryPrice: '', // This property doesn't exist on Product type
+          // introductoryPriceAsAmountIOS: '', // This property doesn't exist on Product type
+          // introductoryPricePaymentModeIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceNumberOfPeriodsIOS: '', // This property doesn't exist on Product type
+          // introductoryPriceSubscriptionPeriodIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodNumberIOS: '', // This property doesn't exist on Product type
+          // subscriptionPeriodUnitIOS: '', // This property doesn't exist on Product type
           countryCode: 'US',
         },
       ];

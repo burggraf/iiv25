@@ -59,8 +59,8 @@ describe('useDeviceId', () => {
       expect(result.current).toBe(mockDeviceId);
     });
 
-    // Re-render the hook
-    rerender();
+    // Re-render the hook (props not needed for this hook)
+    rerender({});
 
     // Should still have the same device ID and only called once
     expect(result.current).toBe(mockDeviceId);

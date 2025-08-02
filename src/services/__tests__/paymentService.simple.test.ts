@@ -4,11 +4,11 @@ import { PaymentService, SUBSCRIPTION_PRODUCT_IDS } from '../paymentService';
 describe('PaymentService - Simple Tests', () => {
   describe('Product IDs', () => {
     it('should have correct subscription product IDs', () => {
-      expect(SUBSCRIPTION_PRODUCT_IDS.MONTHLY).toBe('isitvegan_premium_monthly');
-      expect(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY).toBe('isitvegan_premium_quarterly');
-      expect(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL).toBe('isitvegan_premium_semiannual');
-      expect(SUBSCRIPTION_PRODUCT_IDS.ANNUAL).toBe('isitvegan_premium_annual');
-      expect(SUBSCRIPTION_PRODUCT_IDS.LIFETIME).toBe('isitvegan_premium_lifetime');
+      expect(SUBSCRIPTION_PRODUCT_IDS.MONTHLY).toBe('iiv_standard_monthly');
+      expect(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY).toBe('iiv_standard_quarterly');
+      expect(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL).toBe('iiv_standard_semiannual');
+      expect(SUBSCRIPTION_PRODUCT_IDS.ANNUAL).toBe('iiv_standard_annual');
+      expect(SUBSCRIPTION_PRODUCT_IDS.LIFETIME).toBe('iiv_standard_lifetime');
     });
   });
 
@@ -17,27 +17,27 @@ describe('PaymentService - Simple Tests', () => {
       const getSubscriptionInfo = (PaymentService as any).getSubscriptionInfo;
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.MONTHLY)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 30,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.QUARTERLY)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 90,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.SEMIANNUAL)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 180,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.ANNUAL)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: 365,
       });
 
       expect(getSubscriptionInfo(SUBSCRIPTION_PRODUCT_IDS.LIFETIME)).toEqual({
-        level: 'premium',
+        level: 'standard',
         duration: -1,
       });
 

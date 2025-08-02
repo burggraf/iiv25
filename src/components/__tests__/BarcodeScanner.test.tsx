@@ -1,11 +1,14 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import { BarcodeScanner } from '../BarcodeScanner';
+import BarcodeScanner from '../BarcodeScanner';
 import { CameraView } from 'expo-camera';
 
 // Mock expo-camera
 jest.mock('expo-camera', () => ({
-  CameraView: jest.fn(() => null),
+  CameraView: jest.fn(),
+  Camera: {
+    requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  },
   useCameraPermissions: jest.fn(() => [
     { granted: true, canAskAgain: true },
     jest.fn(),
@@ -20,7 +23,7 @@ jest.mock('expo-haptics', () => ({
   },
 }));
 
-const mockCameraView = CameraView as jest.MockedFunction<typeof CameraView>;
+const mockCameraView = CameraView as jest.MockedFunction<any>;
 
 describe('BarcodeScanner', () => {
   const mockOnBarcodeScanned = jest.fn();
@@ -28,15 +31,15 @@ describe('BarcodeScanner', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCameraView.mockImplementation(({ onBarcodeScanned, children }) => {
+    mockCameraView.mockImplementation((props: any) => {
       return React.createElement(
         'View',
         {
           testID: 'camera-view',
           onPress: () => {
             // Simulate barcode scan
-            if (onBarcodeScanned) {
-              onBarcodeScanned({
+            if (props.onBarcodeScanned) {
+              props.onBarcodeScanned({
                 type: 'ean13',
                 data: '1234567890123',
                 bounds: { origin: { x: 0, y: 0 }, size: { width: 100, height: 50 } },
@@ -45,7 +48,7 @@ describe('BarcodeScanner', () => {
             }
           },
         },
-        children
+        props.children
       );
     });
   });
@@ -54,6 +57,7 @@ describe('BarcodeScanner', () => {
     it('should render camera view when permissions are granted', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -65,6 +69,7 @@ describe('BarcodeScanner', () => {
     it('should render close button', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -76,6 +81,7 @@ describe('BarcodeScanner', () => {
     it('should render scanning instructions', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -87,6 +93,7 @@ describe('BarcodeScanner', () => {
     it('should render scanning overlay/frame', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -101,6 +108,7 @@ describe('BarcodeScanner', () => {
     it('should call onBarcodeScanned when barcode is detected', async () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -117,6 +125,7 @@ describe('BarcodeScanner', () => {
     it('should prevent multiple rapid scans of the same barcode', async () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -136,15 +145,15 @@ describe('BarcodeScanner', () => {
 
     it('should allow scanning different barcodes', async () => {
       let scanCount = 0;
-      mockCameraView.mockImplementation(({ onBarcodeScanned, children }) => {
+      mockCameraView.mockImplementation((props: any) => {
         return React.createElement(
           'View',
           {
             testID: 'camera-view',
             onPress: () => {
-              if (onBarcodeScanned) {
+              if (props.onBarcodeScanned) {
                 scanCount++;
-                onBarcodeScanned({
+                props.onBarcodeScanned({
                   type: 'ean13',
                   data: `123456789012${scanCount}`,
                   bounds: { origin: { x: 0, y: 0 }, size: { width: 100, height: 50 } },
@@ -153,12 +162,13 @@ describe('BarcodeScanner', () => {
               }
             },
           },
-          children
+          props.children
         );
       });
 
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -177,14 +187,14 @@ describe('BarcodeScanner', () => {
     });
 
     it('should filter out invalid barcode formats', async () => {
-      mockCameraView.mockImplementation(({ onBarcodeScanned, children }) => {
+      mockCameraView.mockImplementation((props: any) => {
         return React.createElement(
           'View',
           {
             testID: 'camera-view',
             onPress: () => {
-              if (onBarcodeScanned) {
-                onBarcodeScanned({
+              if (props.onBarcodeScanned) {
+                props.onBarcodeScanned({
                   type: 'qr',
                   data: 'invalid-barcode-format',
                   bounds: { origin: { x: 0, y: 0 }, size: { width: 100, height: 50 } },
@@ -193,12 +203,13 @@ describe('BarcodeScanner', () => {
               }
             },
           },
-          children
+          props.children
         );
       });
 
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -217,6 +228,7 @@ describe('BarcodeScanner', () => {
     it('should call onClose when close button is pressed', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -231,6 +243,7 @@ describe('BarcodeScanner', () => {
     it('should handle flashlight toggle if available', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -255,6 +268,7 @@ describe('BarcodeScanner', () => {
 
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -276,6 +290,7 @@ describe('BarcodeScanner', () => {
 
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -296,6 +311,7 @@ describe('BarcodeScanner', () => {
       expect(() => {
         render(
           <BarcodeScanner
+            isVisible={true}
             onBarcodeScanned={mockOnBarcodeScanned}
             onClose={mockOnClose}
           />
@@ -304,14 +320,14 @@ describe('BarcodeScanner', () => {
     });
 
     it('should handle malformed barcode data', async () => {
-      mockCameraView.mockImplementation(({ onBarcodeScanned, children }) => {
+      mockCameraView.mockImplementation((props: any) => {
         return React.createElement(
           'View',
           {
             testID: 'camera-view',
             onPress: () => {
-              if (onBarcodeScanned) {
-                onBarcodeScanned({
+              if (props.onBarcodeScanned) {
+                props.onBarcodeScanned({
                   type: 'ean13',
                   data: null as any, // Malformed data
                   bounds: { origin: { x: 0, y: 0 }, size: { width: 100, height: 50 } },
@@ -320,12 +336,13 @@ describe('BarcodeScanner', () => {
               }
             },
           },
-          children
+          props.children
         );
       });
 
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -344,6 +361,7 @@ describe('BarcodeScanner', () => {
     it('should have proper accessibility labels', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -357,6 +375,7 @@ describe('BarcodeScanner', () => {
     it('should provide accessibility hint for camera view', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -371,6 +390,7 @@ describe('BarcodeScanner', () => {
     it('should provide visual feedback when barcode is detected', async () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
@@ -391,6 +411,7 @@ describe('BarcodeScanner', () => {
     it('should show scanning animation', () => {
       render(
         <BarcodeScanner
+          isVisible={true}
           onBarcodeScanned={mockOnBarcodeScanned}
           onClose={mockOnClose}
         />
