@@ -88,3 +88,4 @@ generate_apple_token/script.js
 
 # OFF database utility
 off-db-utility/off-database.db
+off-db-utility/batch-logs.csv

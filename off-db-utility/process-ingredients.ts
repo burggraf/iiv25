@@ -14,6 +14,7 @@
 import axios from 'axios';
 import Database from 'better-sqlite3';
 import { config } from 'dotenv';
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Load environment variables
@@ -49,6 +50,130 @@ class OffDbProcessor {
   private processedCount: number = 0;
   private errorCount: number = 0;
   private skippedCount: number = 0;
+  private totalApiCalls: number = 0;
+  private totalApiCost: number = 0;
+  private batchStartTime: Date = new Date();
+
+  // Original comprehensive prompt (stored for reference/modification)
+  private readonly ORIGINAL_GEMINI_PROMPT = `Analyze this food product label image and extract the ingredients list with a two-step analysis.
+
+Instructions:
+1. Look for an "INGREDIENTS:" or "Ingredients:" section (or a "CONTAINS:" or "Contains:" section)
+2. Extract each individual ingredient from the list
+3. Clean up the text (remove parentheses, allergen warnings, etc.)
+4. MANDATORY: TRANSLATE ALL ingredients to standard American English food terminology - NO EXCEPTIONS
+5. Return ONLY the actual food ingredients that are part of this product
+6. Determine if this appears to be a valid food ingredients list
+
+CRITICAL TRANSLATION REQUIREMENT: Every single ingredient must be translated to English immediately upon extraction. Do not include any non-English words in either field.
+
+TRANSLATION EXAMPLES (MANDATORY TO FOLLOW):
+- French "eau" → "water" (not "aqua")
+- French "sucre" → "sugar" 
+- French "lait" → "milk"
+- French "farine de blé" → "wheat flour"
+- French "beurre" → "butter"
+- French "œufs" → "eggs"
+- French "sel" → "salt"
+- French "levure" → "yeast"
+- French "huile" → "oil"
+- French "viande" → "meat"
+- French "fromage" → "cheese"
+- French "tomates" → "tomatoes"
+- French "oignons" → "onions"
+- French "ail" → "garlic"
+- German "Kohlensäure" → "carbon dioxide" (not "carbonic acid")
+- German "Süßungsmittel" → "sweeteners"
+- German "Wasser" → "water"
+- German "Zucker" → "sugar"
+- Spanish "azúcar" → "sugar"
+- Spanish "agua" → "water"
+- Spanish "aceite" → "oil"
+- Italian "pomodori" → "tomatoes"
+- Italian "acqua" → "water"
+- Portuguese "água" → "water"
+- Portuguese "açúcar" → "sugar"
+- Finnish "vesi" → "water"
+- Finnish "sokeri" → "sugar"
+
+IMPORTANT EXCLUSIONS - Skip any text that mentions:
+- "Made in a facility that also processes..." or similar facility warnings
+- "May contain..." statements (however do include ingredients if it says "Contains:")
+- "Processed in a facility with..." warnings
+- Cross-contamination or allergen facility information
+- Manufacturing location or equipment information
+
+Focus ONLY on ingredients that are actually added to make this specific product.
+
+CRITICAL: If you only find facility warnings or processing statements (like "Made in a facility that processes...") but NO actual ingredients list, then return an empty ingredients array and set isValidIngredientsList to false. Do NOT include the facility warning items as ingredients.
+
+STEP 2 - ANALYSIS FIELD CLEANUP:
+After extracting the ingredients, create a cleaned "analysis" version where you:
+- FIRST AND MOST IMPORTANT: TRANSLATE ALL ingredients to standard American English food terminology
+- IMPORTANT: Remove unnecessary adjectives and modifiers (pasteurized, enriched, modified, concentrated, dried, whole, organic, etc.)
+- Remove percentage indicators (12% oat flakes → oat flakes)
+- Remove geographic/brand descriptors (italian pork → pork, australian almonds → almonds)
+- IMPORTANT: Remove processing methods (hydrogenated vegetable oil → vegetable oil)
+- IMPORTANT: Remove parenthetical specifications (whey powder (from milk) → whey powder)
+- Fix obvious misspellings
+- Keep only the core ingredient name in STANDARD AMERICAN ENGLISH
+
+MANDATORY: Use common American English food names, not technical or scientific terms.
+
+Examples of cleanup with translation:
+- "lait pasteurisé" → "milk" (French to English + cleanup)
+- "farine de blé enrichie" → "wheat flour" (French to English + cleanup)
+- "12% copos de avena" → "oat flakes" (Spanish to English + cleanup)
+- "concentrado de limón" → "lemon juice" (Spanish to English + cleanup)
+- "suero seco (de leche)" → "whey" (Spanish to English + cleanup)
+- "almidón de maíz modificado" → "corn starch" (Spanish to English + cleanup)
+- "aceites vegetales (girasol, colza)" → "vegetable oils" (Spanish to English + cleanup)
+
+Return a JSON object with this exact structure:
+{
+  "ingredients": ["english_ingredient1", "english_ingredient2", "english_ingredient3"],
+  "analysis": ["cleaned_english_ingredient1", "cleaned_english_ingredient2", "cleaned_english_ingredient3"],
+  "confidence": 0.95,
+  "isValidIngredientsList": true
+}
+
+ABSOLUTE REQUIREMENT: Both "ingredients" and "analysis" fields MUST contain ingredients translated to standard American English food terminology. 
+
+THE "INGREDIENTS" FIELD MUST BE IN ENGLISH - translate everything!
+THE "ANALYSIS" FIELD MUST BE IN ENGLISH - translate and clean everything!
+
+ZERO TOLERANCE FOR NON-ENGLISH WORDS: If you see "tomate" write "tomato". If you see "lait" write "milk". If you see "sucre" write "sugar". If you see "eau" write "water". If you see "huile" write "oil". 
+
+FINAL REMINDER: I will reject any response that contains non-English words in either field. Every single ingredient in both fields must be in perfect American English.
+
+If you cannot find or read ingredients clearly, OR if you only find facility warnings without actual ingredients, set confidence below 0.7 and isValidIngredientsList to false.`;
+
+  // Optimized prompt for reduced token usage while maintaining functionality
+  private readonly OPTIMIZED_GEMINI_PROMPT = `Extract ingredients from food label image. Two-step process:
+
+STEP 1 - Extract ingredients from "INGREDIENTS:" section:
+- Find ingredients list (skip "May contain" warnings)
+- TRANSLATE ALL to English: eau→water, sucre→sugar, lait→milk, farine→flour, huile→oil, etc.
+- Only actual ingredients, not facility warnings
+
+STEP 2 - Create cleaned "analysis" field:
+- Remove modifiers: pasteurized, enriched, organic, dried, whole, 12%, Italian, etc.
+- Core names only: "pasteurized milk" → "milk", "enriched wheat flour" → "wheat flour"
+
+Examples:
+- "lait pasteurisé" → ingredients: "milk", analysis: "milk"  
+- "12% farine de blé enrichie" → ingredients: "enriched wheat flour", analysis: "wheat flour"
+- "aceites vegetales (girasol)" → ingredients: "vegetable oils (sunflower)", analysis: "vegetable oils"
+
+Return JSON:
+{
+  "ingredients": ["full_english_ingredient1", "full_english_ingredient2"],
+  "analysis": ["core_ingredient1", "core_ingredient2"], 
+  "confidence": 0.95,
+  "isValidIngredientsList": true
+}
+
+CRITICAL: Both fields must be 100% English. If no ingredients found (only warnings), return empty array + isValidIngredientsList: false.`;
 
   constructor() {
     // Initialize SQLite database
@@ -132,6 +257,11 @@ class OffDbProcessor {
    */
   async process(): Promise<void> {
     try {
+      // Reset batch tracking
+      this.batchStartTime = new Date();
+      this.totalApiCalls = 0;
+      this.totalApiCost = 0;
+      
       console.log('📋 Starting ingredient processing...');
 
       // Get eligible records from openfoodfacts table
@@ -351,98 +481,7 @@ class OffDbProcessor {
           contents: [{
             parts: [
               {
-                text: `Analyze this food product label image and extract the ingredients list with a two-step analysis.
-
-Instructions:
-1. Look for an "INGREDIENTS:" or "Ingredients:" section (or a "CONTAINS:" or "Contains:" section)
-2. Extract each individual ingredient from the list
-3. Clean up the text (remove parentheses, allergen warnings, etc.)
-4. MANDATORY: TRANSLATE ALL ingredients to standard American English food terminology - NO EXCEPTIONS
-5. Return ONLY the actual food ingredients that are part of this product
-6. Determine if this appears to be a valid food ingredients list
-
-CRITICAL TRANSLATION REQUIREMENT: Every single ingredient must be translated to English immediately upon extraction. Do not include any non-English words in either field.
-
-TRANSLATION EXAMPLES (MANDATORY TO FOLLOW):
-- French "eau" → "water" (not "aqua")
-- French "sucre" → "sugar" 
-- French "lait" → "milk"
-- French "farine de blé" → "wheat flour"
-- French "beurre" → "butter"
-- French "œufs" → "eggs"
-- French "sel" → "salt"
-- French "levure" → "yeast"
-- French "huile" → "oil"
-- French "viande" → "meat"
-- French "fromage" → "cheese"
-- French "tomates" → "tomatoes"
-- French "oignons" → "onions"
-- French "ail" → "garlic"
-- German "Kohlensäure" → "carbon dioxide" (not "carbonic acid")
-- German "Süßungsmittel" → "sweeteners"
-- German "Wasser" → "water"
-- German "Zucker" → "sugar"
-- Spanish "azúcar" → "sugar"
-- Spanish "agua" → "water"
-- Spanish "aceite" → "oil"
-- Italian "pomodori" → "tomatoes"
-- Italian "acqua" → "water"
-- Portuguese "água" → "water"
-- Portuguese "açúcar" → "sugar"
-- Finnish "vesi" → "water"
-- Finnish "sokeri" → "sugar"
-
-IMPORTANT EXCLUSIONS - Skip any text that mentions:
-- "Made in a facility that also processes..." or similar facility warnings
-- "May contain..." statements (however do include ingredients if it says "Contains:")
-- "Processed in a facility with..." warnings
-- Cross-contamination or allergen facility information
-- Manufacturing location or equipment information
-
-Focus ONLY on ingredients that are actually added to make this specific product.
-
-CRITICAL: If you only find facility warnings or processing statements (like "Made in a facility that processes...") but NO actual ingredients list, then return an empty ingredients array and set isValidIngredientsList to false. Do NOT include the facility warning items as ingredients.
-
-STEP 2 - ANALYSIS FIELD CLEANUP:
-After extracting the ingredients, create a cleaned "analysis" version where you:
-- FIRST AND MOST IMPORTANT: TRANSLATE ALL ingredients to standard American English food terminology
-- IMPORTANT: Remove unnecessary adjectives and modifiers (pasteurized, enriched, modified, concentrated, dried, whole, organic, etc.)
-- Remove percentage indicators (12% oat flakes → oat flakes)
-- Remove geographic/brand descriptors (italian pork → pork, australian almonds → almonds)
-- IMPORTANT: Remove processing methods (hydrogenated vegetable oil → vegetable oil)
-- IMPORTANT: Remove parenthetical specifications (whey powder (from milk) → whey powder)
-- Fix obvious misspellings
-- Keep only the core ingredient name in STANDARD AMERICAN ENGLISH
-
-MANDATORY: Use common American English food names, not technical or scientific terms.
-
-Examples of cleanup with translation:
-- "lait pasteurisé" → "milk" (French to English + cleanup)
-- "farine de blé enrichie" → "wheat flour" (French to English + cleanup)
-- "12% copos de avena" → "oat flakes" (Spanish to English + cleanup)
-- "concentrado de limón" → "lemon juice" (Spanish to English + cleanup)
-- "suero seco (de leche)" → "whey" (Spanish to English + cleanup)
-- "almidón de maíz modificado" → "corn starch" (Spanish to English + cleanup)
-- "aceites vegetales (girasol, colza)" → "vegetable oils" (Spanish to English + cleanup)
-
-Return a JSON object with this exact structure:
-{
-  "ingredients": ["english_ingredient1", "english_ingredient2", "english_ingredient3"],
-  "analysis": ["cleaned_english_ingredient1", "cleaned_english_ingredient2", "cleaned_english_ingredient3"],
-  "confidence": 0.95,
-  "isValidIngredientsList": true
-}
-
-ABSOLUTE REQUIREMENT: Both "ingredients" and "analysis" fields MUST contain ingredients translated to standard American English food terminology. 
-
-THE "INGREDIENTS" FIELD MUST BE IN ENGLISH - translate everything!
-THE "ANALYSIS" FIELD MUST BE IN ENGLISH - translate and clean everything!
-
-ZERO TOLERANCE FOR NON-ENGLISH WORDS: If you see "tomate" write "tomato". If you see "lait" write "milk". If you see "sucre" write "sugar". If you see "eau" write "water". If you see "huile" write "oil". 
-
-FINAL REMINDER: I will reject any response that contains non-English words in either field. Every single ingredient in both fields must be in perfect American English.
-
-If you cannot find or read ingredients clearly, OR if you only find facility warnings without actual ingredients, set confidence below 0.7 and isValidIngredientsList to false.`
+                text: this.OPTIMIZED_GEMINI_PROMPT
               },
               {
                 inline_data: {
@@ -497,6 +536,10 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
           outputTokens,
           totalCost: `$${totalCost.toFixed(6)}`
         };
+
+        // Track cumulative API costs
+        this.totalApiCalls++;
+        this.totalApiCost += totalCost;
 
         console.log(`💰 API Cost: ${parsedResult.apiCost.totalCost} (${inputTokens + outputTokens} tokens)`);
       }
@@ -656,7 +699,63 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
     console.log(`⏭️  Skipped (already valid): ${this.skippedCount}`);
     console.log(`❌ Errors: ${this.errorCount}`);
     console.log(`📊 Total handled: ${this.processedCount + this.skippedCount + this.errorCount}`);
+    console.log(`🔥 Total API calls: ${this.totalApiCalls}`);
+    console.log(`💰 Total API cost: $${this.totalApiCost.toFixed(6)}`);
     console.log('✅ Processing completed!');
+    
+    // Log batch results to CSV
+    this.logBatchResultsToCSV();
+  }
+
+  /**
+   * Log batch results to CSV file
+   */
+  private logBatchResultsToCSV(): void {
+    try {
+      const batchEndTime = new Date();
+      const csvPath = path.join(__dirname, 'batch-logs.csv');
+      
+      // Check if CSV file exists, if not create with headers
+      const fileExists = fs.existsSync(csvPath);
+      
+      if (!fileExists) {
+        const headers = 'timestamp,batch_start,batch_end,duration_seconds,mode,total_handled,processed,skipped,errors,api_calls,total_cost,avg_cost_per_call\n';
+        fs.writeFileSync(csvPath, headers);
+      }
+      
+      // Calculate batch duration
+      const durationMs = batchEndTime.getTime() - this.batchStartTime.getTime();
+      const durationSeconds = Math.round(durationMs / 1000);
+      
+      // Calculate average cost per call
+      const avgCostPerCall = this.totalApiCalls > 0 ? this.totalApiCost / this.totalApiCalls : 0;
+      
+      // Prepare CSV row
+      const totalHandled = this.processedCount + this.skippedCount + this.errorCount;
+      const mode = this.isTestMode ? 'TEST' : 'FULL';
+      const csvRow = [
+        batchEndTime.toISOString(),
+        this.batchStartTime.toISOString(),
+        batchEndTime.toISOString(),
+        durationSeconds,
+        mode,
+        totalHandled,
+        this.processedCount,
+        this.skippedCount,
+        this.errorCount,
+        this.totalApiCalls,
+        this.totalApiCost.toFixed(6),
+        avgCostPerCall.toFixed(8)
+      ].join(',') + '\n';
+      
+      // Append to CSV file
+      fs.appendFileSync(csvPath, csvRow);
+      
+      console.log(`📄 Batch results logged to: ${csvPath}`);
+      
+    } catch (error) {
+      console.error('❌ Failed to log batch results to CSV:', error);
+    }
   }
 
   /**
