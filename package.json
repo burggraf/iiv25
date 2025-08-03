@@ -28,7 +28,9 @@
     "migrate:dev": "npm run supabase:dev && supabase db push",
     "migrate:prod": "npm run supabase:prod && supabase db push",
     "functions:deploy:dev": "supabase functions deploy --project-ref wpjqtgkfgvheisgcxhxu",
-    "functions:deploy:prod": "supabase functions deploy --project-ref wlatnzsnrlwykkriovwd"
+    "functions:deploy:prod": "supabase functions deploy --project-ref wlatnzsnrlwykkriovwd",
+    "off-process": "tsx off-db-utility/process-ingredients.ts",
+    "off-process:full": "tsx off-db-utility/process-ingredients.ts --full"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -41,8 +43,10 @@
     "@supabase/supabase-js": "^2.52.0",
     "@types/uuid": "^10.0.0",
     "axios": "^1.10.0",
+    "better-sqlite3": "^11.1.2",
     "canvas": "^3.1.2",
     "core-js": "^3.44.0",
+    "dotenv": "^16.4.5",
     "expo": "^53.0.20",
     "expo-apple-authentication": "~7.2.4",
     "expo-asset": "~11.1.7",
@@ -92,6 +96,7 @@
     "@babel/core": "^7.25.2",
     "@testing-library/react": "^16.3.0",
     "@testing-library/react-native": "^13.2.0",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.0.10",
     "babel-preset-expo": "^13.2.3",
@@ -103,6 +108,7 @@
     "jest-transform-stub": "^2.0.0",
     "react-test-renderer": "^19.0.0",
     "ts-jest": "^29.4.0",
+    "tsx": "^4.16.2",
     "typescript": "~5.8.3"
   },
   "private": true
