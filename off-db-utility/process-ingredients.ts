@@ -305,64 +305,35 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
    * Get eligible records from openfoodfacts table
    */
   private async getEligibleRecords(): Promise<OpenFoodFactsRecord[]> {
-    const limit = this.isTestMode ? 50 : 5000; // Get more to filter from
+    const targetCount = this.isTestMode ? 10 : 1000;
 
-    // First get candidate records without the complex join
+    // Use LEFT JOIN to get records that don't have valid products in one query
     const stmt = this.db.prepare(`
       SELECT 
-        code,
-        product_name,
-        brands,
-        image_url,
-        image_ingredients_url,
-        import_status
-      FROM openfoodfacts
-      WHERE image_ingredients_url IS NOT NULL 
-        AND image_ingredients_url <> ''
-        AND image_ingredients_url NOT LIKE '%invalid%'
-        AND (import_status IS NULL OR import_status = 'pending')
+        o.code,
+        o.product_name,
+        o.brands,
+        o.image_url,
+        o.image_ingredients_url,
+        o.import_status
+      FROM openfoodfacts o
+        LEFT OUTER JOIN products p ON o.code = p.upc
+      WHERE
+        o.image_ingredients_url IS NOT NULL
+        AND o.image_ingredients_url <> ''
+        AND o.image_ingredients_url NOT LIKE '%invalid%'
+        AND (p.upc is null or p.analysis is null or p.analysis = '')
+        AND (o.import_status IS NULL OR o.import_status = 'pending')
       ORDER BY RANDOM()
       LIMIT ?
     `);
 
-    const candidateRecords = stmt.all(limit) as OpenFoodFactsRecord[];
-    console.log(`📋 Found ${candidateRecords.length} candidate records`);
+    const records = stmt.all(targetCount) as OpenFoodFactsRecord[];
+    console.log(`📋 Found ${records.length} eligible records (no existing valid products)`);
 
-    // Filter out records that already have valid products
-    const filteredRecords: OpenFoodFactsRecord[] = [];
-    const targetCount = this.isTestMode ? 10 : 1000;
-
-    for (const record of candidateRecords) {
-      if (filteredRecords.length >= targetCount) break;
-
-      const hasValidProduct = this.hasValidProduct(record.code);
-      if (!hasValidProduct) {
-        filteredRecords.push(record);
-      } else {
-        // Update status to skipped
-        this.updateOpenFoodFactsStatus(record.code, 'skipped', new Date());
-        this.skippedCount++;
-      }
-    }
-
-    return filteredRecords;
+    return records;
   }
 
-  /**
-   * Check if a product already exists with valid analysis
-   */
-  private hasValidProduct(code: string): boolean {
-    const stmt = this.db.prepare(`
-      SELECT upc, analysis 
-      FROM products 
-      WHERE (upc = ?) 
-        AND analysis IS NOT NULL 
-        AND analysis <> ''
-    `);
-
-    const product = stmt.get(code);
-    return !!product;
-  }
 
   /**
    * Process a single OpenFoodFacts record
