@@ -1,4 +1,5 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+off-database.db
 
 .mcp.json
 
@@ -82,3 +83,6 @@ generate_apple_token/script.js
 
 /local-android-development-build.sh
 /local-notes
+
+# OFF database utility
+off-db-utility/off-database.db
