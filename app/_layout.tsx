@@ -6,12 +6,14 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 // import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import 'react-native-reanimated'; // Temporarily disabled due to crashes
 
 import { useColorScheme } from '../hooks/useColorScheme';
 import { AppProvider } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
+import EnvironmentBanner from '../src/components/EnvironmentBanner';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -40,18 +42,21 @@ export default function RootLayout() {
       <AuthProvider>
         <AppProvider>
           {/* <GestureHandlerRootView style={{ flex: 1 }}> */}
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack>
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-                <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
-                <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
-                <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style="auto" />
-            </ThemeProvider>
+            <View style={{ flex: 1 }}>
+              <EnvironmentBanner style={{ position: 'absolute', top: 50, left: 10, right: 10, zIndex: 1000 }} />
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack>
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </View>
           {/* </GestureHandlerRootView> */}
         </AppProvider>
       </AuthProvider>

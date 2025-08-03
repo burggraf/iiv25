@@ -313,6 +313,25 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 								<Text style={styles.cardLabel}>Platform:</Text>
 								<Text style={styles.cardValue}>{Platform.OS === 'ios' ? 'iOS' : 'Android'}</Text>
 							</View>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Environment:</Text>
+								<Text style={[styles.cardValue, { 
+									color: process.env.ENVIRONMENT === 'production' ? '#4CAF50' : '#FF9500',
+									fontWeight: '700' 
+								}]}>
+									{process.env.ENVIRONMENT?.toUpperCase() || 'UNKNOWN'}
+								</Text>
+							</View>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>App Name:</Text>
+								<Text style={styles.cardValue}>{process.env.EXPO_PUBLIC_APP_NAME || 'Is It Vegan?'}</Text>
+							</View>
+							<View style={styles.cardRow}>
+								<Text style={styles.cardLabel}>Backend:</Text>
+								<Text style={[styles.cardValue, styles.deviceId]}>
+									{process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('https://', '') || 'Unknown'}
+								</Text>
+							</View>
 						</View>
 					</View>
 

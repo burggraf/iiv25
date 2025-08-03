@@ -18,7 +18,17 @@
     "build:preview": "eas build --platform all --profile preview",
     "submit:ios": "eas submit --platform ios",
     "build:production": "eas build --platform all --profile production",
-    "deploy:testflight": "./scripts/deploy-testflight.sh"
+    "deploy:testflight": "./scripts/deploy-testflight.sh",
+    "supabase:dev": "echo 'Switching to DEVELOPMENT environment (wpjqtgkfgvheisgcxhxu)' && supabase link --project-ref wpjqtgkfgvheisgcxhxu",
+    "supabase:prod": "echo 'Switching to PRODUCTION environment (wlatnzsnrlwykkriovwd)' && supabase link --project-ref wlatnzsnrlwykkriovwd",
+    "supabase:status": "supabase projects list | grep '●'",
+    "build:dev-android": "eas build --platform android --profile development-build",
+    "build:dev-ios": "eas build --platform ios --profile development-build",
+    "build:testflight-dev": "eas build --platform ios --profile testflight-dev",
+    "migrate:dev": "npm run supabase:dev && supabase db push",
+    "migrate:prod": "npm run supabase:prod && supabase db push",
+    "functions:deploy:dev": "supabase functions deploy --project-ref wpjqtgkfgvheisgcxhxu",
+    "functions:deploy:prod": "supabase functions deploy --project-ref wlatnzsnrlwykkriovwd"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",

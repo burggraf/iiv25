@@ -27,11 +27,19 @@ npm run web         # Run on web browser
 
 ### Building & Deployment
 
+#### Production Builds
 ```bash
-npm run build:android     # Build Android APK
-npm run build:ios        # Build iOS TestFlight
+npm run build:android     # Build Android APK (production)
+npm run build:ios        # Build iOS TestFlight (production)
 npm run build:production # Build for production (both platforms)
 npm run submit:ios       # Submit to App Store
+```
+
+#### Development Builds
+```bash
+npm run build:dev-android    # Build Android APK (development environment)
+npm run build:dev-ios       # Build iOS (development environment)
+npm run build:testflight-dev # Build iOS TestFlight (development environment)
 ```
 
 ### Testing & Quality
@@ -40,6 +48,57 @@ npm run submit:ios       # Submit to App Store
 npm run test        # Run all tests
 npm run lint        # Run ESLint (flat config format)
 npm run type-check  # Run TypeScript compiler check
+```
+
+## Environment Management
+
+### Development vs Production
+
+The app uses **two separate Supabase projects** for complete environment isolation:
+
+- **Production**: `wlatnzsnrlwykkriovwd` (isitvegan) - `https://isitvegan.supabase.co`
+- **Development**: `wpjqtgkfgvheisgcxhxu` (isitvegan-dev) - `https://wpjqtgkfgvheisgcxhxu.supabase.co`
+
+### Environment Switching
+
+```bash
+npm run supabase:dev      # Switch to DEVELOPMENT environment
+npm run supabase:prod     # Switch to PRODUCTION environment  
+npm run supabase:status   # Show current linked environment
+```
+
+### Environment Indicators
+
+- **Visual Banner**: Development builds show environment banner at top of app
+- **App Names**: "Is It Vegan?" (prod) vs "Is It Vegan? (Dev)" (dev)
+- **Bundle IDs**: `net.isitvegan.free` (prod) vs `net.isitvegan.dev` (dev)
+- **Settings Screen**: Shows environment, backend URL, and build info
+
+### Database Migrations
+
+**CRITICAL**: All database schema changes MUST go through migrations only. Never modify production database directly.
+
+```bash
+# Create new migration
+supabase migration new migration_name
+
+# Test in development
+npm run migrate:dev        # Apply migrations to development
+npm run supabase:dev       # Ensure linked to dev first
+
+# Deploy to production (after testing)
+npm run migrate:prod       # Apply migrations to production
+npm run supabase:prod      # Ensure linked to prod first
+```
+
+### Edge Functions Deployment
+
+```bash
+# Deploy to development
+npm run functions:deploy:dev   # Deploy all functions to development
+
+# Deploy to production  
+npm run functions:deploy:prod  # Deploy all functions to production
 ```
 
 ## Testing Requirements
