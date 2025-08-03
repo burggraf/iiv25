@@ -261,7 +261,7 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
       this.batchStartTime = new Date();
       this.totalApiCalls = 0;
       this.totalApiCost = 0;
-      
+
       console.log('📋 Starting ingredient processing...');
 
       // Get eligible records from openfoodfacts table
@@ -353,14 +353,14 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
    */
   private hasValidProduct(code: string): boolean {
     const stmt = this.db.prepare(`
-      SELECT upc, ean13, analysis 
+      SELECT upc, analysis 
       FROM products 
-      WHERE (upc = ? OR ean13 = ?) 
+      WHERE (upc = ?) 
         AND analysis IS NOT NULL 
         AND analysis <> ''
     `);
 
-    const product = stmt.get(code, code);
+    const product = stmt.get(code);
     return !!product;
   }
 
@@ -567,20 +567,19 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
   ): boolean {
     // Normalize barcode format
     const normalizedUPC = record.code.length === 11 ? '0' + record.code : record.code;
-    const normalizedEAN13 = normalizedUPC;
 
     // Check if product exists
     const existingProductStmt = this.db.prepare(`
       SELECT * FROM products 
-      WHERE upc = ? OR upc = ? OR ean13 = ? OR ean13 = ?
+      WHERE upc = ?
     `);
-    const existingProduct = existingProductStmt.get(record.code, normalizedUPC, record.code, normalizedEAN13);
+    const existingProduct = existingProductStmt.get(record.code);
 
     const now = new Date().toISOString();
 
     if (existingProduct) {
       // Update existing product
-      console.log(`📝 Updating existing product: ${existingProduct.upc || existingProduct.ean13}`);
+      console.log(`📝 Updating existing product: ${existingProduct.upc}`);
 
       const updateStmt = this.db.prepare(`
         UPDATE products SET 
@@ -590,7 +589,7 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
           ingredients_url = ?,
           import_status = ?,
           import_status_time = ?
-        WHERE ean13 = ? OR upc = ?
+        WHERE upc = ?
       `);
 
       updateStmt.run(
@@ -600,7 +599,6 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
         record.image_ingredients_url,
         'updated',
         now,
-        existingProduct.ean13,
         existingProduct.upc
       );
 
@@ -612,15 +610,14 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
 
       const insertStmt = this.db.prepare(`
         INSERT INTO products (
-          upc, ean13, product_name, brand, ingredients, analysis,
+          upc, product_name, brand, ingredients, analysis,
           imageurl, ingredients_url, import_status, import_status_time,
           created, lastupdated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       insertStmt.run(
         normalizedUPC,
-        normalizedEAN13,
         record.product_name || 'Unknown Product',
         record.brands || '',
         ingredients,
@@ -702,7 +699,7 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
     console.log(`🔥 Total API calls: ${this.totalApiCalls}`);
     console.log(`💰 Total API cost: $${this.totalApiCost.toFixed(6)}`);
     console.log('✅ Processing completed!');
-    
+
     // Log batch results to CSV
     this.logBatchResultsToCSV();
   }
@@ -714,22 +711,22 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
     try {
       const batchEndTime = new Date();
       const csvPath = path.join(__dirname, 'batch-logs.csv');
-      
+
       // Check if CSV file exists, if not create with headers
       const fileExists = fs.existsSync(csvPath);
-      
+
       if (!fileExists) {
         const headers = 'timestamp,batch_start,batch_end,duration_seconds,mode,total_handled,processed,skipped,errors,api_calls,total_cost,avg_cost_per_call\n';
         fs.writeFileSync(csvPath, headers);
       }
-      
+
       // Calculate batch duration
       const durationMs = batchEndTime.getTime() - this.batchStartTime.getTime();
       const durationSeconds = Math.round(durationMs / 1000);
-      
+
       // Calculate average cost per call
       const avgCostPerCall = this.totalApiCalls > 0 ? this.totalApiCost / this.totalApiCalls : 0;
-      
+
       // Prepare CSV row
       const totalHandled = this.processedCount + this.skippedCount + this.errorCount;
       const mode = this.isTestMode ? 'TEST' : 'FULL';
@@ -747,12 +744,12 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
         this.totalApiCost.toFixed(6),
         avgCostPerCall.toFixed(8)
       ].join(',') + '\n';
-      
+
       // Append to CSV file
       fs.appendFileSync(csvPath, csvRow);
-      
+
       console.log(`📄 Batch results logged to: ${csvPath}`);
-      
+
     } catch (error) {
       console.error('❌ Failed to log batch results to CSV:', error);
     }
