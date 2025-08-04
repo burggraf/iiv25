@@ -1,5 +1,6 @@
 -- Search Products PostgreSQL Function with Rate Limiting and Pagination
 -- Created: 2025-01-24
+-- Updated: 2025-08-04 - Added hierarchical 3-tier search strategy matching ingredient search
 -- Purpose: Secure product search by name with authentication check, rate limiting, and automatic logging
 --
 -- This function provides name-based product search with rate limiting and pagination:
@@ -8,7 +9,7 @@
 --    - Free: 10 total searches per day (combined with ingredient_search and product_lookup)
 --    - Standard: unlimited searches per day  
 --    - Premium: unlimited searches per day
--- 3. Two-tier search strategy (exact match → prefix match)
+-- 3. Three-tier hierarchical search strategy (exact match → prefix match → contains match)
 -- 4. Pagination support (250 products per page)
 -- 5. Automatic logging with detailed metadata about the search
 --
@@ -18,7 +19,7 @@
 -- - Subscription awareness: Checks user_subscription table for current level
 -- - Expiration handling: Automatically downgrades expired subscriptions to free
 -- - Automatic logging: All searches logged to actionlog table with enhanced metadata
--- - Two-tier search: Exact match first, then optimized prefix match
+-- - Three-tier hierarchical search: Exact match first, then prefix match, then contains match
 -- - Pagination: Returns 250 results per page with offset support
 -- - Graceful rate limits: Returns special response instead of throwing errors
 -- - Optimized indexing: Uses proper text_pattern_ops index for fast LIKE queries
@@ -120,11 +121,10 @@ BEGIN
     LIMIT 250
     OFFSET page_offset;
     
-    -- Check if exact match found
+    -- If exact match found, log and return
     GET DIAGNOSTICS search_result_count = ROW_COUNT;
-    
     IF search_result_count > 0 THEN
-        -- Log the search operation
+        -- Log the search operation using unified 'search' action type
         INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
         VALUES (
             'search',
@@ -147,7 +147,7 @@ BEGIN
         RETURN;
     END IF;
     
-    -- Step 2: Search for prefix match if no exact match using optimized query
+    -- Step 2: Search for prefix/starts-with match if no exact match
     RETURN QUERY
     SELECT
         p.ean13,
@@ -171,23 +171,70 @@ BEGIN
     LIMIT 250
     OFFSET page_offset;
     
-    -- Log the search operation (even if no results)
+    -- If prefix match found, log and return
     GET DIAGNOSTICS search_result_count = ROW_COUNT;
+    IF search_result_count > 0 THEN
+        -- Log the search operation using unified 'search' action type
+        INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
+        VALUES (
+            'search',
+            search_term,
+            current_user_id,
+            device_uuid,
+            format('Found %s prefix matches', search_result_count),
+            json_build_object(
+                'device_id', device_id,
+                'search_type', 'product',
+                'search_strategy', 'starts_with',
+                'result_count', search_result_count,
+                'search_term_length', length(search_term),
+                'page_offset', page_offset,
+                'subscription_level', rate_info.subscription_level,
+                'rate_limit', rate_info.rate_limit,
+                'searches_used', rate_info.recent_searches + 1
+            )
+        );
+        RETURN;
+    END IF;
     
+    -- Step 3: Search for contains pattern (NEW - matching ingredient search)
+    RETURN QUERY
+    SELECT
+        p.ean13,
+        p.upc,
+        p.product_name,
+        p.brand,
+        p.ingredients,
+        p.classification,
+        p.imageurl,
+        p.issues,
+        p.created,
+        p.lastupdated
+    FROM
+        public.products p
+    WHERE
+        lower((p.product_name)::text) ILIKE ('%' || cleaned_term || '%')
+    ORDER BY
+        lower((p.product_name)::text)
+    LIMIT 250
+    OFFSET page_offset;
+    
+    -- Log the search operation (even if no results) using unified 'search' action type
+    GET DIAGNOSTICS search_result_count = ROW_COUNT;
     INSERT INTO public.actionlog(type, input, userid, deviceid, result, metadata)
     VALUES (
-        'product_search',
+        'search',
         search_term,
         current_user_id,
         device_uuid,
         CASE 
-            WHEN search_result_count > 0 THEN format('Found %s prefix matches', search_result_count)
+            WHEN search_result_count > 0 THEN format('Found %s contains matches', search_result_count)
             ELSE 'No matches found'
         END,
         json_build_object(
             'device_id', device_id,
             'search_type', 'product',
-            'search_strategy', 'prefix_match',
+            'search_strategy', 'contains',
             'result_count', search_result_count,
             'search_term_length', length(search_term),
             'page_offset', page_offset,
@@ -228,9 +275,11 @@ $$;
 
 -- Search Strategy:
 -- 1. Exact match: lower((product_name)::text) = 'search term'
--- 2. Prefix match: Optimized range query + LIKE for fast index usage
--- 3. Returns 250 results per page with offset support
--- 4. Results ordered by product_name for consistent pagination
+-- 2. Prefix/starts-with match: Optimized range query + LIKE for fast index usage
+-- 3. Contains match: ILIKE '%search term%' for broader wildcard matching
+-- 4. Returns results from first successful search strategy (hierarchical fallback)
+-- 5. Returns 250 results per page with offset support
+-- 6. Results ordered by product_name for consistent pagination
 
 -- Performance Optimizations:
 -- - Uses products_name_lower_text_pattern_idx index for prefix searches
@@ -249,13 +298,13 @@ $$;
 -- Enhanced Metadata Logging:
 -- The function logs comprehensive metadata including:
 -- - device_id: The device ID making the request
--- - search_strategy: Which search strategy was successful (exact_match/prefix_match)
+-- - search_strategy: Which search strategy was successful (exact_match/starts_with/contains)
 -- - result_count: Number of results found
 -- - search_term_length: Length of search term for analytics
 -- - page_offset: Pagination offset used
 -- - subscription_level: Current user's subscription tier
 -- - rate_limit: Maximum searches allowed for this tier
--- - searches_used: Number of searches used in current hour (including this one)
+-- - searches_used: Number of searches used in current period (including this one)
 
 -- Security Notes:
 -- - SECURITY DEFINER allows function to bypass RLS policies
