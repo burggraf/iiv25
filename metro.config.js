@@ -1,11 +1,7 @@
+// Learn more https://docs.expo.io/guides/customizing-metro
 const { getDefaultConfig } = require('expo/metro-config');
 
+/** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
-
-// Add polyfill resolver
-config.resolver.alias = {
-  ...config.resolver.alias,
-  'react-native-polyfill-globals': require.resolve('react-native-polyfill-globals'),
-};
 
 module.exports = config;

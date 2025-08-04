@@ -2,6 +2,7 @@ import { BarcodeScanningResult, Camera, CameraView } from 'expo-camera'
 import { isDevice } from 'expo-device'
 import * as ImagePicker from 'expo-image-picker'
 import { useIsFocused } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
@@ -41,6 +42,7 @@ import { backgroundQueueService } from '../services/backgroundQueueService'
 
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
+	const router = useRouter()
 	const { addToHistory, deviceId } = useApp()
 	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
 
@@ -77,9 +79,11 @@ export default function ScannerScreen() {
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
 	const [showJobsModal, setShowJobsModal] = useState(false)
+	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
+	const cameraRef = useRef<CameraView>(null)
 	
 	// Simple cache for last 20 scanned UPCs and their results
 	const scannedUPCQueue = useRef<string[]>([])
@@ -177,8 +181,8 @@ export default function ScannerScreen() {
 	}
 
 	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
-		// Only process barcodes when screen is focused and no modal is shown
-		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal) {
+		// Only process barcodes when screen is focused and no modal is shown, and not in product creation mode
+		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal || productCreationMode !== 'off') {
 			return
 		}
 
@@ -417,8 +421,84 @@ export default function ScannerScreen() {
 	}
 
 	const handleCreateProduct = async () => {
-		// Show full screen modal instead of alert
-		setShowCreateProductModal(true)
+		// Navigate to dedicated product creation camera screen
+		setError(null)
+		hideOverlay()
+		
+		if (currentBarcode) {
+			router.push(`/product-creation/${currentBarcode}`)
+		} else {
+			Alert.alert('Error', 'No barcode found')
+		}
+	}
+
+	const handleCancelProductCreation = () => {
+		setProductCreationMode('off')
+		setFrontPhotoTaken(false)
+		setError(null)
+	}
+
+	const handleTakeProductCreationPhoto = async () => {
+		try {
+			if (!cameraRef.current) {
+				setError('Camera not available')
+				return
+			}
+
+			if (!currentBarcode) {
+				setError('No barcode found')
+				return
+			}
+
+			// Take photo using the camera ref
+			const photo = await cameraRef.current.takePictureAsync({
+				quality: 0.8,
+				base64: false,
+			})
+
+			if (!photo?.uri) {
+				setError('Failed to capture image')
+				return
+			}
+
+			if (productCreationMode === 'front-photo') {
+				// Queue the front product photo for processing
+				await queueJob({
+					jobType: 'product_creation',
+					imageUri: photo.uri,
+					upc: currentBarcode,
+					priority: 3, // Highest priority for product creation
+				})
+				
+				// Move to ingredients photo step
+				setFrontPhotoTaken(true)
+				setProductCreationMode('ingredients-photo')
+			} else if (productCreationMode === 'ingredients-photo') {
+				// Queue the ingredients photo for processing
+				await queueJob({
+					jobType: 'ingredient_parsing',
+					imageUri: photo.uri,
+					upc: currentBarcode,
+					existingProductData: null, // Product doesn't exist yet
+					priority: 2,
+				})
+				
+				// Complete the flow
+				setProductCreationMode('off')
+				setFrontPhotoTaken(false)
+				
+				// Show confirmation
+				Alert.alert(
+					"Photos Queued",
+					"Both product and ingredients photos have been queued for processing. You'll receive notifications when they're complete. You can continue using the app.",
+					[{ text: "OK" }]
+				)
+			}
+
+		} catch (err) {
+			console.error('Error in photo capture flow:', err)
+			setError('Failed to capture photo. Please try again.')
+		}
 	}
 
 	const handleCreateProductCancel = () => {
@@ -990,7 +1070,11 @@ export default function ScannerScreen() {
 
 			<View style={styles.instructionsContainer}>
 				<Text style={styles.instructionText}>
-					{isLoading ? '🔍 Looking up product...' : '📷 Point your camera\nat a food product barcode'}
+					{productCreationMode !== 'off' 
+						? '📷 Product Creation Mode'
+						: isLoading 
+							? '🔍 Looking up product...' 
+							: '📷 Point your camera\nat a food product barcode'}
 				</Text>
 				<TouchableOpacity style={styles.bellIconContainer} onPress={handleSoundToggle}>
 					<BellIcon size={24} color="#666" filled={isSoundEnabled} />
@@ -1007,9 +1091,10 @@ export default function ScannerScreen() {
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={handleBarcodeScanned} />
-				) : isFocused && !showProductDetail ? (
+				) : isFocused && !showProductDetail && hasPermission ? (
 					<>
 						<CameraView
+							ref={cameraRef}
 							style={styles.camera}
 							facing='back'
 							onBarcodeScanned={handleBarcodeScanned}
@@ -1029,6 +1114,19 @@ export default function ScannerScreen() {
 							<View style={styles.unfocusedContainer}></View>
 						</View>
 					</>
+				) : isFocused && !showProductDetail && !hasPermission ? (
+					<View style={styles.permissionContainer}>
+						<Text style={styles.permissionText}>Camera access is required to scan barcodes</Text>
+						<TouchableOpacity 
+							style={styles.permissionButton}
+							onPress={async () => {
+								const { status } = await Camera.requestCameraPermissionsAsync()
+								setHasPermission(status === 'granted')
+							}}
+						>
+							<Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+						</TouchableOpacity>
+					</View>
 				) : (
 					<View style={styles.inactiveCamera}>
 						<Text style={styles.inactiveCameraText}>Scanner inactive</Text>
@@ -1040,6 +1138,38 @@ export default function ScannerScreen() {
 					<View style={styles.loadingOverlay}>
 						<ActivityIndicator size='large' color='#007AFF' />
 						<Text style={styles.loadingText}>Looking up product...</Text>
+					</View>
+				)}
+
+				{/* Product Creation Instruction Overlay */}
+				{productCreationMode !== 'off' && (
+					<View style={styles.productCreationOverlay}>
+						<View style={styles.productCreationHeader}>
+							<Text style={styles.productCreationTitle}>
+								{productCreationMode === 'front-photo' 
+									? 'Step 1 of 2: Product Front' 
+									: 'Step 2 of 2: Ingredients'}
+							</Text>
+							<TouchableOpacity 
+								style={styles.productCreationCancelButton}
+								onPress={handleCancelProductCreation}
+							>
+								<Text style={styles.productCreationCancelText}>Cancel</Text>
+							</TouchableOpacity>
+						</View>
+						<View style={styles.productCreationInstructions}>
+							<Text style={styles.productCreationInstructionText}>
+								{productCreationMode === 'front-photo' 
+									? 'Take a clear photo of the front of the product, making sure the name and brand information is visible.'
+									: 'Take a clear photo of the product ingredients.'}
+							</Text>
+						</View>
+						<TouchableOpacity 
+							style={styles.productCreationCaptureButton}
+							onPress={handleTakeProductCreationPhoto}
+						>
+							<Text style={styles.productCreationCaptureText}>📷 Capture Photo</Text>
+						</TouchableOpacity>
 					</View>
 				)}
 
@@ -1928,5 +2058,89 @@ const styles = StyleSheet.create({
 		fontSize: 32,
 		textAlign: 'center',
 		marginBottom: 8,
+	},
+	productCreationOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		backgroundColor: 'rgba(0, 0, 0, 0.85)',
+		paddingTop: 60,
+		paddingHorizontal: 20,
+		paddingBottom: 20,
+		zIndex: 1000,
+	},
+	productCreationHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		marginBottom: 20,
+	},
+	productCreationTitle: {
+		fontSize: 18,
+		fontWeight: 'bold',
+		color: 'white',
+	},
+	productCreationCancelButton: {
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		backgroundColor: 'rgba(255, 255, 255, 0.2)',
+		borderRadius: 6,
+	},
+	productCreationCancelText: {
+		color: 'white',
+		fontSize: 14,
+		fontWeight: '500',
+	},
+	productCreationInstructions: {
+		backgroundColor: 'rgba(255, 255, 255, 0.95)',
+		borderRadius: 12,
+		padding: 16,
+		marginBottom: 20,
+	},
+	productCreationInstructionText: {
+		fontSize: 16,
+		color: '#333',
+		textAlign: 'center',
+		lineHeight: 22,
+	},
+	productCreationCaptureButton: {
+		backgroundColor: '#FF6B35',
+		paddingVertical: 16,
+		paddingHorizontal: 24,
+		borderRadius: 12,
+		alignItems: 'center',
+		alignSelf: 'center',
+		minWidth: 180,
+	},
+	productCreationCaptureText: {
+		color: 'white',
+		fontSize: 18,
+		fontWeight: 'bold',
+	},
+	permissionContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		padding: 40,
+		backgroundColor: 'black',
+	},
+	permissionText: {
+		color: 'white',
+		fontSize: 18,
+		textAlign: 'center',
+		marginBottom: 24,
+		lineHeight: 24,
+	},
+	permissionButton: {
+		backgroundColor: '#007AFF',
+		paddingVertical: 12,
+		paddingHorizontal: 24,
+		borderRadius: 8,
+	},
+	permissionButtonText: {
+		color: 'white',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 })

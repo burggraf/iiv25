@@ -55,6 +55,14 @@ export default function RootLayout() {
                     <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
                     <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
                     <Stack.Screen name="product/[barcode]" options={{ headerShown: false }} />
+                    <Stack.Screen 
+                      name="product-creation/[barcode]" 
+                      options={{ 
+                        headerShown: false, 
+                        presentation: 'fullScreenModal',
+                        gestureEnabled: false 
+                      }} 
+                    />
                     <Stack.Screen name="+not-found" />
                   </Stack>
                   <StatusBar style="auto" />
