@@ -307,15 +307,28 @@ class BackgroundQueueServiceClass extends EventEmitter {
       job.completedAt = new Date();
       job.resultData = result;
       
-      await this.moveJobToCompleted(job);
-      this.removeJobFromQueue(job.id);
+      try {
+        await this.moveJobToCompleted(job);
+        console.log(`📦 [BackgroundQueue] Job ${job.id.slice(-6)} moved to completed storage`);
+      } catch (error) {
+        console.error(`📦 [BackgroundQueue] Error moving job ${job.id.slice(-6)} to completed:`, error);
+        // Continue anyway - we don't want to lose the job
+      }
       
-      console.log(`📋 [BackgroundQueue] Job ${job.id.slice(-6)} moved to completed. Active queue now has ${this.jobs.length} jobs`);
+      // Always remove from active queue, even if moveJobToCompleted failed
+      this.removeJobFromQueue(job.id);
+      console.log(`📋 [BackgroundQueue] Job ${job.id.slice(-6)} removed from active queue. Active queue now has ${this.jobs.length} jobs`);
+      
+      // CRITICAL: Save the updated active jobs to storage IMMEDIATELY after removal
+      await this.saveJobsToStorage();
+      console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} completion`);
       
       this.emit('job_completed', job);
       
-      // Send local notification
-      await this.sendLocalNotification(job, 'completed');
+      // Send local notification (non-blocking)
+      this.sendLocalNotification(job, 'completed').catch(error => {
+        console.error(`📱 [BackgroundQueue] Error sending notification for job ${job.id.slice(-6)}:`, error);
+      });
       
     } catch (error) {
       console.error(`❌ [BackgroundQueue] Job ${job.id.slice(-6)} failed:`, error);
@@ -341,18 +354,32 @@ class BackgroundQueueServiceClass extends EventEmitter {
         job.completedAt = new Date();
         job.errorMessage = (error as Error).message;
         
-        await this.moveJobToCompleted(job);
-        this.removeJobFromQueue(job.id);
+        try {
+          await this.moveJobToCompleted(job);
+          console.log(`📦 [BackgroundQueue] Failed job ${job.id.slice(-6)} moved to completed storage`);
+        } catch (moveError) {
+          console.error(`📦 [BackgroundQueue] Error moving failed job ${job.id.slice(-6)} to completed:`, moveError);
+          // Continue anyway - we don't want to lose the job
+        }
         
-        console.log(`📋 [BackgroundQueue] Failed job ${job.id.slice(-6)} moved to completed. Active queue now has ${this.jobs.length} jobs`);
+        // Always remove from active queue, even if moveJobToCompleted failed
+        this.removeJobFromQueue(job.id);
+        console.log(`📋 [BackgroundQueue] Failed job ${job.id.slice(-6)} removed from active queue. Active queue now has ${this.jobs.length} jobs`);
+        
+        // CRITICAL: Save the updated active jobs to storage IMMEDIATELY after removal
+        await this.saveJobsToStorage();
+        console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} failure`);
         
         this.emit('job_failed', job);
         
-        // Send failure notification
-        await this.sendLocalNotification(job, 'failed');
+        // Send failure notification (non-blocking)
+        this.sendLocalNotification(job, 'failed').catch(notificationError => {
+          console.error(`📱 [BackgroundQueue] Error sending failure notification for job ${job.id.slice(-6)}:`, notificationError);
+        });
       }
       
-      await this.saveJobsToStorage();
+      // NOTE: saveJobsToStorage() is now called immediately after removeJobFromQueue() above
+      // to ensure storage is consistent and prevent race conditions
       this.emit('job_updated', job);
     }
   }
@@ -527,6 +554,14 @@ class BackgroundQueueServiceClass extends EventEmitter {
               console.warn(`💾 [BackgroundQueue] Skipping invalid job:`, job);
               return false;
             }
+            
+            // CRITICAL: Only load jobs that should be in active queue
+            // Completed, failed, or cancelled jobs should NOT be in active storage
+            if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+              console.warn(`💾 [BackgroundQueue] Skipping completed/failed job from active storage: ${job.id?.slice(-6)} (${job.status})`);
+              return false;
+            }
+            
             return true;
           })
           .map((job: any) => ({
@@ -543,7 +578,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
         
         // If we had to filter out some jobs, save the cleaned data
         if (validJobs.length !== jobsData.length) {
-          console.log(`💾 [BackgroundQueue] Cleaned up storage (removed ${jobsData.length - validJobs.length} invalid jobs)`);
+          console.log(`💾 [BackgroundQueue] Cleaned up storage (removed ${jobsData.length - validJobs.length} invalid/completed jobs)`);
           await this.saveJobsToStorage();
         }
       } else {
@@ -585,12 +620,30 @@ class BackgroundQueueServiceClass extends EventEmitter {
   }
 
   private removeJobFromQueue(jobId: string): void {
-    const index = this.jobs.findIndex(job => job.id === jobId);
-    if (index !== -1) {
-      console.log(`🗑️ [BackgroundQueue] Removing job ${jobId.slice(-6)} from active queue`);
-      this.jobs.splice(index, 1);
+    const beforeCount = this.jobs.length;
+    console.log(`🗑️ [BackgroundQueue] Attempting to remove job ${jobId.slice(-6)} from active queue (${beforeCount} jobs total)`);
+    
+    // Remove ALL instances of this job ID (in case of duplicates)
+    let removedCount = 0;
+    this.jobs = this.jobs.filter(job => {
+      if (job.id === jobId) {
+        removedCount++;
+        console.log(`🗑️ [BackgroundQueue] Removing job instance ${jobId.slice(-6)} (status: ${job.status})`);
+        return false;
+      }
+      return true;
+    });
+    
+    const afterCount = this.jobs.length;
+    if (removedCount > 0) {
+      console.log(`✅ [BackgroundQueue] Removed ${removedCount} instance(s) of job ${jobId.slice(-6)}. Queue: ${beforeCount} -> ${afterCount} jobs`);
     } else {
-      console.log(`⚠️ [BackgroundQueue] Job ${jobId.slice(-6)} not found in active queue when trying to remove`);
+      console.log(`⚠️ [BackgroundQueue] Job ${jobId.slice(-6)} not found in active queue (${beforeCount} jobs)`);
+      // Debug: Log what jobs ARE in the queue
+      if (this.jobs.length > 0) {
+        console.log(`🔍 [BackgroundQueue] Current active jobs:`, 
+          this.jobs.map(j => `${j.id.slice(-6)} (${j.jobType}, ${j.status})`));
+      }
     }
   }
 
@@ -720,12 +773,21 @@ class BackgroundQueueServiceClass extends EventEmitter {
       if (job.status === 'processing') {
         // Job is marked as processing but not actually being processed
         if (!this.processingJobs.has(job.id)) {
-          console.log(`🧹 [BackgroundQueue] Found orphaned processing job: ${job.id.slice(-6)}`);
-          return true;
+          // Only consider it stuck if it's been processing for a reasonable amount of time
+          // This prevents cleanup of jobs that completed but weren't properly cleaned up
+          const timeSinceStarted = job.startedAt ? (Date.now() - job.startedAt.getTime()) : 0;
+          
+          if (timeSinceStarted > 120000) { // 2 minutes instead of immediately marking as stuck
+            console.log(`🧹 [BackgroundQueue] Found orphaned processing job: ${job.id.slice(-6)} (${Math.round(timeSinceStarted / 1000)}s old)`);
+            return true;
+          } else {
+            console.log(`🧹 [BackgroundQueue] Skipping recent orphaned job: ${job.id.slice(-6)} (${Math.round(timeSinceStarted / 1000)}s old)`);
+            return false;
+          }
         }
         
-        // Job has been processing for too long
-        if (job.startedAt && (Date.now() - job.startedAt.getTime()) > 10000) {
+        // Job has been processing for too long (increased timeout)
+        if (job.startedAt && (Date.now() - job.startedAt.getTime()) > 300000) { // 5 minutes instead of 10 seconds
           console.log(`🧹 [BackgroundQueue] Found timed-out processing job: ${job.id.slice(-6)}`);
           return true;
         }
@@ -738,24 +800,37 @@ class BackgroundQueueServiceClass extends EventEmitter {
     for (const job of stuckJobs) {
       console.log(`🧹 [BackgroundQueue] Cleaning up stuck job ${job.id.slice(-6)}: ${job.jobType}`);
       
-      // Move to failed status
-      job.status = 'failed';
-      job.completedAt = new Date();
-      job.errorMessage = 'Job was stuck in processing state and was automatically cleaned up';
+      // Instead of always marking as failed, try to determine if job actually completed
+      // Check if the job has result data, which would indicate it completed successfully
+      if (job.resultData && !job.resultData.error) {
+        console.log(`🧹 [BackgroundQueue] Job ${job.id.slice(-6)} has result data, marking as completed instead of failed`);
+        job.status = 'completed';
+        job.completedAt = new Date();
+        
+        // Move to completed and emit success event
+        await this.moveJobToCompleted(job);
+        this.removeJobFromQueue(job.id);
+        this.emit('job_completed', job);
+      } else {
+        // Only mark as failed if we're confident it actually failed
+        job.status = 'failed';
+        job.completedAt = new Date();
+        job.errorMessage = 'Job was stuck in processing state and was automatically cleaned up';
+        
+        // Move to completed
+        await this.moveJobToCompleted(job);
+        this.removeJobFromQueue(job.id);
+        this.emit('job_failed', job);
+      }
       
       // Remove from processing set
       this.processingJobs.delete(job.id);
-      
-      // Move to completed
-      await this.moveJobToCompleted(job);
-      this.removeJobFromQueue(job.id);
-      
-      this.emit('job_failed', job);
     }
     
     if (stuckJobs.length > 0) {
+      // Save active jobs to storage after cleanup
       await this.saveJobsToStorage();
-      console.log(`🧹 [BackgroundQueue] Cleaned up ${stuckJobs.length} stuck jobs`);
+      console.log(`🧹 [BackgroundQueue] Cleaned up ${stuckJobs.length} stuck jobs and updated storage`);
     }
     
     return stuckJobs.length;

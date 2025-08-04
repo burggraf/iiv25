@@ -977,17 +977,15 @@ export default function ScannerScreen() {
 					<Logo size={32} />
 					<Text style={styles.appTitle}>Is It Vegan?</Text>
 				</View>
-				{/* Queue Management Button */}
-				{activeJobs && activeJobs.length > 0 && (
-					<TouchableOpacity 
-						style={styles.queueButton}
-						onPress={() => setShowJobsModal(true)}
-					>
-						<Text style={styles.queueButtonText}>
-							{activeJobs.some(j => j.status === 'processing') ? '⚡' : '⏳'} {activeJobs.length}
-						</Text>
-					</TouchableOpacity>
-				)}
+				{/* Queue Management Button - Always visible for debugging */}
+				<TouchableOpacity 
+					style={styles.queueButton}
+					onPress={() => setShowJobsModal(true)}
+				>
+					<Text style={styles.queueButtonText}>
+						📋 {activeJobs ? activeJobs.length : 0}
+					</Text>
+				</TouchableOpacity>
 			</View>
 
 			<View style={styles.instructionsContainer}>

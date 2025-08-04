@@ -15,9 +15,20 @@ export const useBackgroundJobs = () => {
         backgroundQueueService.getCompletedJobs()
       ]);
       
-      // Filter out any null or invalid jobs
-      const validActiveJobs = (active || []).filter(job => job && job.id && job.status);
-      const validCompletedJobs = (completed || []).filter(job => job && job.id && job.status);
+      // Filter out any null or invalid jobs and deduplicate by job ID
+      const validActiveJobs = (active || [])
+        .filter(job => job && job.id && job.status)
+        .filter((job, index, array) => 
+          // Keep only the first occurrence of each job ID
+          array.findIndex(j => j.id === job.id) === index
+        );
+      
+      const validCompletedJobs = (completed || [])
+        .filter(job => job && job.id && job.status)
+        .filter((job, index, array) => 
+          // Keep only the first occurrence of each job ID  
+          array.findIndex(j => j.id === job.id) === index
+        );
       
       console.log(`[useBackgroundJobs] Refreshed jobs - Active: ${validActiveJobs.length}, Completed: ${validCompletedJobs.length}`);
       
@@ -34,15 +45,27 @@ export const useBackgroundJobs = () => {
   }, []);
 
   useEffect(() => {
-    // Initial load with cleanup
-    const loadAndCleanup = async () => {
-      // Always run cleanup first to catch stuck jobs
-      const { backgroundQueueService } = await import('../services/backgroundQueueService');
-      await backgroundQueueService.cleanupStuckJobs();
+    // Initial load - only run cleanup if there are stuck jobs
+    const loadJobs = async () => {
       await refreshJobs();
+      
+      // Only run cleanup if we find actual stuck jobs (processing jobs not in processingJobs set)
+      const activeJobs = await backgroundQueueService.getActiveJobs();
+      const hasStuckJobs = activeJobs.some(job => 
+        job.status === 'processing' && 
+        job.startedAt && 
+        (Date.now() - job.startedAt.getTime()) > 120000 // 2 minutes
+      );
+      
+      if (hasStuckJobs) {
+        console.log('Found stuck jobs, running cleanup...');
+        await backgroundQueueService.cleanupStuckJobs();
+        // Refresh again after cleanup
+        await refreshJobs();
+      }
     };
     
-    loadAndCleanup();
+    loadJobs();
 
     // Subscribe to job updates
     const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {

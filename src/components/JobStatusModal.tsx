@@ -255,8 +255,8 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Active Jobs ({activeJobs.length})</Text>
-        {activeJobs.filter(job => job && job.id).map(job => (
-          <View key={`active-${job.id}`}>
+        {activeJobs.filter(job => job && job.id).map((job, index) => (
+          <View key={`active-${job.id}-${index}`}>
             {renderJobCard(job)}
           </View>
         ))}
@@ -275,8 +275,8 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
             <Text style={styles.clearButtonText}>Clear All</Text>
           </TouchableOpacity>
         </View>
-        {completedJobs.slice(0, 20).filter(job => job && job.id).map(job => (
-          <View key={`completed-${job.id}`}>
+        {completedJobs.slice(0, 20).filter(job => job && job.id).map((job, index) => (
+          <View key={`completed-${job.id}-${index}`}>
             {renderJobCard(job)}
           </View>
         ))}
