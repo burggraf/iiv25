@@ -1,4 +1,8 @@
 // Mock dependencies before importing the module
+import { AppState, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+
 const mockAppStateAddEventListener = jest.fn();
 const mockAppStateRemoveEventListener = jest.fn();
 const mockCreateClient = jest.fn();
@@ -32,10 +36,6 @@ jest.mock('react-native-url-polyfill/auto', () => ({}));
 
 // Clear the global mock from jest-setup.js for this specific test file
 jest.unmock('../supabaseClient');
-
-import { AppState, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
 
 // Helper to clear module cache and require fresh module
 function requireFreshModule() {

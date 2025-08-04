@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text, TouchableOpacity , Platform } from 'react-native';
 import { AuthProvider, useAuth } from '../AuthContext';
 import { supabase } from '../../services/supabaseClient';
 import { SubscriptionService } from '../../services/subscriptionService';
@@ -9,7 +9,6 @@ import { EmailConfirmationService } from '../../services/emailConfirmationServic
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { Platform } from 'react-native';
 
 // Mock Supabase
 const mockSupabase = {

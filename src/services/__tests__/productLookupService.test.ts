@@ -1,4 +1,9 @@
 // Mock all dependencies before importing the service
+import { ProductLookupService, ProductLookupResult } from '../productLookupService';
+import { SupabaseService } from '../supabaseService';
+import { OpenFoodFactsService } from '../openFoodFactsApi';
+import { VeganStatus, Product } from '../../types';
+
 jest.mock('../supabaseClient', () => ({
   supabase: {
     functions: {
@@ -50,11 +55,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 // Mock environment variables
 process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
-
-import { ProductLookupService, ProductLookupResult } from '../productLookupService';
-import { SupabaseService } from '../supabaseService';
-import { OpenFoodFactsService } from '../openFoodFactsApi';
-import { VeganStatus, Product } from '../../types';
 
 const mockSupabaseService = SupabaseService as jest.Mocked<typeof SupabaseService>;
 const mockOpenFoodFactsService = OpenFoodFactsService as jest.Mocked<typeof OpenFoodFactsService>;

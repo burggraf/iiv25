@@ -110,12 +110,8 @@ export default function ProductResult({
 	const showReportIssueAlert = () => {
 		Alert.alert('Report an issue', 'What would you like to update?', [
 			{
-				text: 'Take new product photo',
-				onPress: () => handleReportIssue('image'),
-			},
-			{
-				text: 'Take photo of product name',
-				onPress: () => handleReportIssue('name'),
+				text: 'Take photo of product',
+				onPress: () => handleReportIssue('product'),
 			},
 			{
 				text: 'Take photo of ingredients',
@@ -128,11 +124,37 @@ export default function ProductResult({
 		])
 	}
 
-	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients') => {
+	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients' | 'product') => {
 		setProcessingReport(true)
 		setReportType(issueType)
 
 		try {
+			// Show user guidance for 'product' case before camera permission
+			if (issueType === 'product') {
+				const shouldContinue = await new Promise<boolean>((resolve) => {
+					Alert.alert(
+						'Take Product Photo',
+						'Take a clear photo of the front of the product and make sure the product name and brand are visible.',
+						[
+							{
+								text: 'Cancel',
+								style: 'cancel',
+								onPress: () => resolve(false)
+							},
+							{
+								text: 'Take Photo',
+								onPress: () => resolve(true)
+							}
+						]
+					)
+				})
+				
+				if (!shouldContinue) {
+					setProcessingReport(false)
+					return
+				}
+			}
+
 			// Request camera permission
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
 
@@ -179,6 +201,16 @@ export default function ProductResult({
 					}
 					successMessage = 'Ingredients updated successfully'
 					break
+				case 'product':
+					cameraConfig = {
+						mediaTypes: 'images',
+						allowsEditing: true,
+						aspect: [4, 3],
+						quality: 0.8,
+						base64: true,
+					}
+					successMessage = 'Product photo and information updated successfully'
+					break
 			}
 
 			// Launch camera with a small delay to let modal state settle
@@ -213,6 +245,9 @@ export default function ProductResult({
 					break
 				case 'ingredients':
 					success = await handleIngredientsUpdate(imageBase64)
+					break
+				case 'product':
+					await handleProductUpdate(imageBase64, imageUri)
 					break
 			}
 
@@ -269,6 +304,21 @@ export default function ProductResult({
 		const response = await ProductCreationService.createProductFromPhoto(
 			imageBase64,
 			currentProduct.barcode
+		)
+
+		if (response.error) {
+			throw new Error(response.error)
+		}
+	}
+
+	const handleProductUpdate = async (imageBase64: string, imageUri: string) => {
+		if (!currentProduct.barcode) return
+
+		// Use product creation service to extract name and brand AND upload image - same as "Create product" flow
+		const response = await ProductCreationService.createProductFromPhoto(
+			imageBase64,
+			currentProduct.barcode,
+			imageUri
 		)
 
 		if (response.error) {
@@ -635,6 +685,7 @@ export default function ProductResult({
 							{reportType === 'image' && 'Uploading new image...'}
 							{reportType === 'name' && 'Extracting product name and brand...'}
 							{reportType === 'ingredients' && 'Analyzing ingredients...'}
+							{reportType === 'product' && 'Processing product photo...'}
 						</Text>
 					</View>
 				</View>
