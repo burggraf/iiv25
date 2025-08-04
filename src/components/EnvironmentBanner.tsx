@@ -6,7 +6,8 @@ interface EnvironmentBannerProps {
 }
 
 const EnvironmentBanner: React.FC<EnvironmentBannerProps> = ({ style }) => {
-  const environment = process.env.ENVIRONMENT;
+  // Try multiple environment variable sources for better compatibility
+  const environment = process.env.EXPO_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT;
   
   // Only show banner for non-production environments
   if (environment === 'production') {

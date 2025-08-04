@@ -316,10 +316,10 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 							<View style={styles.cardRow}>
 								<Text style={styles.cardLabel}>Environment:</Text>
 								<Text style={[styles.cardValue, { 
-									color: process.env.ENVIRONMENT === 'production' ? '#4CAF50' : '#FF9500',
+									color: (process.env.EXPO_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT) === 'production' ? '#4CAF50' : '#FF9500',
 									fontWeight: '700' 
 								}]}>
-									{process.env.ENVIRONMENT?.toUpperCase() || 'UNKNOWN'}
+									{(process.env.EXPO_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT)?.toUpperCase() || 'UNKNOWN'}
 								</Text>
 							</View>
 							<View style={styles.cardRow}>
