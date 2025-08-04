@@ -170,14 +170,14 @@ const styles = StyleSheet.create({
 	},
 	frameMiddle: {
 		flexDirection: 'row',
-		height: 400, // Increased height to match actual crop area
+		height: 420, // Slightly larger height
 	},
 	frameSide: {
 		flex: 1,
 		backgroundColor: 'rgba(0, 0, 0, 0.4)',
 	},
 	photoFrame: {
-		width: 320, // Increased width to match actual crop area
+		width: 340, // Slightly larger width
 		backgroundColor: 'transparent',
 		justifyContent: 'center',
 		alignItems: 'center',
