@@ -6,6 +6,7 @@ import {
 	TouchableOpacity,
 	View,
 	Alert,
+	Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -19,6 +20,8 @@ export default function ProductCreationCameraScreen() {
 	const cameraRef = useRef<CameraView>(null)
 	const [currentStep, setCurrentStep] = useState<'front-photo' | 'ingredients-photo'>('front-photo')
 	const [isCapturing, setIsCapturing] = useState(false)
+	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
+	const [isPreviewMode, setIsPreviewMode] = useState(false)
 
 	const handleTakePhoto = async () => {
 		if (!cameraRef.current || !barcode) {
@@ -38,37 +41,9 @@ export default function ProductCreationCameraScreen() {
 				return
 			}
 
-			if (currentStep === 'front-photo') {
-				// Queue the front product photo for processing
-				await queueJob({
-					jobType: 'product_creation',
-					imageUri: photo.uri,
-					upc: barcode,
-					priority: 3,
-				})
-				
-				// Move to ingredients photo step
-				setCurrentStep('ingredients-photo')
-			} else if (currentStep === 'ingredients-photo') {
-				// Queue the ingredients photo for processing
-				await queueJob({
-					jobType: 'ingredient_parsing',
-					imageUri: photo.uri,
-					upc: barcode,
-					existingProductData: null,
-					priority: 2,
-				})
-				
-				// Show confirmation and go back
-				Alert.alert(
-					"Photos Queued",
-					"Both product and ingredients photos have been queued for processing. You'll receive notifications when they're complete.",
-					[{ 
-						text: "OK", 
-						onPress: () => router.back()
-					}]
-				)
-			}
+			// Set captured photo and enter preview mode
+			setCapturedPhoto(photo.uri)
+			setIsPreviewMode(true)
 		} catch (error) {
 			console.error('Error capturing photo:', error)
 			Alert.alert('Error', 'Failed to capture photo. Please try again.')
@@ -79,6 +54,47 @@ export default function ProductCreationCameraScreen() {
 
 	const handleCancel = () => {
 		router.back()
+	}
+
+	const handleRetakePhoto = () => {
+		setCapturedPhoto(null)
+		setIsPreviewMode(false)
+	}
+
+	const handleUsePhoto = async () => {
+		if (!capturedPhoto || !barcode) return
+
+		try {
+			if (currentStep === 'front-photo') {
+				// Queue the front product photo for processing
+				await queueJob({
+					jobType: 'product_creation',
+					imageUri: capturedPhoto,
+					upc: barcode,
+					priority: 3,
+				})
+				
+				// Move to ingredients photo step
+				setCurrentStep('ingredients-photo')
+				setCapturedPhoto(null)
+				setIsPreviewMode(false)
+			} else if (currentStep === 'ingredients-photo') {
+				// Queue the ingredients photo for processing
+				await queueJob({
+					jobType: 'ingredient_parsing',
+					imageUri: capturedPhoto,
+					upc: barcode,
+					existingProductData: null,
+					priority: 2,
+				})
+				
+				// Go back after queuing both photos
+				router.back()
+			}
+		} catch (error) {
+			console.error('Error processing photo:', error)
+			Alert.alert('Error', 'Failed to process photo. Please try again.')
+		}
 	}
 
 	const getInstructionText = () => {
@@ -93,6 +109,45 @@ export default function ProductCreationCameraScreen() {
 		return currentStep === 'front-photo' ? 'Step 1 of 2: Product Front' : 'Step 2 of 2: Ingredients'
 	}
 
+	if (isPreviewMode && capturedPhoto) {
+		// Preview Mode - Show captured photo with crop overlay
+		return (
+			<View style={styles.container}>
+				{/* Preview Image */}
+				<Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
+				
+				{/* Photo Frame Overlay */}
+				<View style={styles.frameOverlay}>
+					<View style={styles.frameTopBottom} />
+					<View style={styles.frameMiddle}>
+						<View style={styles.frameSide} />
+						<View style={styles.photoFrame}>
+							<View style={[styles.frameCorner, styles.frameCornerTopLeft]} />
+							<View style={[styles.frameCorner, styles.frameCornerTopRight]} />
+							<View style={[styles.frameCorner, styles.frameCornerBottomLeft]} />
+							<View style={[styles.frameCorner, styles.frameCornerBottomRight]} />
+						</View>
+						<View style={styles.frameSide} />
+					</View>
+					<View style={styles.frameTopBottom} />
+				</View>
+
+				{/* Bottom Controls for Preview */}
+				<SafeAreaView style={styles.bottomControlsContainer}>
+					<View style={styles.previewControls}>
+						<TouchableOpacity style={styles.retakeButton} onPress={handleRetakePhoto}>
+							<Text style={styles.retakeButtonText}>Retake</Text>
+						</TouchableOpacity>
+						<TouchableOpacity style={styles.usePhotoButton} onPress={handleUsePhoto}>
+							<Text style={styles.usePhotoButtonText}>Use Photo</Text>
+						</TouchableOpacity>
+					</View>
+				</SafeAreaView>
+			</View>
+		)
+	}
+
+	// Camera Mode - Normal camera view
 	return (
 		<View style={styles.container}>
 			{/* Full Screen Camera */}
@@ -283,5 +338,41 @@ const styles = StyleSheet.create({
 		height: 50,
 		borderRadius: 25,
 		backgroundColor: 'white',
+	},
+	previewImage: {
+		...StyleSheet.absoluteFillObject,
+		zIndex: 1,
+	},
+	previewControls: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: 40,
+		paddingBottom: 40,
+		width: '100%',
+	},
+	retakeButton: {
+		backgroundColor: 'rgba(0, 0, 0, 0.6)',
+		paddingHorizontal: 24,
+		paddingVertical: 12,
+		borderRadius: 20,
+		borderWidth: 1,
+		borderColor: 'rgba(255, 255, 255, 0.3)',
+	},
+	retakeButtonText: {
+		color: 'white',
+		fontSize: 16,
+		fontWeight: '600',
+	},
+	usePhotoButton: {
+		backgroundColor: 'white',
+		paddingHorizontal: 24,
+		paddingVertical: 12,
+		borderRadius: 20,
+	},
+	usePhotoButtonText: {
+		color: 'black',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 })
