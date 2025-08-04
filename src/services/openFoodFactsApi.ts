@@ -7,7 +7,9 @@ const BASE_URL = 'https://world.openfoodfacts.org/api/v0/product';
 export class OpenFoodFactsService {
   static async getProductByBarcode(barcode: string): Promise<Product | null> {
     try {
-      const response = await axios.get<OpenFoodFactsProduct>(`${BASE_URL}/${barcode}.json`);
+      const response = await axios.get<OpenFoodFactsProduct>(`${BASE_URL}/${barcode}.json`, {
+        timeout: 5000 // 5 second timeout
+      });
       
       if (response.data.status === 0 || !response.data.product) {
         return null; // Product not found
@@ -30,7 +32,9 @@ export class OpenFoodFactsService {
         classificationMethod: classificationResult.method,
       };
     } catch (error) {
-      console.error('Error fetching product from Open Food Facts:', error);
+      // Silently handle network errors - user doesn't need to see these
+      // Just log a simple message without the full error details
+      console.log('OpenFoodFacts API temporarily unavailable, falling back gracefully');
       return null;
     }
   }
@@ -337,7 +341,10 @@ export class OpenFoodFactsService {
   }> {
     try {
       const response = await axios.get(
-        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page=${page}&page_size=${pageSize}`
+        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page=${page}&page_size=${pageSize}`,
+        {
+          timeout: 5000 // 5 second timeout
+        }
       );
 
       if (!response.data.products) {
@@ -378,7 +385,8 @@ export class OpenFoodFactsService {
         hasNextPage,
       };
     } catch (error) {
-      console.error('Error searching products:', error);
+      // Silently handle network errors - user doesn't need to see these
+      console.log('OpenFoodFacts search API temporarily unavailable');
       return {
         products: [],
         totalCount: 0,

@@ -33,11 +33,24 @@ import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 import { validateIngredientParsingResult } from '../utils/ingredientValidation'
+import { BackgroundJobsIndicator } from '../components/BackgroundJobsIndicator'
+import { JobStatusModal } from '../components/JobStatusModal'
+import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
+import { backgroundQueueService } from '../services/backgroundQueueService'
 
 
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
 	const { addToHistory, deviceId } = useApp()
+	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
+
+	// Temporary debugging - log stuck jobs on screen load
+	useEffect(() => {
+		if (activeJobs && activeJobs.length > 0) {
+			console.log(`🚨 [DEBUG] Found ${activeJobs.length} stuck jobs on scanner load:`, 
+				activeJobs.map(j => `${j.id.slice(-6)} (${j.jobType}, ${j.status}, created: ${j.createdAt})`));
+		}
+	}, [activeJobs])
 	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
@@ -63,6 +76,7 @@ export default function ScannerScreen() {
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
+	const [showJobsModal, setShowJobsModal] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -116,6 +130,18 @@ export default function ScannerScreen() {
 			loadSubscriptionData()
 		}
 	}, [deviceId, loadSubscriptionData])
+
+	// Listen for background job completion to invalidate cache
+	useEffect(() => {
+		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
+			if (event === 'job_completed' && job?.jobType === 'ingredient_parsing') {
+				console.log(`🔄 Ingredient parsing completed for ${job.upc} - invalidating cache`)
+				invalidateCache(job.upc, 'ingredient parsing completed')
+			}
+		})
+
+		return unsubscribe
+	}, [])
 
 	const loadSubscriptionData = useCallback(async () => {
 		try {
@@ -197,21 +223,30 @@ export default function ScannerScreen() {
 		// Check if we have this UPC in our recent cache
 		const cachedProduct = scannedResultsCache.current.get(data)
 		if (cachedProduct) {
-			console.log(`💾 Using cached result for ${data}`)
-			setScannedProduct(cachedProduct)
-			addToHistory(cachedProduct)
-			showOverlay()
+			// If cached product has no ingredients but status is UNKNOWN, check database for updates
+			const hasNoIngredients = !cachedProduct.ingredients || cachedProduct.ingredients.length === 0
+			const isUnknownStatus = cachedProduct.veganStatus === VeganStatus.UNKNOWN
 			
-			// Show "FREE!" message for cached scans (free users only)
-			if (subscriptionStatus?.subscription_level === 'free') {
-				setShowCacheHitMessage(true)
-				// Hide message after 3 seconds
-				setTimeout(() => {
-					setShowCacheHitMessage(false)
-				}, 3000)
+			if (hasNoIngredients && isUnknownStatus) {
+				console.log(`🔍 Cached product ${data} has no ingredients - checking database for updates`)
+				// Don't return early - let it fall through to database lookup
+			} else {
+				console.log(`💾 Using cached result for ${data}`)
+				setScannedProduct(cachedProduct)
+				addToHistory(cachedProduct)
+				showOverlay()
+				
+				// Show "FREE!" message for cached scans (free users only)
+				if (subscriptionStatus?.subscription_level === 'free') {
+					setShowCacheHitMessage(true)
+					// Hide message after 3 seconds
+					setTimeout(() => {
+						setShowCacheHitMessage(false)
+					}, 3000)
+				}
+				
+				return
 			}
-			
-			return
 		}
 
 		// Let server handle rate limiting - the phantom entry issue needs to be fixed server-side
@@ -272,6 +307,13 @@ export default function ScannerScreen() {
 		console.log(`💾 Cached result for ${upc} (cache size: ${scannedResultsCache.current.size})`)
 	}
 
+	const invalidateCache = (upc: string, reason: string) => {
+		if (scannedResultsCache.current.has(upc)) {
+			scannedResultsCache.current.delete(upc)
+			console.log(`🗑️ Invalidated cache for ${upc} - ${reason}`)
+		}
+	}
+
 	const showOverlay = () => {
 		// Use larger height only if product is UNKNOWN AND has no ingredients (to accommodate scan button)
 		const needsScanButton = scannedProduct?.veganStatus === VeganStatus.UNKNOWN && 
@@ -309,17 +351,20 @@ export default function ScannerScreen() {
 
 
 	const handleScanIngredients = async () => {
-		let isSuccess = false
+		// Use the background queue for ingredient scanning - same as long press
+		await handleScanIngredientsBackground()
+	}
+
+	const handleScanIngredientsBackground = async () => {
 		try {
 			setIsParsingIngredients(true)
 			setParsedIngredients(null)
-			setShowIngredientScanModal(true)
-
+			
 			// Request camera permission for image picker
 			const { status } = await ImagePicker.requestCameraPermissionsAsync()
 			if (status !== 'granted') {
-				setError('Camera permission is required to scan ingredients')
-				setShowIngredientScanModal(false)
+				setIngredientScanError('Camera permission is required to scan ingredients')
+				setIsParsingIngredients(false)
 				return
 			}
 
@@ -329,94 +374,45 @@ export default function ScannerScreen() {
 				allowsEditing: true,
 				aspect: [4, 3],
 				quality: 0.8,
-				base64: true,
+				base64: false, // We don't need base64 for background processing
 			})
 
 			if (result.canceled) {
-				setShowIngredientScanModal(false)
-				// Clear error state and hide overlay to allow new scans
+				setIsParsingIngredients(false)
 				hideOverlay()
 				return
 			}
 
-			if (!result.assets[0].base64) {
-				setError('Failed to capture image data')
-				setShowIngredientScanModal(false)
+			if (!result.assets[0].uri || !currentBarcode) {
+				setIngredientScanError('Failed to capture image or missing barcode')
+				setIsParsingIngredients(false)
 				return
 			}
 
-			// Call ingredient OCR service with UPC and Open Food Facts data if available
-			if (!currentBarcode) {
-				setError('No barcode available for ingredient processing')
-				setShowIngredientScanModal(false)
-				return
-			}
+			// Queue the job for background processing
+			const job = await queueJob({
+				jobType: 'ingredient_parsing',
+				imageUri: result.assets[0].uri,
+				upc: currentBarcode,
+				existingProductData: scannedProduct,
+				priority: 2, // High priority for user-initiated actions
+			})
 
-			const data = await IngredientOCRService.parseIngredientsFromImage(
-				result.assets[0].base64,
-				currentBarcode,
-				scannedProduct || undefined
+			// Show success feedback and clear overlay
+			setIsParsingIngredients(false)
+			hideOverlay()
+			
+			// Show brief confirmation
+			Alert.alert(
+				"Photo Queued",
+				"Your ingredients photo has been queued for processing. You'll receive a notification when it's complete. You can continue using the app.",
+				[{ text: "OK" }]
 			)
 
-			const validation = validateIngredientParsingResult(data)
-			if (!validation.isValid) {
-				setIngredientScanError(validation.errorMessage!)
-				setShowIngredientScanModal(false)
-				return
-			}
-
-			setParsedIngredients(data.ingredients)
-			setError(null)
-			isSuccess = true
-
-			// Always refresh the product data after successful ingredient processing
-			console.log(`🔄 Refreshing product data after ingredient processing`)
-			try {
-				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'IngredientOCR' })
-				if (refreshResult.product) {
-					console.log(`✅ Product refreshed with updated classification: ${refreshResult.product.veganStatus}`)
-					setScannedProduct(refreshResult.product)
-					addToHistory(refreshResult.product)
-					// Update cache with new product data
-					addToCache(currentBarcode, refreshResult.product)
-					
-					// Clear parsed ingredients since we're now showing the full product
-					setParsedIngredients(null)
-					
-					// Show normal product overlay instead of ingredients list
-					showOverlay()
-				} else {
-					// Fallback: show parsed ingredients if refresh failed
-					console.log('⚠️ Product refresh failed, showing parsed ingredients')
-					// Update overlay to show parsed ingredients
-					Animated.timing(overlayHeight, {
-						toValue: 200, // Larger height for ingredients list
-						duration: 300,
-						useNativeDriver: false,
-					}).start()
-				}
-			} catch (refreshError) {
-				console.error('Error refreshing product after OCR:', refreshError)
-				// Fallback: show parsed ingredients if refresh failed
-				console.log('⚠️ Product refresh error, showing parsed ingredients')
-				// Update overlay to show parsed ingredients
-				Animated.timing(overlayHeight, {
-					toValue: 200, // Larger height for ingredients list
-					duration: 300,
-					useNativeDriver: false,
-				}).start()
-			}
 		} catch (err) {
-			console.error('Error parsing ingredients:', err)
-			setError('Failed to parse ingredients. Please try again.')
-		} finally {
+			console.error('Error queuing background ingredient scan:', err)
+			setIngredientScanError('Failed to queue photo for processing. Please try again.')
 			setIsParsingIngredients(false)
-			// Show success feedback before closing modal
-			if (isSuccess) {
-				showSuccessFeedback(setShowIngredientScanSuccess, setShowIngredientScanModal)
-			} else {
-				setShowIngredientScanModal(false)
-			}
 		}
 	}
 
@@ -450,25 +446,24 @@ export default function ScannerScreen() {
 				return
 			}
 
-			// Launch camera to take photo
-			const result = await ImagePicker.launchCameraAsync({
+			// Step 1: Take front product photo
+			const frontPhotoResult = await ImagePicker.launchCameraAsync({
 				mediaTypes: 'images',
 				allowsEditing: true,
 				aspect: [4, 3],
 				quality: 0.8,
-				base64: true,
+				base64: false,
 			})
 
-			if (result.canceled) {
+			if (frontPhotoResult.canceled) {
 				setIsCreatingProduct(false)
-				// Clear error state and hide overlay to allow new scans
 				hideOverlay()
 				return
 			}
 
-			if (!result.assets[0].base64) {
+			if (!frontPhotoResult.assets[0].uri || !currentBarcode) {
 				setProductCreationError({
-					error: 'Failed to capture image data',
+					error: 'Failed to capture front photo or missing barcode',
 					imageBase64: '',
 					imageUri: '',
 					retryable: true
@@ -477,11 +472,129 @@ export default function ScannerScreen() {
 				return
 			}
 
-			await processProductCreation(result.assets[0].base64, result.assets[0].uri)
+			// Queue the front product photo for processing
+			await queueJob({
+				jobType: 'product_creation',
+				imageUri: frontPhotoResult.assets[0].uri,
+				upc: currentBarcode,
+				priority: 3, // Highest priority for product creation
+			})
+
+			// Step 2: Take ingredients photo
+			const ingredientsPhotoResult = await ImagePicker.launchCameraAsync({
+				mediaTypes: 'images',
+				allowsEditing: true,
+				aspect: [4, 3],
+				quality: 0.8,
+				base64: false,
+			})
+
+			if (!ingredientsPhotoResult.canceled && ingredientsPhotoResult.assets[0].uri) {
+				// Queue the ingredients photo for processing (lower priority than product creation)
+				await queueJob({
+					jobType: 'ingredient_parsing',
+					imageUri: ingredientsPhotoResult.assets[0].uri,
+					upc: currentBarcode,
+					existingProductData: null, // Product doesn't exist yet
+					priority: 2,
+				})
+			}
+
+			// Show success feedback and clear overlay
+			setIsCreatingProduct(false)
+			hideOverlay()
+			
+			// Show confirmation
+			const ingredientMessage = ingredientsPhotoResult.canceled 
+				? "Product photo has been queued for processing." 
+				: "Both product and ingredients photos have been queued for processing."
+			
+			Alert.alert(
+				"Photos Queued",
+				`${ingredientMessage} You'll receive notifications when they're complete. You can continue using the app.`,
+				[{ text: "OK" }]
+			)
+
 		} catch (err) {
-			console.error('Error in camera flow:', err)
+			console.error('Error in photo capture flow:', err)
 			setProductCreationError({
-				error: 'Failed to capture photo. Please try again.',
+				error: 'Failed to capture photos. Please try again.',
+				imageBase64: '',
+				imageUri: '',
+				retryable: true
+			});
+			setIsCreatingProduct(false)
+		}
+	}
+
+	const handleCreateProductBackground = async () => {
+		try {
+			setShowCreateProductModal(false)
+			setIsCreatingProduct(true)
+			setError(null)
+
+			// Request camera permission for image picker
+			const { status } = await ImagePicker.requestCameraPermissionsAsync()
+			if (status !== 'granted') {
+				setProductCreationError({
+					error: 'Camera permission is required to create product',
+					imageBase64: '',
+					imageUri: '',
+					retryable: false
+				});
+				setIsCreatingProduct(false)
+				return
+			}
+
+			// Launch camera to take photo
+			const result = await ImagePicker.launchCameraAsync({
+				mediaTypes: 'images',
+				allowsEditing: true,
+				aspect: [4, 3],
+				quality: 0.8,
+				base64: false, // We don't need base64 for background processing
+			})
+
+			if (result.canceled) {
+				setIsCreatingProduct(false)
+				hideOverlay()
+				return
+			}
+
+			if (!result.assets[0].uri || !currentBarcode) {
+				setProductCreationError({
+					error: 'Failed to capture image or missing barcode',
+					imageBase64: '',
+					imageUri: '',
+					retryable: true
+				});
+				setIsCreatingProduct(false)
+				return
+			}
+
+			// Queue the job for background processing
+			const job = await queueJob({
+				jobType: 'product_creation',
+				imageUri: result.assets[0].uri,
+				upc: currentBarcode,
+				priority: 2, // High priority for user-initiated actions
+			})
+
+			// Show success feedback and clear overlay
+			setIsCreatingProduct(false)
+			hideOverlay()
+			
+			// Show brief confirmation
+			Alert.alert(
+				"Photo Queued",
+				"Your photo has been queued for processing. You'll receive a notification when it's complete. You can continue using the app.",
+				[{ text: "OK" }]
+			)
+
+		} catch (err) {
+			console.error('Error queuing background job:', err)
+			setProductCreationError({
+				error: 'Failed to queue photo for processing. Please try again.',
 				imageBase64: '',
 				imageUri: '',
 				retryable: true
@@ -509,7 +622,7 @@ export default function ScannerScreen() {
 
 	const handleIngredientScanRetry = () => {
 		setIngredientScanError(null);
-		handleScanIngredients();
+		handleScanIngredientsBackground();
 	}
 
 	const handleIngredientScanCancel = () => {
@@ -864,6 +977,17 @@ export default function ScannerScreen() {
 					<Logo size={32} />
 					<Text style={styles.appTitle}>Is It Vegan?</Text>
 				</View>
+				{/* Queue Management Button */}
+				{activeJobs && activeJobs.length > 0 && (
+					<TouchableOpacity 
+						style={styles.queueButton}
+						onPress={() => setShowJobsModal(true)}
+					>
+						<Text style={styles.queueButtonText}>
+							{activeJobs.some(j => j.status === 'processing') ? '⚡' : '⏳'} {activeJobs.length}
+						</Text>
+					</TouchableOpacity>
+				)}
 			</View>
 
 			<View style={styles.instructionsContainer}>
@@ -877,6 +1001,9 @@ export default function ScannerScreen() {
 					</Text>
 				</TouchableOpacity>
 			</View>
+
+			{/* Background Jobs Indicator */}
+			<BackgroundJobsIndicator onPress={() => setShowJobsModal(true)} />
 
 			{/* Camera View */}
 			<View style={styles.cameraContainer}>
@@ -996,6 +1123,7 @@ export default function ScannerScreen() {
 								<TouchableOpacity
 									style={styles.scanIngredientsButtonSmall}
 									onPress={handleScanIngredients}
+									onLongPress={handleScanIngredientsBackground}
 									disabled={isParsingIngredients}>
 									{isParsingIngredients ? (
 										<ActivityIndicator size='small' color='white' />
@@ -1042,6 +1170,7 @@ export default function ScannerScreen() {
 									<TouchableOpacity
 										style={styles.scanIngredientsButton}
 										onPress={handleScanIngredients}
+										onLongPress={handleScanIngredientsBackground}
 										disabled={isParsingIngredients || isCreatingProduct}>
 										{isParsingIngredients ? (
 											<ActivityIndicator size='small' color='white' />
@@ -1256,7 +1385,10 @@ export default function ScannerScreen() {
 							<BarcodeIcon size={48} color="#FF6B35" />
 							<Text style={styles.createProductModalTitle}>Add New Product</Text>
 							<Text style={styles.createProductModalSubtitle}>
-								Take a photo of the entire front of the product package.
+								Take two photos:{'\n'}
+								1. Take a clear photo of the front of the product showing the product's name and brand.{'\n'}
+								2. Take a clear photo of the product ingredients.{'\n'}
+								Both will be processed in the background so you can continue scanning.
 							</Text>
 						</View>
 						<View style={styles.createProductModalButtons}>
@@ -1268,7 +1400,7 @@ export default function ScannerScreen() {
 							<TouchableOpacity
 								style={styles.createProductModalConfirmButton}
 								onPress={handleCreateProductConfirm}>
-								<Text style={styles.createProductModalConfirmText}>Take Photo</Text>
+								<Text style={styles.createProductModalConfirmText}>Take Photos</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -1285,6 +1417,12 @@ export default function ScannerScreen() {
 					iconType="scanner"
 				/>
 			)}
+
+			{/* Background Jobs Modal */}
+			<JobStatusModal 
+				isVisible={showJobsModal}
+				onClose={() => setShowJobsModal(false)}
+			/>
 		</SafeAreaView>
 	)
 }
@@ -1325,12 +1463,26 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
+		flex: 1,
 	},
 	appTitle: {
 		fontSize: 18,
 		fontWeight: 'bold',
 		marginLeft: 8,
 		color: '#333',
+	},
+	queueButton: {
+		backgroundColor: '#007AFF',
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 16,
+		position: 'absolute',
+		right: 16,
+	},
+	queueButtonText: {
+		color: 'white',
+		fontSize: 14,
+		fontWeight: '600',
 	},
 	instructionsContainer: {
 		flexDirection: 'row',

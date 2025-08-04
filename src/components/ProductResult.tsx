@@ -14,13 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { useApp } from '../context/AppContext'
-import { IngredientOCRService } from '../services/ingredientOCRService'
+import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
 import { ProductCreationService } from '../services/productCreationService'
 import { ProductImageUploadService } from '../services/productImageUploadService'
 import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
 import { Product, VeganStatus } from '../types'
-import { validateIngredientParsingResult } from '../utils/ingredientValidation'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
 
@@ -43,6 +42,7 @@ export default function ProductResult({
 	onProductUpdated,
 }: ProductResultProps) {
 	const { addToHistory } = useApp()
+	const { queueJob } = useBackgroundJobs()
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
@@ -231,8 +231,11 @@ export default function ProductResult({
 				return
 			}
 
-			// Show processing modal immediately after image capture
-			setShowProcessingModal(true)
+			// Only show processing modal for synchronous operations (not background jobs)
+			const isBackgroundJob = issueType === 'ingredients' || issueType === 'product'
+			if (!isBackgroundJob) {
+				setShowProcessingModal(true)
+			}
 
 			// Process based on issue type
 			let success = true
@@ -244,14 +247,14 @@ export default function ProductResult({
 					await handleNameUpdate(imageBase64)
 					break
 				case 'ingredients':
-					success = await handleIngredientsUpdate(imageBase64)
+					success = await handleIngredientsUpdate(imageUri, imageBase64)
 					break
 				case 'product':
-					await handleProductUpdate(imageBase64, imageUri)
+					success = await handleProductUpdate(imageBase64, imageUri)
 					break
 			}
 
-			// Only show success if the operation actually succeeded
+			// Only show success if the operation actually succeeded AND wasn't handled by the specific handler
 			if (success) {
 				// Hide processing modal, refresh product data, and show success
 				setShowProcessingModal(false)
@@ -267,6 +270,7 @@ export default function ProductResult({
 		} finally {
 			setProcessingReport(false)
 			setReportType('')
+			setShowProcessingModal(false) // Ensure modal is always hidden
 		}
 	}
 
@@ -311,42 +315,73 @@ export default function ProductResult({
 		}
 	}
 
-	const handleProductUpdate = async (imageBase64: string, imageUri: string) => {
-		if (!currentProduct.barcode) return
+	const handleProductUpdate = async (imageBase64: string, imageUri: string): Promise<boolean> => {
+		if (!currentProduct.barcode) return false
 
-		// Use product creation service to extract name and brand AND upload image - same as "Create product" flow
-		const response = await ProductCreationService.createProductFromPhoto(
-			imageBase64,
-			currentProduct.barcode,
-			imageUri
-		)
+		try {
+			console.log('🔄 [ProductUpdate] Starting product update job queue')
+			// Queue the product creation job instead of processing synchronously
+			const job = await queueJob({
+				jobType: 'product_creation',
+				imageUri: imageUri,
+				upc: currentProduct.barcode,
+				existingProductData: currentProduct,
+				priority: 2, // High priority for product updates
+			})
+			console.log('🔄 [ProductUpdate] Job queued successfully:', job.id.slice(-6))
 
-		if (response.error) {
-			throw new Error(response.error)
+			// Reset processing state (modal was never shown for background jobs)
+			console.log('🔄 [ProductUpdate] Resetting processing state')
+			setProcessingReport(false)
+
+			// Show success message indicating job was queued
+			Alert.alert(
+				'Product Update Queued',
+				'Your product photo has been queued and will be processed in the background. You can continue using the app and check the progress in the background jobs manager.',
+				[{ text: 'OK' }]
+			)
+
+			return false // Return false to prevent parent from handling success
+		} catch (error) {
+			console.error('Error queueing product creation job:', error)
+			// Reset state and show error
+			setProcessingReport(false)
+			Alert.alert('Error', 'Failed to queue product update job. Please try again.')
+			return false
 		}
 	}
 
-	const handleIngredientsUpdate = async (imageBase64: string): Promise<boolean> => {
+	const handleIngredientsUpdate = async (imageUri: string, imageBase64: string): Promise<boolean> => {
 		if (!currentProduct.barcode) return false
 
-		// Extract ingredients using OCR service - this edge function handles the database update
-		const ocrResponse = await IngredientOCRService.parseIngredientsFromImage(
-			imageBase64,
-			currentProduct.barcode
-		)
+		try {
+			// Queue the ingredient parsing job instead of processing synchronously
+			await queueJob({
+				jobType: 'ingredient_parsing',
+				imageUri: imageUri,
+				upc: currentProduct.barcode,
+				existingProductData: currentProduct,
+				priority: 2, // High priority for ingredient parsing
+			})
 
-		// Use the same validation logic as the scanner screen
-		const validation = validateIngredientParsingResult(ocrResponse)
-		if (!validation.isValid) {
-			// Set error state and show modal instead of throwing
-			setIngredientScanError(validation.errorMessage!)
-			setShowProcessingModal(false)
+			// Reset processing state (modal was never shown for background jobs)
 			setProcessingReport(false)
-			setReportType('')
+
+			// Show success message indicating job was queued
+			Alert.alert(
+				'Ingredient Scan Queued',
+				'Your ingredient scan has been queued and will be processed in the background. You can continue using the app and check the progress in the background jobs manager.',
+				[{ text: 'OK' }]
+			)
+
+			return false // Return false to prevent parent from handling success
+		} catch (error) {
+			console.error('Error queueing ingredient parsing job:', error)
+			// Set error state instead of throwing
+			setIngredientScanError('Failed to queue ingredient parsing job. Please try again.')
+			setProcessingReport(false)
 			return false
 		}
-
-		return true
 	}
 
 	const handleIngredientScanRetry = () => {
