@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker'
 import React, { useEffect, useState } from 'react'
 import {
 	ActivityIndicator,
@@ -12,11 +11,9 @@ import {
 	View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 
 import { useApp } from '../context/AppContext'
-import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
-import { ProductCreationService } from '../services/productCreationService'
-import { ProductImageUploadService } from '../services/productImageUploadService'
 import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
 import { Product, VeganStatus } from '../types'
@@ -41,16 +38,12 @@ export default function ProductResult({
 	hideHeaderBackButton = false,
 	onProductUpdated,
 }: ProductResultProps) {
+	const router = useRouter()
 	const { addToHistory } = useApp()
-	const { queueJob } = useBackgroundJobs()
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
-	const [processingReport, setProcessingReport] = useState(false)
-	const [reportType, setReportType] = useState<string>('')
-	const [showProcessingModal, setShowProcessingModal] = useState(false)
-	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
 
 	// Fetch ingredient classifications from database
 	useEffect(() => {
@@ -111,11 +104,11 @@ export default function ProductResult({
 		Alert.alert('Report an issue', 'What would you like to update?', [
 			{
 				text: 'Take photo of product',
-				onPress: () => handleReportIssue('product'),
+				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/product`),
 			},
 			{
 				text: 'Take photo of ingredients',
-				onPress: () => handleReportIssue('ingredients'),
+				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/ingredients`),
 			},
 			{
 				text: 'Cancel',
@@ -124,274 +117,7 @@ export default function ProductResult({
 		])
 	}
 
-	const handleReportIssue = async (issueType: 'image' | 'name' | 'ingredients' | 'product') => {
-		setProcessingReport(true)
-		setReportType(issueType)
 
-		try {
-			// Show user guidance for 'product' case before camera permission
-			if (issueType === 'product') {
-				const shouldContinue = await new Promise<boolean>((resolve) => {
-					Alert.alert(
-						'Take Product Photo',
-						'Take a clear photo of the front of the product and make sure the product name and brand are visible.',
-						[
-							{
-								text: 'Cancel',
-								style: 'cancel',
-								onPress: () => resolve(false)
-							},
-							{
-								text: 'Take Photo',
-								onPress: () => resolve(true)
-							}
-						]
-					)
-				})
-				
-				if (!shouldContinue) {
-					setProcessingReport(false)
-					return
-				}
-			}
-
-			// Request camera permission
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-
-			if (status !== 'granted') {
-				Alert.alert(
-					'Permission Required',
-					'Camera permission is required to update product information'
-				)
-				setProcessingReport(false)
-				return
-			}
-
-			let cameraConfig = {}
-			let successMessage = ''
-
-			switch (issueType) {
-				case 'image':
-					cameraConfig = {
-						mediaTypes: 'images',
-						allowsEditing: true,
-						aspect: [1, 1],
-						quality: 0.8,
-						base64: true,
-					}
-					successMessage = 'Product image updated successfully'
-					break
-				case 'name':
-					cameraConfig = {
-						mediaTypes: 'images',
-						allowsEditing: true,
-						aspect: [4, 3],
-						quality: 0.8,
-						base64: true,
-					}
-					successMessage = 'Product name and brand updated successfully'
-					break
-				case 'ingredients':
-					cameraConfig = {
-						mediaTypes: 'images',
-						allowsEditing: true,
-						aspect: [4, 3],
-						quality: 0.8,
-						base64: true,
-					}
-					successMessage = 'Ingredients updated successfully'
-					break
-				case 'product':
-					cameraConfig = {
-						mediaTypes: 'images',
-						allowsEditing: true,
-						aspect: [4, 3],
-						quality: 0.8,
-						base64: true,
-					}
-					successMessage = 'Product photo and information updated successfully'
-					break
-			}
-
-			// Launch camera with a small delay to let modal state settle
-			await new Promise((resolve) => setTimeout(resolve, 100))
-			const result = await ImagePicker.launchCameraAsync(cameraConfig)
-
-			if (result.canceled) {
-				setProcessingReport(false)
-				return
-			}
-
-			const imageUri = result.assets[0].uri
-			const imageBase64 = result.assets[0].base64
-
-			if (!imageBase64) {
-				Alert.alert('Error', 'Failed to process image')
-				setProcessingReport(false)
-				return
-			}
-
-			// Only show processing modal for synchronous operations (not background jobs)
-			const isBackgroundJob = issueType === 'ingredients' || issueType === 'product'
-			if (!isBackgroundJob) {
-				setShowProcessingModal(true)
-			}
-
-			// Process based on issue type
-			let success = true
-			switch (issueType) {
-				case 'image':
-					await handleImageUpdate(imageUri, imageBase64)
-					break
-				case 'name':
-					await handleNameUpdate(imageBase64)
-					break
-				case 'ingredients':
-					success = await handleIngredientsUpdate(imageUri, imageBase64)
-					break
-				case 'product':
-					success = await handleProductUpdate(imageBase64, imageUri)
-					break
-			}
-
-			// Only show success if the operation actually succeeded AND wasn't handled by the specific handler
-			if (success) {
-				// Hide processing modal, refresh product data, and show success
-				setShowProcessingModal(false)
-				await refreshProductData()
-				Alert.alert('Success', successMessage)
-			}
-			// If success is false, the error handling was already done in the specific handler
-		} catch (error) {
-			console.error('Error processing report:', error)
-			// Hide processing modal and show error
-			setShowProcessingModal(false)
-			Alert.alert('Error', `Failed to update product information: ${error}`)
-		} finally {
-			setProcessingReport(false)
-			setReportType('')
-			setShowProcessingModal(false) // Ensure modal is always hidden
-		}
-	}
-
-	const handleImageUpdate = async (imageUri: string, imageBase64: string) => {
-		if (!currentProduct.barcode) return
-
-		// Upload new image to storage
-		const uploadResult = await ProductImageUploadService.uploadProductImage(
-			imageUri,
-			currentProduct.barcode
-		)
-
-		if (!uploadResult.success) {
-			throw new Error(uploadResult.error || 'Failed to upload image')
-		}
-
-		// Update product imageurl in database via edge function with timestamp for cache busting
-		const timestampedImageUrl = `[SUPABASE]?t=${Date.now()}`
-		const { error } = await supabase.functions.invoke('update-product-image', {
-			body: {
-				upc: currentProduct.barcode,
-				imageUrl: timestampedImageUrl,
-			},
-		})
-
-		if (error) {
-			throw new Error(`Failed to update product image URL: ${error.message}`)
-		}
-	}
-
-	const handleNameUpdate = async (imageBase64: string) => {
-		if (!currentProduct.barcode) return
-
-		// Use product creation service to extract name and brand - this edge function handles the database update
-		const response = await ProductCreationService.createProductFromPhoto(
-			imageBase64,
-			currentProduct.barcode
-		)
-
-		if (response.error) {
-			throw new Error(response.error)
-		}
-	}
-
-	const handleProductUpdate = async (imageBase64: string, imageUri: string): Promise<boolean> => {
-		if (!currentProduct.barcode) return false
-
-		try {
-			console.log('🔄 [ProductUpdate] Starting product update job queue')
-			// Queue the product creation job instead of processing synchronously
-			const job = await queueJob({
-				jobType: 'product_creation',
-				imageUri: imageUri,
-				upc: currentProduct.barcode,
-				existingProductData: currentProduct,
-				priority: 2, // High priority for product updates
-			})
-			console.log('🔄 [ProductUpdate] Job queued successfully:', job.id.slice(-6))
-
-			// Reset processing state (modal was never shown for background jobs)
-			console.log('🔄 [ProductUpdate] Resetting processing state')
-			setProcessingReport(false)
-
-			// Show success message indicating job was queued
-			Alert.alert(
-				'Product Update Queued',
-				'Your product photo has been queued and will be processed in the background. You can continue using the app and check the progress in the background jobs manager.',
-				[{ text: 'OK' }]
-			)
-
-			return false // Return false to prevent parent from handling success
-		} catch (error) {
-			console.error('Error queueing product creation job:', error)
-			// Reset state and show error
-			setProcessingReport(false)
-			Alert.alert('Error', 'Failed to queue product update job. Please try again.')
-			return false
-		}
-	}
-
-	const handleIngredientsUpdate = async (imageUri: string, imageBase64: string): Promise<boolean> => {
-		if (!currentProduct.barcode) return false
-
-		try {
-			// Queue the ingredient parsing job instead of processing synchronously
-			await queueJob({
-				jobType: 'ingredient_parsing',
-				imageUri: imageUri,
-				upc: currentProduct.barcode,
-				existingProductData: currentProduct,
-				priority: 2, // High priority for ingredient parsing
-			})
-
-			// Reset processing state (modal was never shown for background jobs)
-			setProcessingReport(false)
-
-			// Show success message indicating job was queued
-			Alert.alert(
-				'Ingredient Scan Queued',
-				'Your ingredient scan has been queued and will be processed in the background. You can continue using the app and check the progress in the background jobs manager.',
-				[{ text: 'OK' }]
-			)
-
-			return false // Return false to prevent parent from handling success
-		} catch (error) {
-			console.error('Error queueing ingredient parsing job:', error)
-			// Set error state instead of throwing
-			setIngredientScanError('Failed to queue ingredient parsing job. Please try again.')
-			setProcessingReport(false)
-			return false
-		}
-	}
-
-	const handleIngredientScanRetry = () => {
-		setIngredientScanError(null)
-		handleReportIssue('ingredients')
-	}
-
-	const handleIngredientScanCancel = () => {
-		setIngredientScanError(null)
-	}
 
 	const getVerdictColor = (verdict: string): string => {
 		switch (verdict) {
@@ -698,65 +424,12 @@ export default function ProductResult({
 				<View style={styles.reportIssueSection}>
 					<TouchableOpacity
 						style={styles.reportIssueButton}
-						onPress={showReportIssueAlert}
-						disabled={processingReport}>
+						onPress={showReportIssueAlert}>
 						<Text style={styles.reportIssueButtonText}>Report an issue with this product</Text>
 					</TouchableOpacity>
 				</View>
 			</ScrollView>
 
-			{/* Processing Modal */}
-			<Modal
-				visible={showProcessingModal}
-				transparent={true}
-				animationType='fade'
-				onRequestClose={() => {}} // Prevent dismissal
-			>
-				<View style={styles.processingModalOverlay}>
-					<View style={styles.processingModalContent}>
-						<ActivityIndicator size='large' color='#FF6B35' />
-						<Text style={styles.processingModalTitle}>Processing</Text>
-						<Text style={styles.processingModalSubtitle}>
-							{reportType === 'image' && 'Uploading new image...'}
-							{reportType === 'name' && 'Extracting product name and brand...'}
-							{reportType === 'ingredients' && 'Analyzing ingredients...'}
-							{reportType === 'product' && 'Processing product photo...'}
-						</Text>
-					</View>
-				</View>
-			</Modal>
-
-			{/* Ingredient Scan Error Modal */}
-			{ingredientScanError && (
-				<View style={styles.createProductModal}>
-					<View style={styles.createProductModalContent}>
-						<View style={styles.createProductModalHeader}>
-							<Text style={styles.retryErrorIcon}>❌</Text>
-							<Text style={styles.createProductModalTitle}>Ingredient Scan Failed</Text>
-							<Text style={styles.createProductModalSubtitle}>
-								{ingredientScanError}
-							</Text>
-						</View>
-						<View style={styles.createProductModalButtons}>
-							<TouchableOpacity
-								style={styles.createProductModalCancelButton}
-								onPress={handleIngredientScanCancel}>
-								<Text style={styles.createProductModalCancelText}>Cancel</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={styles.createProductModalConfirmButton}
-								onPress={handleIngredientScanRetry}
-								disabled={processingReport}>
-								{processingReport ? (
-									<ActivityIndicator size='small' color='white' />
-								) : (
-									<Text style={styles.createProductModalConfirmText}>Try Again</Text>
-								)}
-							</TouchableOpacity>
-						</View>
-					</View>
-				</View>
-			)}
 		</SafeAreaView>
 	)
 }
@@ -1130,118 +803,5 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: '#495057',
 		fontWeight: '500',
-	},
-	processingModalOverlay: {
-		flex: 1,
-		backgroundColor: 'rgba(0, 0, 0, 0.7)',
-		justifyContent: 'center',
-		alignItems: 'center',
-	},
-	processingModalContent: {
-		backgroundColor: 'white',
-		borderRadius: 12,
-		padding: 32,
-		alignItems: 'center',
-		minWidth: 200,
-		shadowColor: '#000',
-		shadowOffset: {
-			width: 0,
-			height: 2,
-		},
-		shadowOpacity: 0.25,
-		shadowRadius: 3.84,
-		elevation: 5,
-	},
-	processingModalTitle: {
-		fontSize: 18,
-		fontWeight: 'bold',
-		color: '#333',
-		marginTop: 16,
-		marginBottom: 8,
-	},
-	processingModalSubtitle: {
-		fontSize: 14,
-		color: '#666',
-		textAlign: 'center',
-		lineHeight: 20,
-	},
-	createProductModal: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: 'rgba(0, 0, 0, 0.9)',
-		justifyContent: 'center',
-		alignItems: 'center',
-		zIndex: 2000,
-	},
-	createProductModalContent: {
-		backgroundColor: 'white',
-		borderRadius: 16,
-		padding: 32,
-		margin: 20,
-		alignItems: 'center',
-		maxWidth: 350,
-		width: '90%',
-	},
-	createProductModalHeader: {
-		alignItems: 'center',
-		marginBottom: 32,
-	},
-	createProductModalTitle: {
-		fontSize: 24,
-		fontWeight: 'bold',
-		color: '#333',
-		marginTop: 16,
-		marginBottom: 12,
-		textAlign: 'center',
-	},
-	createProductModalSubtitle: {
-		fontSize: 16,
-		color: '#666',
-		textAlign: 'center',
-		lineHeight: 22,
-	},
-	createProductModalButtons: {
-		flexDirection: 'row',
-		gap: 12,
-		width: '100%',
-		justifyContent: 'space-between',
-	},
-	createProductModalCancelButton: {
-		flex: 1,
-		backgroundColor: '#f0f0f0',
-		paddingVertical: 16,
-		paddingHorizontal: 8,
-		borderRadius: 12,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	createProductModalCancelText: {
-		color: '#666',
-		fontSize: 16,
-		fontWeight: '600',
-		textAlign: 'center',
-	},
-	createProductModalConfirmButton: {
-		flex: 1,
-		backgroundColor: '#FF6B35',
-		paddingVertical: 16,
-		paddingHorizontal: 8,
-		borderRadius: 12,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	createProductModalConfirmText: {
-		color: 'white',
-		fontSize: 16,
-		fontWeight: '600',
-		textAlign: 'center',
-	},
-	retryErrorIcon: {
-		fontSize: 32,
-		textAlign: 'center',
-		marginBottom: 8,
 	},
 })

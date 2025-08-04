@@ -63,6 +63,14 @@ export default function RootLayout() {
                         gestureEnabled: false 
                       }} 
                     />
+                    <Stack.Screen 
+                      name="report-issue/[barcode]/[type]" 
+                      options={{ 
+                        headerShown: false, 
+                        presentation: 'fullScreenModal',
+                        gestureEnabled: false 
+                      }} 
+                    />
                     <Stack.Screen name="+not-found" />
                   </Stack>
                   <StatusBar style="auto" />
