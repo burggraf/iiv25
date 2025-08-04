@@ -1,13 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product } from '../types';
 import deviceIdService from '../services/deviceIdService';
+import { historyService, HistoryItem, HistoryEventListener } from '../services/HistoryService';
+import { cacheInvalidationService } from '../services/CacheInvalidationService';
 
-export interface HistoryItem {
-  barcode: string;
-  scannedAt: Date;
-  cachedProduct: Product; // For immediate display
-}
+// HistoryItem is now exported from HistoryService
 
 interface AppContextType {
   scanHistory: Product[];
@@ -21,7 +18,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEY = '@IsItVegan:scanHistory';
+// Storage key is now managed by HistoryService
 
 interface AppProviderProps {
   children: ReactNode;
@@ -38,168 +35,95 @@ export function AppProvider({ children }: AppProviderProps) {
     initializeApp();
   }, []);
 
+  // History event listener
+  useEffect(() => {
+    const listener: HistoryEventListener = {
+      onHistoryUpdated: (items: HistoryItem[]) => {
+        setHistoryItems(items);
+        setScanHistory(items.map(item => item.cachedProduct));
+      },
+      onProductUpdated: (barcode: string, product: Product) => {
+        // History will be updated automatically through onHistoryUpdated
+        console.log(`📚 Product updated in history: ${barcode}`);
+      }
+    };
+
+    historyService.addListener(listener);
+
+    return () => {
+      historyService.removeListener(listener);
+    };
+  }, []);
+
   const initializeApp = async () => {
     try {
+      console.log('🚀 [AppContext] *** INITIALIZING APP SERVICES ***');
+      console.log('🚀 [AppContext] Initialization timestamp:', new Date().toISOString());
+      
       // Initialize device ID first
+      console.log('🚀 [AppContext] Step 1: Initializing device ID service...');
       const id = await deviceIdService.getDeviceId();
       setDeviceId(id);
+      console.log('🚀 [AppContext] Device ID initialized:', id);
       
-      // Then load history
-      await loadHistory();
-    } catch (error) {
-      console.error('Error initializing app:', error);
-      setIsLoading(false);
-    }
-  };
-
-  const loadHistory = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const history = JSON.parse(stored);
-        
-        // Check if this is the old format (array of Products) or new format (array of HistoryItems)
-        if (history.length > 0 && 'cachedProduct' in history[0]) {
-          // New format - HistoryItem[]
-          const historyWithDates = history.map((item: any) => ({
-            ...item,
-            scannedAt: new Date(item.scannedAt),
-            cachedProduct: {
-              ...item.cachedProduct,
-              lastScanned: new Date(item.cachedProduct.lastScanned)
-            }
-          }));
-          setHistoryItems(historyWithDates);
-          // Also set scanHistory for backward compatibility
-          setScanHistory(historyWithDates.map((item: HistoryItem) => item.cachedProduct));
-        } else {
-          // Old format - Product[] - migrate to new format
-          const historyWithDates = history.map((item: any) => ({
-            ...item,
-            lastScanned: new Date(item.lastScanned)
-          }));
-          
-          // Convert to new format
-          const newHistoryItems: HistoryItem[] = historyWithDates.map((product: Product) => ({
-            barcode: product.barcode,
-            scannedAt: product.lastScanned || new Date(),
-            cachedProduct: product
-          }));
-          
-          setHistoryItems(newHistoryItems);
-          setScanHistory(historyWithDates);
-          
-          // Save in new format
-          await saveHistoryItems(newHistoryItems);
-        }
+      // Initialize history service
+      console.log('🚀 [AppContext] Step 2: Initializing history service...');
+      await historyService.initialize();
+      console.log('🚀 [AppContext] History service initialized');
+      
+      // Initialize cache invalidation service
+      console.log('🚀 [AppContext] Step 3: Initializing cache invalidation service...');
+      console.log('🚀 [AppContext] This service should subscribe to background job events');
+      await cacheInvalidationService.initialize();
+      console.log('🚀 [AppContext] Cache invalidation service initialized');
+      
+      // Verify the service status
+      const cacheServiceStatus = cacheInvalidationService.getStatus();
+      console.log('🚀 [AppContext] Cache invalidation service status:', cacheServiceStatus);
+      
+      if (!cacheServiceStatus.isInitialized) {
+        console.error('❌ [AppContext] Cache invalidation service failed to initialize!');
       }
+      
+      if (!cacheServiceStatus.isListeningToJobs) {
+        console.error('❌ [AppContext] Cache invalidation service is not listening to job events!');
+      }
+      
+      // Load initial history from service
+      console.log('🚀 [AppContext] Step 4: Loading initial history...');
+      const initialHistory = historyService.getHistory();
+      setHistoryItems(initialHistory);
+      setScanHistory(initialHistory.map(item => item.cachedProduct));
+      console.log('🚀 [AppContext] Initial history loaded:', initialHistory.length, 'items');
+      
+      console.log('✅ [AppContext] *** APP INITIALIZATION COMPLETE ***');
+      console.log('✅ [AppContext] All services initialized and ready for photo upload events');
+      
     } catch (error) {
-      console.error('Error loading scan history:', error);
+      console.error('❌ [AppContext] Error initializing app:', error);
+      console.error('❌ [AppContext] Error stack:', error.stack);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveHistory = async (history: Product[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (error) {
-      console.error('Error saving scan history:', error);
-    }
+  // History loading is now handled by HistoryService
+
+  // History saving is now handled by HistoryService
+
+  const addToHistory = async (product: Product) => {
+    // Delegate to HistoryService - it will handle cache and state updates
+    await historyService.addToHistory(product);
   };
 
-  const saveHistoryItems = async (items: HistoryItem[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (error) {
-      console.error('Error saving history items:', error);
-    }
-  };
-
-  const addToHistory = (product: Product) => {
-    const now = new Date();
-    const productWithTimestamp = { ...product, lastScanned: now };
-    
-    // Update both scanHistory and historyItems
-    setScanHistory(prev => {
-      const existingIndex = prev.findIndex(item => item.barcode === product.barcode);
-      
-      let newHistory: Product[];
-      if (existingIndex >= 0) {
-        // Update existing product and move to top
-        newHistory = [
-          productWithTimestamp,
-          ...prev.filter(item => item.barcode !== product.barcode)
-        ];
-      } else {
-        // Add new product to top
-        newHistory = [productWithTimestamp, ...prev];
-      }
-      
-      // Keep only last 500 items
-      return newHistory.slice(0, 500);
-    });
-
-    setHistoryItems(prev => {
-      const existingIndex = prev.findIndex(item => item.barcode === product.barcode);
-      
-      let newHistoryItems: HistoryItem[];
-      if (existingIndex >= 0) {
-        // Update existing item and move to top
-        newHistoryItems = [
-          {
-            barcode: product.barcode,
-            scannedAt: now,
-            cachedProduct: productWithTimestamp
-          },
-          ...prev.filter(item => item.barcode !== product.barcode)
-        ];
-      } else {
-        // Add new item to top
-        newHistoryItems = [
-          {
-            barcode: product.barcode,
-            scannedAt: now,
-            cachedProduct: productWithTimestamp
-          },
-          ...prev
-        ];
-      }
-      
-      // Keep only last 500 items
-      const limitedHistoryItems = newHistoryItems.slice(0, 500);
-      
-      // Save to storage
-      saveHistoryItems(limitedHistoryItems);
-      
-      return limitedHistoryItems;
-    });
-  };
-
-  const updateHistoryProduct = (barcode: string, product: Product) => {
-    setScanHistory(prev => 
-      prev.map(item => 
-        item.barcode === barcode ? { ...product, lastScanned: item.lastScanned } : item
-      )
-    );
-
-    setHistoryItems(prev => 
-      prev.map(item => 
-        item.barcode === barcode 
-          ? { ...item, cachedProduct: { ...product, lastScanned: item.scannedAt } }
-          : item
-      )
-    );
+  const updateHistoryProduct = async (barcode: string, product: Product) => {
+    // Delegate to HistoryService - it will handle cache and state updates
+    await historyService.updateHistoryProduct(barcode, product);
   };
 
   const clearHistory = async () => {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      setScanHistory([]);
-      setHistoryItems([]);
-    } catch (error) {
-      console.error('Error clearing scan history:', error);
-    }
+    // Delegate to HistoryService - it will handle cache and state updates
+    await historyService.clearHistory();
   };
 
   const value = {

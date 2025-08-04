@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { ProductImageUploadService } from './productImageUploadService';
+import { backgroundQueueService } from './backgroundQueueService';
 
 export interface CreateProductResponse {
   product?: any;
@@ -57,20 +58,22 @@ export class ProductCreationService {
         console.log(`🎯 Confidence: ${data.confidence}%`);
       }
 
-      // Start async image upload process if imageUri is provided
+      // Queue async image upload job if imageUri is provided
       if (imageUri && data?.productName) {
-        console.log(`📸 Starting async image upload for UPC: ${upc}`);
-        // Add delay to ensure product is fully committed to database
-        // Database transactions from edge function (service role) need time to be visible to client queries
-        setTimeout(() => {
-          ProductImageUploadService.processProductImage(imageUri, upc)
-            .then(() => {
-              console.log(`✅ Image upload completed for UPC: ${upc}`);
-            })
-            .catch((error) => {
-              console.error(`❌ Image upload failed for UPC: ${upc}`, error);
-            });
-        }, 1000); // 1 second delay to ensure product creation is complete
+        console.log(`📸 Queueing image upload job for UPC: ${upc}`);
+        try {
+          // Queue the photo upload as a background job
+          const job = await backgroundQueueService.queueJob({
+            jobType: 'product_photo_upload',
+            imageUri: imageUri,
+            upc: upc,
+            existingProductData: data,
+            priority: 1
+          });
+          console.log(`✅ Image upload job queued: ${job.id.slice(-8)}`);
+        } catch (error) {
+          console.error(`❌ Failed to queue image upload job for UPC: ${upc}`, error);
+        }
       }
       
       return data as CreateProductResponse;

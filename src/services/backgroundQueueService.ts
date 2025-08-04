@@ -323,7 +323,21 @@ class BackgroundQueueServiceClass extends EventEmitter {
       await this.saveJobsToStorage();
       console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} completion`);
       
+      console.log(`🎉 [BackgroundQueue] *** EMITTING JOB_COMPLETED EVENT ***`);
+      console.log(`🎉 [BackgroundQueue] Event details:`, {
+        jobId: job.id?.slice(-8) || 'NO_ID',
+        jobType: job.jobType,
+        upc: job.upc,
+        status: job.status,
+        timestamp: new Date().toISOString(),
+        hasResultData: !!job.resultData,
+        resultDataKeys: job.resultData ? Object.keys(job.resultData) : [],
+        resultSuccess: job.resultData?.success,
+        resultImageUrl: job.resultData?.imageUrl
+      });
+      
       this.emit('job_completed', job);
+      console.log(`📡 [BackgroundQueue] job_completed event emitted for job ${job.id.slice(-6)}`);
       
       // Send local notification (non-blocking)
       this.sendLocalNotification(job, 'completed').catch(error => {
@@ -370,7 +384,20 @@ class BackgroundQueueServiceClass extends EventEmitter {
         await this.saveJobsToStorage();
         console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} failure`);
         
+        console.log(`💥 [BackgroundQueue] *** EMITTING JOB_FAILED EVENT ***`);
+        console.log(`💥 [BackgroundQueue] Failed job details:`, {
+          jobId: job.id?.slice(-8) || 'NO_ID',
+          jobType: job.jobType,
+          upc: job.upc,
+          status: job.status,
+          timestamp: new Date().toISOString(),
+          errorMessage: job.errorMessage,
+          retryCount: job.retryCount,
+          maxRetries: job.maxRetries
+        });
+        
         this.emit('job_failed', job);
+        console.log(`📡 [BackgroundQueue] job_failed event emitted for job ${job.id.slice(-6)}`);
         
         // Send failure notification (non-blocking)
         this.sendLocalNotification(job, 'failed').catch(notificationError => {
@@ -435,27 +462,59 @@ class BackgroundQueueServiceClass extends EventEmitter {
    * Process product photo upload job
    */
   private async processProductPhotoUpload(job: BackgroundJob): Promise<any> {
+    console.log(`📸 [BackgroundQueue] *** PROCESSING PHOTO UPLOAD JOB ***`);
+    console.log(`📸 [BackgroundQueue] Job ID: ${job.id.slice(-6)}`);
+    console.log(`📸 [BackgroundQueue] UPC: ${job.upc}`);
+    console.log(`📸 [BackgroundQueue] Image URI: ${job.imageUri}`);
+    console.log(`📸 [BackgroundQueue] Processing timestamp:`, new Date().toISOString());
+    
     // This will use existing ProductImageUploadService
     const { ProductImageUploadService } = await import('./productImageUploadService');
+    
+    console.log(`📸 [BackgroundQueue] Step 1: Uploading image to storage...`);
     
     // Upload image and get URL
     const uploadResult = await ProductImageUploadService.uploadProductImage(job.imageUri, job.upc);
     
+    console.log(`📸 [BackgroundQueue] Step 2: Image upload result:`, {
+      success: uploadResult.success,
+      imageUrl: uploadResult.imageUrl,
+      error: uploadResult.error
+    });
+    
     if (!uploadResult.success || !uploadResult.imageUrl) {
-      throw new Error(uploadResult.error || 'Failed to upload image');
+      const errorMessage = uploadResult.error || 'Failed to upload image';
+      console.error(`❌ [BackgroundQueue] Image upload failed: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
+    
+    console.log(`📸 [BackgroundQueue] Step 3: Updating database with new image URL...`);
+    console.log(`📸 [BackgroundQueue] New image URL: ${uploadResult.imageUrl}`);
     
     // Update the database with the new image URL
     const updateSuccess = await ProductImageUploadService.updateProductImageUrl(job.upc, uploadResult.imageUrl);
     
+    console.log(`📸 [BackgroundQueue] Step 4: Database update result:`, {
+      success: updateSuccess,
+      upc: job.upc,
+      imageUrl: uploadResult.imageUrl
+    });
+    
     if (!updateSuccess) {
-      throw new Error('Image uploaded but failed to update product record');
+      const errorMessage = 'Image uploaded but failed to update product record';
+      console.error(`❌ [BackgroundQueue] Database update failed: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
     
-    return {
+    const result = {
       success: true,
       imageUrl: uploadResult.imageUrl,
     };
+    
+    console.log(`✅ [BackgroundQueue] Photo upload job completed successfully:`, result);
+    console.log(`✅ [BackgroundQueue] Final result will trigger cache invalidation`);
+    
+    return result;
   }
 
   /**
@@ -670,17 +729,53 @@ class BackgroundQueueServiceClass extends EventEmitter {
   subscribeToJobUpdates(callback: (event: string, job?: BackgroundJob) => void): () => void {
     const events = ['job_added', 'job_updated', 'job_completed', 'job_failed', 'jobs_cleared'];
     
+    console.log(`📡 [BackgroundQueue] *** SETTING UP EVENT SUBSCRIPTION ***`);
+    console.log(`📡 [BackgroundQueue] Registering listener for events:`, events);
+    console.log(`📡 [BackgroundQueue] Callback function:`, callback?.name || 'anonymous');
+    console.log(`📡 [BackgroundQueue] Subscription timestamp:`, new Date().toISOString());
+    
+    // Create a wrapper callback to add debugging
+    const debugCallback = (event: string, job?: BackgroundJob) => {
+      console.log(`📡 [BackgroundQueue] *** EVENT FIRED: ${event} ***`);
+      console.log(`📡 [BackgroundQueue] Event timestamp:`, new Date().toISOString());
+      if (job) {
+        console.log(`📡 [BackgroundQueue] Job details:`, {
+          jobId: job.id?.slice(-8) || 'NO_ID',
+          jobType: job.jobType,
+          upc: job.upc,
+          status: job.status
+        });
+      }
+      console.log(`📡 [BackgroundQueue] Calling original callback...`);
+      
+      try {
+        callback(event, job);
+        console.log(`📡 [BackgroundQueue] Callback executed successfully for ${event}`);
+      } catch (error) {
+        console.error(`📡 [BackgroundQueue] Error in callback for ${event}:`, error);
+      }
+    };
+    
     events.forEach(event => {
       if (event === 'jobs_cleared') {
-        this.on(event, () => callback(event));
+        this.on(event, () => {
+          console.log(`📡 [BackgroundQueue] ${event} event listener triggered`);
+          debugCallback(event);
+        });
       } else {
-        this.on(event, (job: BackgroundJob) => callback(event, job));
+        this.on(event, (job: BackgroundJob) => {
+          console.log(`📡 [BackgroundQueue] ${event} event listener triggered for job ${job.id?.slice(-6)}`);
+          debugCallback(event, job);
+        });
       }
     });
     
+    console.log(`📡 [BackgroundQueue] Event subscription setup complete`);
+    
     return () => {
+      console.log(`📡 [BackgroundQueue] Unsubscribing from events:`, events);
       events.forEach(event => {
-        this.off(event, callback);
+        this.off(event, debugCallback);
       });
     };
   }

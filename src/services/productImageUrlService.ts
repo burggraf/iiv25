@@ -15,38 +15,62 @@ export class ProductImageUrlService {
    * @returns Concrete URL for image display, or null if no image
    */
   static resolveImageUrl(imageUrl: string | null | undefined, upc?: string): string | null {
+    console.log(`📸 [ProductImageUrlService] *** RESOLVING IMAGE URL ***`);
+    console.log(`📸 [ProductImageUrlService] Input:`, { imageUrl, upc });
+    console.log(`📸 [ProductImageUrlService] Timestamp:`, new Date().toISOString());
+    
     if (!imageUrl) {
+      console.log(`📸 [ProductImageUrlService] No image URL provided, returning null`);
       return null;
     }
 
     // Handle Supabase storage marker (with or without query parameters for cache busting)
-    if (imageUrl === this.SUPABASE_MARKER || imageUrl.startsWith(this.SUPABASE_MARKER + '?')) {
+    const isSupabaseMarker = imageUrl === this.SUPABASE_MARKER;
+    const isSupabaseMarkerWithQuery = imageUrl.startsWith(this.SUPABASE_MARKER + '?');
+    
+    console.log(`📸 [ProductImageUrlService] URL analysis:`, {
+      isSupabaseMarker,
+      isSupabaseMarkerWithQuery,
+      hasQueryParams: imageUrl.includes('?')
+    });
+    
+    if (isSupabaseMarker || isSupabaseMarkerWithQuery) {
       if (!upc) {
-        console.warn('Cannot resolve [SUPABASE] image URL without UPC');
+        console.warn('📸 [ProductImageUrlService] Cannot resolve [SUPABASE] image URL without UPC');
         return null;
       }
+      
+      console.log(`📸 [ProductImageUrlService] Building Supabase URL for UPC: ${upc}`);
       const baseUrl = this.buildSupabaseImageUrl(upc);
+      console.log(`📸 [ProductImageUrlService] Base Supabase URL: ${baseUrl}`);
       
       // If there are query parameters in the imageUrl, append them for cache busting
       if (imageUrl.includes('?')) {
         const queryParams = imageUrl.split('?')[1];
-        return `${baseUrl}?${queryParams}`;
+        const resolvedUrl = `${baseUrl}?${queryParams}`;
+        console.log(`📸 [ProductImageUrlService] *** CACHE BUSTING DETECTED ***`);
+        console.log(`📸 [ProductImageUrlService] Query params: ${queryParams}`);
+        console.log(`📸 [ProductImageUrlService] Final resolved URL: ${resolvedUrl}`);
+        return resolvedUrl;
       }
       
+      console.log(`📸 [ProductImageUrlService] No cache busting, resolved URL: ${baseUrl}`);
       return baseUrl;
     }
 
-    // Handle full URLs (OpenFoodFacts, etc.)
-    if (this.isValidUrl(imageUrl)) {
-      return imageUrl;
-    }
-
-    // Handle legacy Supabase URLs (for backward compatibility)
+    // Handle Supabase URLs (including cache-busted ones) - check before general URL validation
     if (imageUrl.includes('supabase.co/storage/v1/object/public/product-images/')) {
+      console.log(`📸 [ProductImageUrlService] Supabase URL detected (possibly cache-busted), returning as-is: ${imageUrl}`);
       return imageUrl;
     }
 
-    console.warn(`Unknown image URL format: ${imageUrl}`);
+    // Handle other full URLs (OpenFoodFacts, etc.)
+    if (this.isValidUrl(imageUrl)) {
+      console.log(`📸 [ProductImageUrlService] Valid external URL, returning as-is: ${imageUrl}`);
+      return imageUrl;
+    }
+
+    console.warn(`📸 [ProductImageUrlService] Unknown image URL format: ${imageUrl}`);
     return null;
   }
 
@@ -90,16 +114,40 @@ export class ProductImageUrlService {
    * @returns True if this is a Supabase image URL
    */
   static isSupabaseImageUrl(imageUrl: string, upc?: string): boolean {
-    if (!imageUrl.includes('supabase.co/storage/v1/object/public/product-images/')) {
+    console.log(`📸 [ProductImageUrlService] *** isSupabaseImageUrl DEBUG ***`);
+    console.log(`📸 [ProductImageUrlService] imageUrl: "${imageUrl}"`);
+    console.log(`📸 [ProductImageUrlService] upc: "${upc}"`);
+    
+    const hasSupabasePattern = imageUrl.includes('supabase.co/storage/v1/object/public/product-images/');
+    console.log(`📸 [ProductImageUrlService] Contains supabase pattern: ${hasSupabasePattern}`);
+    
+    if (!hasSupabasePattern) {
+      console.log(`📸 [ProductImageUrlService] Not a Supabase URL - missing pattern`);
       return false;
     }
 
-    if (upc && imageUrl.endsWith(`${upc}.jpg`)) {
-      return true;
+    // Strip query parameters for UPC matching
+    const urlWithoutQuery = imageUrl.split('?')[0];
+    console.log(`📸 [ProductImageUrlService] URL without query: "${urlWithoutQuery}"`);
+    
+    if (upc) {
+      const expectedEnding = `${upc}.jpg`;
+      const endsWithUpc = urlWithoutQuery.endsWith(expectedEnding);
+      console.log(`📸 [ProductImageUrlService] Expected ending: "${expectedEnding}"`);
+      console.log(`📸 [ProductImageUrlService] Ends with UPC: ${endsWithUpc}`);
+      
+      if (endsWithUpc) {
+        console.log(`📸 [ProductImageUrlService] ✅ CONFIRMED Supabase URL for UPC`);
+        return true;
+      }
     }
 
     // General Supabase product-images bucket check
-    return imageUrl.includes('/product-images/');
+    const hasProductImages = imageUrl.includes('/product-images/');
+    console.log(`📸 [ProductImageUrlService] Contains product-images: ${hasProductImages}`);
+    console.log(`📸 [ProductImageUrlService] Final result: ${hasProductImages}`);
+    
+    return hasProductImages;
   }
 
   /**

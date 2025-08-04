@@ -68,14 +68,40 @@ export const useBackgroundJobs = () => {
     loadJobs();
 
     // Subscribe to job updates
+    console.log(`🎣 [useBackgroundJobs] *** SETTING UP JOB EVENT SUBSCRIPTION ***`);
+    console.log(`🎣 [useBackgroundJobs] Subscription timestamp:`, new Date().toISOString());
+    
     const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
+      console.log(`🎣 [useBackgroundJobs] *** RECEIVED JOB EVENT: ${event} ***`);
+      console.log(`🎣 [useBackgroundJobs] Event timestamp:`, new Date().toISOString());
+      
       if (event === 'jobs_cleared') {
-        console.log(`Job update: ${event} - All jobs cleared`);
+        console.log(`🎣 [useBackgroundJobs] Event: ${event} - All jobs cleared`);
       } else if (job) {
-        console.log(`Job update: ${event} - ${job.id.slice(-6)} (${job.jobType}, ${job.status})`);
+        console.log(`🎣 [useBackgroundJobs] Event: ${event} - Job details:`, {
+          jobId: job.id?.slice(-6) || 'NO_ID',
+          jobType: job.jobType,
+          status: job.status,
+          upc: job.upc,
+          hasResultData: !!job.resultData,
+          resultSuccess: job.resultData?.success
+        });
+        
+        if (event === 'job_completed' && job.jobType === 'product_photo_upload') {
+          console.log(`🎣 [useBackgroundJobs] *** PHOTO UPLOAD JOB COMPLETED ***`);
+          console.log(`🎣 [useBackgroundJobs] This should trigger cache invalidation!`);
+          console.log(`🎣 [useBackgroundJobs] Job result:`, job.resultData);
+        }
+      } else {
+        console.log(`🎣 [useBackgroundJobs] Event: ${event} - No job data`);
       }
+      
+      console.log(`🎣 [useBackgroundJobs] Calling refreshJobs() to update UI...`);
       refreshJobs(); // Refresh all jobs when any job updates
     });
+    
+    console.log(`🎣 [useBackgroundJobs] Job event subscription established`);
+    console.log(`🎣 [useBackgroundJobs] Unsubscribe function:`, typeof unsubscribe);
 
     return unsubscribe;
   }, [refreshJobs]);

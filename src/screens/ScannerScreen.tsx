@@ -23,6 +23,7 @@ import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
 import ProductDisplayContainer from '../components/ProductDisplayContainer'
 import RateLimitModal from '../components/RateLimitModal'
+import { ProductImageUrlService } from '../services/productImageUrlService'
 import SimulatorBarcodeTester from '../components/SimulatorBarcodeTester'
 import TakePhotoButton from '../components/TakePhotoButton'
 import { useApp } from '../context/AppContext'
@@ -31,6 +32,7 @@ import { ProductCreationService } from '../services/productCreationService'
 import { ProductLookupService } from '../services/productLookupService'
 import { ProductImageUploadService } from '../services/productImageUploadService'
 import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services/subscriptionService'
+import { cacheService, CacheEventListener } from '../services/CacheService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
 import { validateIngredientParsingResult } from '../utils/ingredientValidation'
@@ -85,9 +87,7 @@ export default function ScannerScreen() {
 	const lastScannedTimeRef = useRef<number>(0)
 	const cameraRef = useRef<CameraView>(null)
 	
-	// Simple cache for last 20 scanned UPCs and their results
-	const scannedUPCQueue = useRef<string[]>([])
-	const scannedResultsCache = useRef<Map<string, Product>>(new Map())
+	// Cache service integration (unified caching)
 
 	// Helper function to show success feedback before closing modal
 	const showSuccessFeedback = (
@@ -137,15 +137,34 @@ export default function ScannerScreen() {
 
 	// Listen for background job completion to invalidate cache
 	useEffect(() => {
-		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
+		const unsubscribe = backgroundQueueService.subscribeToJobUpdates(async (event, job) => {
 			if (event === 'job_completed' && job?.jobType === 'ingredient_parsing') {
 				console.log(`🔄 Ingredient parsing completed for ${job.upc} - invalidating cache`)
-				invalidateCache(job.upc, 'ingredient parsing completed')
+				await cacheService.invalidateProduct(job.upc, 'ingredient parsing completed')
 			}
 		})
 
 		return unsubscribe
 	}, [])
+
+	// Listen for cache updates to refresh scanner product card
+	useEffect(() => {
+		const cacheListener: CacheEventListener = {
+			onCacheUpdated: async (barcode: string, updatedProduct: Product) => {
+				// Update scanner product card if it matches the currently displayed product
+				if (scannedProduct && scannedProduct.barcode === barcode) {
+					console.log(`📱 [ScannerScreen] Cache updated for ${barcode}, refreshing product card`);
+					setScannedProduct(updatedProduct);
+				}
+			}
+		};
+		
+		cacheService.addListener(cacheListener);
+		
+		return () => {
+			cacheService.removeListener(cacheListener);
+		};
+	}, [scannedProduct])
 
 	const loadSubscriptionData = useCallback(async () => {
 		try {
@@ -224,8 +243,8 @@ export default function ScannerScreen() {
 		lastScannedTimeRef.current = currentTime
 		setCurrentBarcode(data)
 
-		// Check if we have this UPC in our recent cache
-		const cachedProduct = scannedResultsCache.current.get(data)
+		// Check if we have this UPC in our unified cache
+		const cachedProduct = await cacheService.getProduct(data)
 		if (cachedProduct) {
 			// If cached product has no ingredients but status is UNKNOWN, check database for updates
 			const hasNoIngredients = !cachedProduct.ingredients || cachedProduct.ingredients.length === 0
@@ -237,7 +256,7 @@ export default function ScannerScreen() {
 			} else {
 				console.log(`💾 Using cached result for ${data}`)
 				setScannedProduct(cachedProduct)
-				addToHistory(cachedProduct)
+				await addToHistory(cachedProduct)
 				showOverlay()
 				
 				// Show "FREE!" message for cached scans (free users only)
@@ -269,11 +288,11 @@ export default function ScannerScreen() {
 			}
 
 			if (result.product) {
-				// Add to cache and queue
-				addToCache(data, result.product)
+				// Add to unified cache
+				await cacheService.setProduct(data, result.product)
 				
 				setScannedProduct(result.product)
-				addToHistory(result.product)
+				await addToHistory(result.product)
 				showOverlay()
 				
 				// Refresh usage stats after successful scan
@@ -292,31 +311,7 @@ export default function ScannerScreen() {
 		}
 	}
 
-	const addToCache = (upc: string, product: Product) => {
-		// Add UPC to queue, maintaining max size of 20
-		const queue = scannedUPCQueue.current
-		if (!queue.includes(upc)) {
-			queue.push(upc)
-			if (queue.length > 20) {
-				const oldestUPC = queue.shift()
-				if (oldestUPC) {
-					scannedResultsCache.current.delete(oldestUPC)
-					console.log(`🗑️ Removed ${oldestUPC} from cache (queue full)`)
-				}
-			}
-		}
-		
-		// Add product to cache
-		scannedResultsCache.current.set(upc, product)
-		console.log(`💾 Cached result for ${upc} (cache size: ${scannedResultsCache.current.size})`)
-	}
-
-	const invalidateCache = (upc: string, reason: string) => {
-		if (scannedResultsCache.current.has(upc)) {
-			scannedResultsCache.current.delete(upc)
-			console.log(`🗑️ Invalidated cache for ${upc} - ${reason}`)
-		}
-	}
+	// Cache management is now handled by CacheService
 
 	const showOverlay = () => {
 		// Use larger height only if product is UNKNOWN AND has no ingredients (to accommodate scan button)
@@ -779,9 +774,9 @@ export default function ScannerScreen() {
 				if (refreshResult.product) {
 					console.log(`✅ Product created and refreshed: ${refreshResult.product.name}`)
 					setScannedProduct(refreshResult.product)
-					addToHistory(refreshResult.product)
+					await addToHistory(refreshResult.product)
 					// Update cache with new product data
-					addToCache(currentBarcode, refreshResult.product)
+					await cacheService.setProduct(currentBarcode, refreshResult.product)
 					
 					// Clear error since we're now showing the full product
 					setError(null)
@@ -808,7 +803,7 @@ export default function ScannerScreen() {
 						if (secondRefreshResult.product && secondRefreshResult.product.imageUrl) {
 							console.log(`✅ Product image found on second refresh`)
 							setScannedProduct(secondRefreshResult.product)
-							addToCache(currentBarcode, secondRefreshResult.product)
+							await cacheService.setProduct(currentBarcode, secondRefreshResult.product)
 						}
 					} catch (secondRefreshError) {
 						console.error('Error in secondary refresh after product creation:', secondRefreshError)
@@ -910,40 +905,22 @@ export default function ScannerScreen() {
 				return
 			}
 
-			console.log(`📸 Starting photo upload for product: ${scannedProduct.name}`)
+			console.log(`📸 Queueing photo upload job for product: ${scannedProduct.name}`)
 
-			// Upload image and update database using existing service
-			const uploadResult = await ProductImageUploadService.uploadProductImage(imageUri, currentBarcode)
+			// Queue the photo upload as a background job instead of processing directly
+			const job = await backgroundQueueService.queueJob({
+				jobType: 'product_photo_upload',
+				imageUri: imageUri,
+				upc: currentBarcode,
+				existingProductData: scannedProduct,
+				priority: 1
+			});
+
+			console.log(`✅ Photo upload job queued: ${job.id.slice(-8)}`)
+			console.log(`📱 Job will process in background and trigger cache invalidation when complete`)
 			
-			if (!uploadResult.success || !uploadResult.imageUrl) {
-				setProductPhotoError(uploadResult.error || 'Failed to upload image');
-				setIsCapturingPhoto(false)
-				return
-			}
-
-			// Update the database with the new image URL using edge function
-			const updateSuccess = await ProductImageUploadService.updateProductImageUrl(currentBarcode, uploadResult.imageUrl)
-			
-			if (!updateSuccess) {
-				setProductPhotoError('Image uploaded but failed to update product record');
-				setIsCapturingPhoto(false)
-				return
-			}
-
-			console.log(`✅ Successfully added photo for product: ${scannedProduct.name}`)
-
-			// Refresh the product data to show the new image
-			try {
-				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'PhotoUpload' })
-				if (refreshResult.product) {
-					setScannedProduct(refreshResult.product)
-					addToCache(currentBarcode, refreshResult.product)
-					console.log(`✅ Product refreshed with new image`)
-				}
-			} catch (refreshError) {
-				console.error('Error refreshing product after photo upload:', refreshError)
-				// Don't show error for refresh failure since upload succeeded
-			}
+			// No need to manually refresh - the background job will trigger cache invalidation
+			// which will automatically update the UI when the job completes
 
 		} catch (err) {
 			console.error('Error uploading product photo:', err)
@@ -963,13 +940,13 @@ export default function ScannerScreen() {
 		setShowProductDetail(false)
 	}
 
-	const handleProductUpdated = (updatedProduct: Product) => {
+	const handleProductUpdated = async (updatedProduct: Product) => {
 		// Update the current scanned product state
 		setScannedProduct(updatedProduct)
 		
 		// Update the cache to reflect the changes
 		if (updatedProduct.barcode) {
-			scannedResultsCache.current.set(updatedProduct.barcode, updatedProduct)
+			await cacheService.setProduct(updatedProduct.barcode, updatedProduct)
 		}
 	}
 
@@ -1204,7 +1181,7 @@ export default function ScannerScreen() {
 							<TouchableOpacity style={styles.overlayProductInfo} onPress={handleOverlayPress}>
 								<View style={styles.overlayLeft}>
 									{scannedProduct.imageUrl ? (
-										<Image source={{ uri: scannedProduct.imageUrl }} style={styles.overlayImage} />
+										<Image source={{ uri: ProductImageUrlService.resolveImageUrl(scannedProduct.imageUrl, scannedProduct.barcode) || undefined }} style={styles.overlayImage} />
 									) : (
 										<TakePhotoButton 
 											onPress={handleTakeProductPhoto}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Product, VeganStatus } from '../types';
+import { ProductImageUrlService } from '../services/productImageUrlService';
 import LogoWhite from './LogoWhite';
 
 interface HistoryItemProps {
@@ -81,7 +82,7 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
       <View style={styles.content}>
         {/* Product Image */}
         {product.imageUrl ? (
-          <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+          <Image source={{ uri: ProductImageUrlService.resolveImageUrl(product.imageUrl, product.barcode) || undefined }} style={styles.productImage} />
         ) : (
           <View style={styles.placeholderImage}>
             <Text style={styles.placeholderText}>📦</Text>

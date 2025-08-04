@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router'
 import { useApp } from '../context/AppContext'
 import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
+import { cacheService, CacheEventListener } from '../services/CacheService'
+import { ProductImageUrlService } from '../services/productImageUrlService'
 import { Product, VeganStatus } from '../types'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
@@ -46,27 +48,61 @@ export default function ProductResult({
 	>([])
 
 	// Fetch ingredient classifications from database
-	useEffect(() => {
-		const fetchIngredientClassifications = async () => {
-			if (!currentProduct.barcode) return
+	const fetchIngredientClassifications = useCallback(async (barcode?: string) => {
+		const targetBarcode = barcode || currentProduct.barcode;
+		if (!targetBarcode) return;
 
-			try {
-				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
-					input_upc: currentProduct.barcode,
-				})
+		try {
+			const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
+				input_upc: targetBarcode,
+			});
 
-				if (error) {
-					console.error('Error fetching ingredient classifications:', error)
-				} else {
-					setIngredientClassifications(data || [])
-				}
-			} catch (err) {
-				console.error('Exception fetching ingredient classifications:', err)
+			if (error) {
+				console.error('Error fetching ingredient classifications:', error);
+			} else {
+				setIngredientClassifications(data || []);
 			}
+		} catch (err) {
+			console.error('Exception fetching ingredient classifications:', err);
 		}
+	}, [currentProduct.barcode]);
 
-		fetchIngredientClassifications()
-	}, [currentProduct.barcode])
+	// Listen for cache updates for this specific product
+	useEffect(() => {
+		console.log(`📱 [ProductResult] Setting up cache listener for barcode: ${currentProduct.barcode}`);
+		
+		const cacheListener: CacheEventListener = {
+			onCacheUpdated: async (barcode: string, updatedProduct: Product) => {
+				console.log(`📱 [ProductResult] Cache event received for barcode: ${barcode}, current product: ${currentProduct.barcode}`);
+				if (barcode === currentProduct.barcode) {
+					console.log(`📱 [ProductResult] ✅ Cache updated for ${barcode}, refreshing UI with new product data`);
+					console.log(`📱 [ProductResult] Updated product imageUrl: ${updatedProduct.imageUrl}`);
+					setCurrentProduct(updatedProduct);
+					
+					// DON'T notify parent component - this would cause a loop since parent might update cache again
+					// The cache update already originated from the system, no need to propagate it back
+					
+					// Refresh ingredient classifications for updated product
+					console.log(`📱 [ProductResult] Refreshing ingredient classifications`);
+					await fetchIngredientClassifications(updatedProduct.barcode);
+				} else {
+					console.log(`📱 [ProductResult] Cache event for different product (${barcode}), ignoring`);
+				}
+			}
+		};
+		
+		cacheService.addListener(cacheListener);
+		console.log(`📱 [ProductResult] Cache listener added for ${currentProduct.barcode}`);
+		
+		return () => {
+			console.log(`📱 [ProductResult] Removing cache listener for ${currentProduct.barcode}`);
+			cacheService.removeListener(cacheListener);
+		};
+	}, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]);
+
+	useEffect(() => {
+		fetchIngredientClassifications();
+	}, [currentProduct.barcode, fetchIngredientClassifications]);
 
 	const refreshProductData = async () => {
 		if (!currentProduct.barcode) return
@@ -77,13 +113,16 @@ export default function ProductResult({
 			if (result.product) {
 				setCurrentProduct(result.product)
 
+				// Update unified cache with fresh product data
+				await cacheService.setProduct(currentProduct.barcode, result.product)
+
 				// Notify parent component of the update
 				if (onProductUpdated) {
 					onProductUpdated(result.product)
 				}
 
-				// Update the product in history as well
-				addToHistory(result.product)
+				// Update the product in history as well (HistoryService will handle cache integration)
+				await addToHistory(result.product)
 
 				// Also refresh ingredient classifications for the updated product
 				const { data, error } = await supabase.rpc('get_ingredients_for_upc', {
@@ -241,7 +280,7 @@ export default function ProductResult({
 				{/* Product Info */}
 				<View style={styles.productInfo}>
 					{currentProduct.imageUrl && (
-						<Image source={{ uri: currentProduct.imageUrl }} style={styles.productImage} />
+						<Image source={{ uri: ProductImageUrlService.resolveImageUrl(currentProduct.imageUrl, currentProduct.barcode) || undefined }} style={styles.productImage} />
 					)}
 
 					<Text style={styles.productName}>{currentProduct.name}</Text>

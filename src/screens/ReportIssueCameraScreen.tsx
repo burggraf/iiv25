@@ -65,9 +65,9 @@ export default function ReportIssueCameraScreen() {
 
 		try {
 			if (type === 'product') {
-				// Queue the product creation job for product front photo
+				// Queue the photo upload job for existing product photo update
 				await queueJob({
-					jobType: 'product_creation',
+					jobType: 'product_photo_upload',
 					imageUri: capturedPhoto,
 					upc: barcode,
 					priority: 2,
