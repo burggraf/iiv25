@@ -3,6 +3,7 @@ import { Product } from '../types';
 import deviceIdService from '../services/deviceIdService';
 import { historyService, HistoryItem, HistoryEventListener } from '../services/HistoryService';
 import { cacheInvalidationService } from '../services/CacheInvalidationService';
+import { cacheService } from '../services/CacheService';
 
 // HistoryItem is now exported from HistoryService
 
@@ -122,8 +123,9 @@ export function AppProvider({ children }: AppProviderProps) {
   };
 
   const clearHistory = async () => {
-    // Delegate to HistoryService - it will handle cache and state updates
+    // Clear both history and cache to ensure no phantom data
     await historyService.clearHistory();
+    await cacheService.clearCache();
   };
 
   const value = {
