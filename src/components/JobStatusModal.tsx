@@ -74,13 +74,6 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Debug Storage', 
-          onPress: async () => {
-            const { backgroundQueueService } = await import('../services/backgroundQueueService');
-            await backgroundQueueService.debugStorageState();
-          }
-        },
-        { 
           text: 'Cleanup Stuck Jobs', 
           onPress: async () => {
             const { backgroundQueueService } = await import('../services/backgroundQueueService');
@@ -155,9 +148,8 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
   const renderJobCard = (job: BackgroundJob): React.ReactNode => {
     if (!job || !job.id) return null;
     
-    const createdTime = job.createdAt ? job.createdAt.toLocaleString() : 'Unknown';
     const startedTime = job.startedAt ? job.startedAt.toLocaleString() : '';
-    const completedTime = job.completedAt ? job.completedAt.toLocaleString() : '';
+    const completedTime = job.completedAt ? job.completedAt.toISOString().replace('T', ' ').slice(0, 19) : '';
     
     return (
       <View key={`job-card-${job.id}`} style={styles.jobCard}>
@@ -175,31 +167,15 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
         </View>
 
         <View style={styles.jobDetails}>
-          <Text style={styles.jobTime}>
-            Created: {createdTime}
-          </Text>
-          
-          {job.startedAt && (
-            <Text style={styles.jobTime}>
-              Started: {startedTime}
-            </Text>
-          )}
-          
           {job.completedAt && (
-            <Text style={styles.jobTime}>
-              Completed: {completedTime}
+            <Text style={[styles.jobTime, styles.alignedWithUpc]}>
+              {completedTime}{job.startedAt && job.completedAt ? ` (${Math.floor((job.completedAt.getTime() - job.startedAt.getTime()) / 1000)}s)` : ''}
             </Text>
           )}
           
           {job.status === 'processing' && job.startedAt && (
             <Text style={styles.jobTime}>
               Running for: {formatElapsedTime(job.startedAt)}
-            </Text>
-          )}
-          
-          {job.status === 'completed' && job.startedAt && job.completedAt && (
-            <Text style={styles.jobTime}>
-              Took: {formatElapsedTime(job.startedAt, job.completedAt)}
             </Text>
           )}
           
@@ -433,6 +409,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.secondary,
     marginTop: 2,
+  },
+  alignedWithUpc: {
+    marginLeft: 36, // Align with UPC text (icon width + margin)
   },
   jobStatus: {
     fontSize: 12,

@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BarcodeIcon from '../components/icons/BarcodeIcon'
 import BellIcon from '../components/icons/BellIcon'
+import GearIcon from '../components/icons/GearIcon'
 import Logo from '../components/Logo'
 import LogoWhite from '../components/LogoWhite'
 import ProductDisplayContainer from '../components/ProductDisplayContainer'
@@ -1029,14 +1030,19 @@ export default function ScannerScreen() {
 					<Logo size={32} />
 					<Text style={styles.appTitle}>Is It Vegan?</Text>
 				</View>
-				{/* Queue Management Button - Always visible for debugging */}
+				{/* Queue Management Button */}
 				<TouchableOpacity 
 					style={styles.queueButton}
 					onPress={() => setShowJobsModal(true)}
 				>
-					<Text style={styles.queueButtonText}>
-						📋 {activeJobs ? activeJobs.length : 0}
-					</Text>
+					<GearIcon size={24} color="#ccc" />
+					{activeJobs && activeJobs.length > 0 && (
+						<View style={styles.queueBadge}>
+							<Text style={styles.queueBadgeText}>
+								{activeJobs.length}
+							</Text>
+						</View>
+					)}
 				</TouchableOpacity>
 			</View>
 
@@ -1570,16 +1576,30 @@ const styles = StyleSheet.create({
 		color: '#333',
 	},
 	queueButton: {
-		backgroundColor: '#007AFF',
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 16,
+		backgroundColor: 'transparent',
+		paddingHorizontal: 8,
+		paddingVertical: 8,
+		borderRadius: 20,
 		position: 'absolute',
 		right: 16,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
-	queueButtonText: {
+	queueBadge: {
+		position: 'absolute',
+		top: -2,
+		right: -2,
+		backgroundColor: '#888',
+		borderRadius: 10,
+		minWidth: 20,
+		height: 20,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	queueBadgeText: {
 		color: 'white',
-		fontSize: 14,
+		fontSize: 12,
 		fontWeight: '600',
 	},
 	instructionsContainer: {
