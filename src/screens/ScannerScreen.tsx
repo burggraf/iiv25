@@ -135,17 +135,8 @@ export default function ScannerScreen() {
 		}
 	}, [deviceId, loadSubscriptionData])
 
-	// Listen for background job completion to invalidate cache
-	useEffect(() => {
-		const unsubscribe = backgroundQueueService.subscribeToJobUpdates(async (event, job) => {
-			if (event === 'job_completed' && job?.jobType === 'ingredient_parsing') {
-				console.log(`🔄 Ingredient parsing completed for ${job.upc} - invalidating cache`)
-				await cacheService.invalidateProduct(job.upc, 'ingredient parsing completed')
-			}
-		})
-
-		return unsubscribe
-	}, [])
+	// Cache invalidation is now handled by CacheInvalidationService
+	// No need for individual component listeners
 
 	// Listen for cache updates to refresh scanner product card
 	useEffect(() => {
