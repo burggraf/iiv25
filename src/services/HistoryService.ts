@@ -191,28 +191,6 @@ class HistoryService implements CacheEventListener {
     return this.historyItems.filter(item => item.isNew === true).length;
   }
 
-  /**
-   * Force mark an existing item as new (failsafe method)
-   */
-  public async markAsNew(barcode: string): Promise<void> {
-    await this.ensureInitialized();
-    
-    const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
-    if (itemIndex !== -1) {
-      const wasNew = this.historyItems[itemIndex].isNew;
-      this.historyItems[itemIndex].isNew = true;
-      
-      // Persist changes
-      await this.persistHistory();
-      
-      // Notify listeners
-      this.notifyListeners('onHistoryUpdated', this.historyItems);
-      
-      console.log(`📚 Force-marking ${barcode} as new (was: ${wasNew})`);
-    } else {
-      console.log(`📚 Cannot mark ${barcode} as new - not found in history`);
-    }
-  }
   
   /**
    * Update a specific product in history (called when cache is updated)

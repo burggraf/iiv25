@@ -226,17 +226,16 @@ class CacheInvalidationService {
     });
     
     if (resultData?.success && resultData?.imageUrl) {
-      console.log(`📸 [CacheInvalidation] Photo upload successful, updating cache with new image URL`);
+      console.log(`📸 [CacheInvalidation] Photo upload successful, but deferring cache update to useBackgroundJobs`);
       console.log(`📸 [CacheInvalidation] New image URL: ${resultData.imageUrl}`);
     } else {
       console.log(`⚠️ [CacheInvalidation] Photo upload may have failed or no image URL returned`);
     }
     
-    // Photo upload means the product's image URL has been updated
-    // We need to invalidate cache AND implement cache busting for React Native's Image component
-    console.log(`📸 [CacheInvalidation] Starting cache refresh with image cache busting...`);
-    await this.invalidateProductCacheWithImageRefresh(upc, 'product photo updated');
-    console.log(`📸 [CacheInvalidation] Completed cache refresh with image cache busting`);
+    // IMPORTANT: Don't update cache here for photo upload jobs!
+    // The useBackgroundJobs hook needs to handle the isNew flag logic first,
+    // then it will trigger the cache update through historyService.addToHistory()
+    console.log(`📸 [CacheInvalidation] Skipping automatic cache update for photo upload - letting useBackgroundJobs handle isNew logic`);
   }
 
   /**

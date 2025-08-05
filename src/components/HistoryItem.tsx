@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Product, VeganStatus } from '../types';
 import { ProductImageUrlService } from '../services/productImageUrlService';
 import LogoWhite from './LogoWhite';
@@ -92,10 +93,19 @@ export default function HistoryItem({ product, onPress, isNew = false }: History
 
         {/* Product Info */}
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
-            {isNew && <Text style={styles.newPrefix}>[NEW] </Text>}
-            {product.name}
-          </Text>
+          <View style={styles.productNameContainer}>
+            {isNew && (
+              <MaterialIcons 
+                name="star" 
+                size={16} 
+                color="#2563EB" 
+                style={styles.newStarIcon} 
+              />
+            )}
+            <Text style={styles.productName} numberOfLines={2}>
+              {product.name}
+            </Text>
+          </View>
           {product.brand && (
             <Text style={styles.productBrand} numberOfLines={1}>
               {product.brand}
@@ -159,16 +169,19 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     marginRight: 8,
   },
+  productNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  newStarIcon: {
+    marginRight: 4,
+  },
   productName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
-  },
-  newPrefix: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#14A44A', // Green color to match app theme
+    flex: 1,
   },
   productBrand: {
     fontSize: 14,
