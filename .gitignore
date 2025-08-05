@@ -23,6 +23,7 @@ android/
 *.orig.*
 
 # Downloaded APK files
+*.apk.zip
 *.apk
 *.jks
 *.p8
@@ -89,3 +90,6 @@ generate_apple_token/script.js
 # OFF database utility
 off-db-utility/off-database.db
 off-db-utility/batch-logs.csv
+
+# Environment switching script with secrets
+switch-environment.sh
