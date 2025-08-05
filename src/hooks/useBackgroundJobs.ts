@@ -12,8 +12,27 @@ export const useBackgroundJobs = () => {
   // Handle job completion to set isNew flag
   const handleJobCompletion = useCallback(async (job: BackgroundJob) => {
     try {
-      if (!job.resultData?.success || !job.upc) {
+      // Check if job was successful based on job type
+      const isJobSuccessful = () => {
+        if (!job.resultData || !job.upc) {
+          return false;
+        }
+        
+        switch (job.jobType) {
+          case 'product_photo_upload':
+            return job.resultData.success === true;
+          case 'ingredient_parsing':
+            return job.resultData.isValidIngredientsList === true;
+          case 'product_creation':
+            return job.resultData.success === true;
+          default:
+            return job.resultData.success === true;
+        }
+      };
+
+      if (!isJobSuccessful()) {
         console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} failed or missing UPC, not marking as new`);
+        console.log(`🎣 [useBackgroundJobs] Job type: ${job.jobType}, result data:`, job.resultData);
         return;
       }
 
@@ -48,6 +67,31 @@ export const useBackgroundJobs = () => {
         await historyService.markAsNew(job.upc);
         
         console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated image`);
+        
+      } else if (job.jobType === 'ingredient_parsing') {
+        // For ingredient parsing jobs, we need to fetch fresh product data with updated ingredients
+        console.log(`🎣 [useBackgroundJobs] Ingredient parsing completed - fetching fresh product data with updated ingredients`);
+        
+        const { ProductLookupService } = await import('../services/productLookupService');
+        const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+          context: 'useBackgroundJobs ingredient completion' 
+        });
+        
+        if (!freshProductResult.product) {
+          console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after ingredient parsing`);
+          return;
+        }
+        
+        console.log(`🎣 [useBackgroundJobs] Fresh product fetched with updated ingredients`);
+        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to ingredient parsing completion`);
+        
+        // Add to history with isNew flag set to true
+        await historyService.addToHistory(freshProductResult.product, true);
+        
+        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
+        await historyService.markAsNew(job.upc);
+        
+        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated ingredients`);
         
       } else {
         // For other job types, get the updated product from cache
