@@ -831,23 +831,10 @@ export default function ScannerScreen() {
 	}
 
 	const handleTakeProductPhoto = async () => {
-		// Show prompt first, like in product creation
-		Alert.alert(
-			"Add Product Photo",
-			"Take a photo of the entire front of the product package.",
-			[
-				{
-					text: "Cancel",
-					style: "cancel"
-				},
-				{
-					text: "Take Photo",
-					onPress: async () => {
-						await captureProductPhoto()
-					}
-				}
-			]
-		)
+		if (!scannedProduct?.barcode) return
+		
+		// Navigate to the dedicated camera screen for product photos
+		router.push(`/report-issue/${scannedProduct.barcode}/product`)
 	}
 
 	const captureProductPhoto = async () => {

@@ -21,6 +21,7 @@ import { ProductImageUrlService } from '../services/productImageUrlService'
 import { Product, VeganStatus } from '../types'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
+import TakePhotoButton from './TakePhotoButton'
 
 interface ProductResultProps {
 	product: Product
@@ -137,6 +138,10 @@ export default function ProductResult({
 			console.error('Error refreshing product data:', error)
 			// Don't show an error to user - this is background refresh
 		}
+	}
+
+	const handleTakePhoto = () => {
+		router.push(`/report-issue/${currentProduct.barcode}/product`)
 	}
 
 	const showReportIssueAlert = () => {
@@ -279,8 +284,13 @@ export default function ProductResult({
 
 				{/* Product Info */}
 				<View style={styles.productInfo}>
-					{currentProduct.imageUrl && (
+					{currentProduct.imageUrl ? (
 						<Image source={{ uri: ProductImageUrlService.resolveImageUrl(currentProduct.imageUrl, currentProduct.barcode) || undefined }} style={styles.productImage} />
+					) : (
+						<TakePhotoButton 
+							onPress={handleTakePhoto}
+							style={styles.takePhotoImage}
+						/>
 					)}
 
 					<Text style={styles.productName}>{currentProduct.name}</Text>
@@ -551,6 +561,12 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 	},
 	productImage: {
+		width: 150,
+		height: 150,
+		borderRadius: 8,
+		marginBottom: 16,
+	},
+	takePhotoImage: {
 		width: 150,
 		height: 150,
 		borderRadius: 8,
