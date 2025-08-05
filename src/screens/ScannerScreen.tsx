@@ -341,8 +341,12 @@ export default function ScannerScreen() {
 
 
 	const handleScanIngredients = async () => {
-		// Use the background queue for ingredient scanning - same as long press
-		await handleScanIngredientsBackground()
+		// Navigate to the dedicated camera screen for ingredient scanning
+		if (currentBarcode) {
+			router.push(`/report-issue/${currentBarcode}/ingredients`)
+		} else {
+			Alert.alert('Error', 'No barcode found')
+		}
 	}
 
 	const handleScanIngredientsBackground = async () => {
@@ -1219,7 +1223,6 @@ export default function ScannerScreen() {
 								<TouchableOpacity
 									style={styles.scanIngredientsButtonSmall}
 									onPress={handleScanIngredients}
-									onLongPress={handleScanIngredientsBackground}
 									disabled={isParsingIngredients}>
 									{isParsingIngredients ? (
 										<ActivityIndicator size='small' color='white' />
@@ -1266,7 +1269,6 @@ export default function ScannerScreen() {
 									<TouchableOpacity
 										style={styles.scanIngredientsButton}
 										onPress={handleScanIngredients}
-										onLongPress={handleScanIngredientsBackground}
 										disabled={isParsingIngredients || isCreatingProduct}>
 										{isParsingIngredients ? (
 											<ActivityIndicator size='small' color='white' />
