@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import ProductResult from './ProductResult';
 import ManualIcon from './icons/ManualIcon';
@@ -6,6 +6,7 @@ import BarcodeIcon from './icons/BarcodeIcon';
 import HistoryIcon from './icons/HistoryIcon';
 import SearchIcon from './icons/SearchIcon';
 import { Product } from '../types';
+import { useApp } from '../context/AppContext';
 
 interface ProductDisplayContainerProps {
   product: Product;
@@ -24,7 +25,16 @@ export default function ProductDisplayContainer({
   useAbsolutePositioning = true,
   iconType = 'manual',
 }: ProductDisplayContainerProps) {
+  const { markAsViewed } = useApp();
   const containerStyle = useAbsolutePositioning ? styles.overlayContainer : styles.fullScreenContainer;
+
+  // Mark as viewed when product is displayed
+  useEffect(() => {
+    if (product?.barcode) {
+      markAsViewed(product.barcode);
+      console.log(`📱 Marked product ${product.barcode} as viewed`);
+    }
+  }, [product?.barcode, markAsViewed]);
   
   return (
     <View style={containerStyle}>

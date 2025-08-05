@@ -7,9 +7,10 @@ import LogoWhite from './LogoWhite';
 interface HistoryItemProps {
   product: Product;
   onPress: () => void;
+  isNew?: boolean;
 }
 
-export default function HistoryItem({ product, onPress }: HistoryItemProps) {
+export default function HistoryItem({ product, onPress, isNew = false }: HistoryItemProps) {
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -92,6 +93,7 @@ export default function HistoryItem({ product, onPress }: HistoryItemProps) {
         {/* Product Info */}
         <View style={styles.productInfo}>
           <Text style={styles.productName} numberOfLines={2}>
+            {isNew && <Text style={styles.newPrefix}>[NEW] </Text>}
             {product.name}
           </Text>
           {product.brand && (
@@ -162,6 +164,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 2,
+  },
+  newPrefix: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#14A44A', // Green color to match app theme
   },
   productBrand: {
     fontSize: 14,

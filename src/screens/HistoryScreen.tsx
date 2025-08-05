@@ -240,12 +240,17 @@ export default function HistoryScreen() {
           <FlatList
             data={filteredProducts}
             keyExtractor={(item) => `${item.barcode}-${item.lastScanned?.getTime()}`}
-            renderItem={({ item }) => (
-              <HistoryItem
-                product={item}
-                onPress={() => handleProductPress(item)}
-              />
-            )}
+            renderItem={({ item, index }) => {
+              // Find the corresponding historyItem to get isNew flag
+              const historyItem = historyItems.find(hi => hi.barcode === item.barcode);
+              return (
+                <HistoryItem
+                  product={item}
+                  onPress={() => handleProductPress(item)}
+                  isNew={historyItem?.isNew || false}
+                />
+              );
+            }}
             style={styles.list}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}

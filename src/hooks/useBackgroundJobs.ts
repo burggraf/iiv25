@@ -1,11 +1,113 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BackgroundJob } from '../types/backgroundJobs';
 import { backgroundQueueService } from '../services/backgroundQueueService';
+import { historyService } from '../services/HistoryService';
+import { cacheService } from '../services/CacheService';
 
 export const useBackgroundJobs = () => {
   const [activeJobs, setActiveJobs] = useState<BackgroundJob[]>([]);
   const [completedJobs, setCompletedJobs] = useState<BackgroundJob[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Handle job completion to set isNew flag
+  const handleJobCompletion = useCallback(async (job: BackgroundJob) => {
+    try {
+      if (!job.resultData?.success || !job.upc) {
+        console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} failed or missing UPC, not marking as new`);
+        return;
+      }
+
+      console.log(`🎣 [useBackgroundJobs] *** HANDLING JOB COMPLETION FOR isNew FLAG ***`);
+      console.log(`🎣 [useBackgroundJobs] Job type: ${job.jobType}, UPC: ${job.upc}`);
+
+      if (job.jobType === 'product_photo_upload') {
+        // For photo upload jobs, we need to fetch fresh product data with the updated image
+        console.log(`🎣 [useBackgroundJobs] Photo upload completed - fetching fresh product data with updated image`);
+        
+        const { ProductLookupService } = await import('../services/productLookupService');
+        const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+          context: 'useBackgroundJobs photo completion' 
+        });
+        
+        if (!freshProductResult.product) {
+          console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after photo upload`);
+          return;
+        }
+        
+        console.log(`🎣 [useBackgroundJobs] Fresh product fetched with image URL: ${freshProductResult.product.imageUrl}`);
+        
+        // Add cache busting to the image URL if it's a Supabase image
+        const productWithCacheBusting = addImageCacheBusting(freshProductResult.product);
+        
+        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to photo upload completion`);
+        
+        // Add to history with isNew flag set to true
+        await historyService.addToHistory(productWithCacheBusting, true);
+        
+        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
+        await historyService.markAsNew(job.upc);
+        
+        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated image`);
+        
+      } else {
+        // For other job types, get the updated product from cache
+        const updatedProduct = await cacheService.getProduct(job.upc);
+        if (!updatedProduct) {
+          console.log(`🎣 [useBackgroundJobs] Product ${job.upc} not found in cache after job completion`);
+          return;
+        }
+
+        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to ${job.jobType} completion`);
+        
+        // Add to history with isNew flag set to true
+        await historyService.addToHistory(updatedProduct, true);
+        
+        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
+        await historyService.markAsNew(job.upc);
+        
+        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history`);
+      }
+    } catch (error) {
+      console.error(`❌ [useBackgroundJobs] Error handling job completion for ${job.upc}:`, error);
+    }
+  }, []);
+
+  // Helper function to add cache busting to image URLs
+  const addImageCacheBusting = (product: any): any => {
+    const { ProductImageUrlService } = require('../services/productImageUrlService');
+    
+    if (!product.imageUrl) {
+      return product;
+    }
+
+    const isSupabaseMarker = ProductImageUrlService.isSupabaseMarker(product.imageUrl);
+    const isSupabaseUrl = ProductImageUrlService.isSupabaseImageUrl(product.imageUrl, product.barcode);
+    
+    if (isSupabaseMarker || isSupabaseUrl) {
+      const timestamp = Date.now();
+      let cacheBustedImageUrl;
+      
+      if (isSupabaseMarker) {
+        cacheBustedImageUrl = `${ProductImageUrlService.getSupabaseMarker()}?t=${timestamp}`;
+      } else {
+        try {
+          const url = new URL(product.imageUrl);
+          url.searchParams.set('t', timestamp.toString());
+          cacheBustedImageUrl = url.toString();
+        } catch (error) {
+          const separator = product.imageUrl.includes('?') ? '&' : '?';
+          cacheBustedImageUrl = `${product.imageUrl}${separator}t=${timestamp}`;
+        }
+      }
+      
+      return {
+        ...product,
+        imageUrl: cacheBustedImageUrl
+      };
+    }
+    
+    return product;
+  };
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -87,10 +189,12 @@ export const useBackgroundJobs = () => {
           resultSuccess: job.resultData?.success
         });
         
-        if (event === 'job_completed' && job.jobType === 'product_photo_upload') {
-          console.log(`🎣 [useBackgroundJobs] *** PHOTO UPLOAD JOB COMPLETED ***`);
-          console.log(`🎣 [useBackgroundJobs] This should trigger cache invalidation!`);
+        if (event === 'job_completed') {
+          console.log(`🎣 [useBackgroundJobs] *** JOB COMPLETED: ${job.jobType} ***`);
           console.log(`🎣 [useBackgroundJobs] Job result:`, job.resultData);
+          
+          // Handle different job types that should mark items as new
+          handleJobCompletion(job);
         }
       } else {
         console.log(`🎣 [useBackgroundJobs] Event: ${event} - No job data`);

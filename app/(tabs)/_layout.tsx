@@ -7,8 +7,10 @@ import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
+import { useApp } from '../../src/context/AppContext';
 
 export default function TabLayout() {
+  const { newItemsCount } = useApp();
   const GREEN_COLOR = '#14A44A';
   const WHITE_COLOR = '#FFFFFF';
   const GRAY_COLOR = '#8E8E93';
@@ -96,6 +98,7 @@ export default function TabLayout() {
               color={focused ? WHITE_COLOR : GREEN_COLOR} 
             />
           ),
+          tabBarBadge: newItemsCount > 0 ? newItemsCount : undefined,
         }}
       />
       <Tabs.Screen

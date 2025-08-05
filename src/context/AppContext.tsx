@@ -15,6 +15,8 @@ interface AppContextType {
   isLoading: boolean;
   deviceId: string | null;
   updateHistoryProduct: (barcode: string, product: Product) => void;
+  newItemsCount: number;
+  markAsViewed: (barcode: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -30,6 +32,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [newItemsCount, setNewItemsCount] = useState<number>(0);
 
   // Initialize device ID and load history on app start
   useEffect(() => {
@@ -42,6 +45,10 @@ export function AppProvider({ children }: AppProviderProps) {
       onHistoryUpdated: (items: HistoryItem[]) => {
         setHistoryItems(items);
         setScanHistory(items.map(item => item.cachedProduct));
+        // Update new items count
+        const newCount = historyService.getNewItemsCount();
+        setNewItemsCount(newCount);
+        console.log(`📚 History updated - ${items.length} total, ${newCount} new items`);
       },
       onProductUpdated: (barcode: string, product: Product) => {
         // History will be updated automatically through onHistoryUpdated
@@ -95,14 +102,16 @@ export function AppProvider({ children }: AppProviderProps) {
       const initialHistory = historyService.getHistory();
       setHistoryItems(initialHistory);
       setScanHistory(initialHistory.map(item => item.cachedProduct));
-      console.log('🚀 [AppContext] Initial history loaded:', initialHistory.length, 'items');
+      const initialNewCount = historyService.getNewItemsCount();
+      setNewItemsCount(initialNewCount);
+      console.log('🚀 [AppContext] Initial history loaded:', initialHistory.length, 'items,', initialNewCount, 'new');
       
       console.log('✅ [AppContext] *** APP INITIALIZATION COMPLETE ***');
       console.log('✅ [AppContext] All services initialized and ready for photo upload events');
       
     } catch (error) {
       console.error('❌ [AppContext] Error initializing app:', error);
-      console.error('❌ [AppContext] Error stack:', error.stack);
+      console.error('❌ [AppContext] Error stack:', (error as Error).stack);
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +137,11 @@ export function AppProvider({ children }: AppProviderProps) {
     await cacheService.clearCache();
   };
 
+  const markAsViewed = async (barcode: string) => {
+    // Delegate to HistoryService to clear isNew flag
+    await historyService.markAsViewed(barcode);
+  };
+
   const value = {
     scanHistory,
     historyItems,
@@ -135,7 +149,9 @@ export function AppProvider({ children }: AppProviderProps) {
     clearHistory,
     isLoading,
     deviceId,
-    updateHistoryProduct
+    updateHistoryProduct,
+    newItemsCount,
+    markAsViewed
   };
 
   return (

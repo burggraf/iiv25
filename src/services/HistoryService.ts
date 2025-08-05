@@ -6,6 +6,7 @@ export interface HistoryItem {
   barcode: string;
   scannedAt: Date;
   cachedProduct: Product; // For immediate display
+  isNew?: boolean; // Flag for items that are new and should show a badge
 }
 
 export interface HistoryEventListener {
@@ -58,7 +59,7 @@ class HistoryService implements CacheEventListener {
   /**
    * Add or update a product in history
    */
-  public async addToHistory(product: Product): Promise<void> {
+  public async addToHistory(product: Product, isNew: boolean = false): Promise<void> {
     await this.ensureInitialized();
     
     const now = new Date();
@@ -75,7 +76,8 @@ class HistoryService implements CacheEventListener {
       const updatedItem: HistoryItem = {
         barcode: product.barcode,
         scannedAt: now,
-        cachedProduct: productWithTimestamp
+        cachedProduct: productWithTimestamp,
+        isNew: isNew
       };
       
       newHistoryItems = [
@@ -97,7 +99,8 @@ class HistoryService implements CacheEventListener {
         {
           barcode: product.barcode,
           scannedAt: now,
-          cachedProduct: productWithTimestamp
+          cachedProduct: productWithTimestamp,
+          isNew: isNew
         },
         ...this.historyItems
       ];
@@ -136,6 +139,79 @@ class HistoryService implements CacheEventListener {
   public getHistoryProduct(barcode: string): Product | null {
     const historyItem = this.historyItems.find(item => item.barcode === barcode);
     return historyItem ? historyItem.cachedProduct : null;
+  }
+
+  /**
+   * Mark a history item as viewed (clear the isNew flag)
+   */
+  public async markAsViewed(barcode: string): Promise<void> {
+    await this.ensureInitialized();
+    
+    const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
+    if (itemIndex !== -1 && this.historyItems[itemIndex].isNew) {
+      this.historyItems[itemIndex].isNew = false;
+      
+      // Persist changes
+      await this.persistHistory();
+      
+      // Notify listeners
+      this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      console.log(`📚 Marked ${barcode} as viewed (cleared isNew flag)`);
+    }
+  }
+
+  /**
+   * Force-set the isNew flag for a specific product (used by background job completion)
+   */
+  public async markAsNew(barcode: string): Promise<void> {
+    await this.ensureInitialized();
+    
+    const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
+    if (itemIndex !== -1) {
+      console.log(`📚 Force-marking ${barcode} as new (was: ${this.historyItems[itemIndex].isNew})`);
+      this.historyItems[itemIndex].isNew = true;
+      
+      // Persist changes
+      await this.persistHistory();
+      
+      // Notify listeners
+      this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      console.log(`✅ Successfully marked ${barcode} as new in history`);
+    } else {
+      console.log(`⚠️ Cannot mark ${barcode} as new - not found in history`);
+    }
+  }
+
+  /**
+   * Get count of new items in history
+   */
+  public getNewItemsCount(): number {
+    return this.historyItems.filter(item => item.isNew === true).length;
+  }
+
+  /**
+   * Force mark an existing item as new (failsafe method)
+   */
+  public async markAsNew(barcode: string): Promise<void> {
+    await this.ensureInitialized();
+    
+    const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
+    if (itemIndex !== -1) {
+      const wasNew = this.historyItems[itemIndex].isNew;
+      this.historyItems[itemIndex].isNew = true;
+      
+      // Persist changes
+      await this.persistHistory();
+      
+      // Notify listeners
+      this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      console.log(`📚 Force-marking ${barcode} as new (was: ${wasNew})`);
+    } else {
+      console.log(`📚 Cannot mark ${barcode} as new - not found in history`);
+    }
   }
   
   /**
@@ -318,7 +394,8 @@ class HistoryService implements CacheEventListener {
           cachedProduct: {
             ...item.cachedProduct,
             lastScanned: new Date(item.cachedProduct.lastScanned)
-          }
+          },
+          isNew: item.isNew || false // Default to false for existing items
         }));
       } else {
         // Old format - Product[] - migrate to new format
@@ -331,7 +408,8 @@ class HistoryService implements CacheEventListener {
         this.historyItems = products.map((product: Product) => ({
           barcode: product.barcode,
           scannedAt: product.lastScanned || new Date(),
-          cachedProduct: product
+          cachedProduct: product,
+          isNew: false // Migrated items are not new
         }));
         
         // Migrate data to cache service
