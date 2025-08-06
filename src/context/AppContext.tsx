@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Product } from '../types';
 import deviceIdService from '../services/deviceIdService';
 import { historyService, HistoryItem, HistoryEventListener } from '../services/HistoryService';
 import { cacheInvalidationService } from '../services/CacheInvalidationService';
+import { useBackgroundJobs } from '../hooks/useBackgroundJobs';
 import { cacheService } from '../services/CacheService';
 
 // HistoryItem is now exported from HistoryService
@@ -33,6 +34,10 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [newItemsCount, setNewItemsCount] = useState<number>(0);
+
+  // Ensure background job processing runs at app level
+  // This is critical - without this, job completion won't be processed when components unmount
+  useBackgroundJobs();
 
   // Initialize device ID and load history on app start
   useEffect(() => {
@@ -121,26 +126,26 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // History saving is now handled by HistoryService
 
-  const addToHistory = async (product: Product) => {
+  const addToHistory = useCallback(async (product: Product) => {
     // Delegate to HistoryService - it will handle cache and state updates
     await historyService.addToHistory(product);
-  };
+  }, []);
 
-  const updateHistoryProduct = async (barcode: string, product: Product) => {
+  const updateHistoryProduct = useCallback(async (barcode: string, product: Product) => {
     // Delegate to HistoryService - it will handle cache and state updates
     await historyService.updateHistoryProduct(barcode, product);
-  };
+  }, []);
 
-  const clearHistory = async () => {
+  const clearHistory = useCallback(async () => {
     // Clear both history and cache to ensure no phantom data
     await historyService.clearHistory();
     await cacheService.clearCache();
-  };
+  }, []);
 
-  const markAsViewed = async (barcode: string) => {
+  const markAsViewed = useCallback(async (barcode: string) => {
     // Delegate to HistoryService to clear isNew flag
     await historyService.markAsViewed(barcode);
-  };
+  }, []);
 
   const value = {
     scanHistory,

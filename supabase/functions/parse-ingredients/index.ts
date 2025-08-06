@@ -13,6 +13,7 @@ interface ParseIngredientsResponse {
   confidence: number;
   isValidIngredientsList: boolean;
   classification?: string;
+  product?: any; // Complete product data for cache invalidation (backward compatible)
   error?: string;
   apiCost?: {
     inputTokens: number;
@@ -333,6 +334,20 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
           // Add classification to response
           parsedResult.classification = classificationResult;
           console.log(`✅ Product classified as: ${classificationResult}`);
+
+          // Fetch the complete updated product data for cache invalidation
+          const { data: completeProduct, error: fetchError } = await supabase
+            .from('products')
+            .select('*')
+            .eq('upc', classifyUPC)
+            .single();
+
+          if (!fetchError && completeProduct) {
+            parsedResult.product = completeProduct;
+            console.log(`✅ Added complete product data to response for cache invalidation`);
+          } else {
+            console.warn(`⚠️ Failed to fetch complete product data for cache invalidation:`, fetchError);
+          }
 
           // Log the action to actionlog table
           try {

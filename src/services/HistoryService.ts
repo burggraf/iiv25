@@ -7,6 +7,7 @@ export interface HistoryItem {
   scannedAt: Date;
   cachedProduct: Product; // For immediate display
   isNew?: boolean; // Flag for items that are new and should show a badge
+  lastViewedAt?: Date; // Timestamp when this item was last marked as viewed
 }
 
 export interface HistoryEventListener {
@@ -59,7 +60,7 @@ class HistoryService implements CacheEventListener {
   /**
    * Add or update a product in history
    */
-  public async addToHistory(product: Product, isNew: boolean = false): Promise<void> {
+  public async addToHistory(product: Product, isNew: boolean = false, fromBackgroundJob: boolean = false): Promise<void> {
     await this.ensureInitialized();
     
     const now = new Date();
@@ -68,16 +69,32 @@ class HistoryService implements CacheEventListener {
     // Find existing entry
     const existingIndex = this.historyItems.findIndex(item => item.barcode === product.barcode);
     
+    // Only check recent viewing for background job updates to avoid UI conflicts
+    // EXCEPTION: Always allow photo upload jobs to set isNew flag since user explicitly took action
+    let finalIsNew = isNew;
+    if (fromBackgroundJob && isNew && existingIndex >= 0) {
+      // For photo uploads, always set isNew=true regardless of recent viewing
+      // This ensures badges appear when user takes photos
+      const wasRecentlyViewed = this.wasRecentlyViewed(product.barcode);
+      if (wasRecentlyViewed) {
+        // For now, disable the recent viewing check to fix badge issue
+        // TODO: Consider more sophisticated logic based on job type
+        console.log(`📚 Product ${product.barcode} was recently viewed but allowing isNew flag for background job`);
+      }
+    }
+    
     let newHistoryItems: HistoryItem[];
     let shouldUpdateCache = false;
     
     if (existingIndex >= 0) {
-      // Update existing item and move to top
+      // Update existing item and move to top, preserve lastViewedAt
+      const existingItem = this.historyItems[existingIndex];
       const updatedItem: HistoryItem = {
         barcode: product.barcode,
         scannedAt: now,
         cachedProduct: productWithTimestamp,
-        isNew: isNew
+        isNew: finalIsNew,
+        lastViewedAt: existingItem.lastViewedAt // Preserve when it was last viewed
       };
       
       newHistoryItems = [
@@ -100,7 +117,7 @@ class HistoryService implements CacheEventListener {
           barcode: product.barcode,
           scannedAt: now,
           cachedProduct: productWithTimestamp,
-          isNew: isNew
+          isNew: finalIsNew
         },
         ...this.historyItems
       ];
@@ -123,7 +140,7 @@ class HistoryService implements CacheEventListener {
     // Notify listeners
     this.notifyListeners('onHistoryUpdated', this.historyItems);
     
-    console.log(`📚 Added ${product.barcode} to history (${this.historyItems.length} total items)`);
+    console.log(`📚 Added ${product.barcode} to history (isNew: ${finalIsNew}, total items: ${this.historyItems.length})`);
   }
   
   /**
@@ -148,8 +165,10 @@ class HistoryService implements CacheEventListener {
     await this.ensureInitialized();
     
     const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
-    if (itemIndex !== -1 && this.historyItems[itemIndex].isNew) {
+    if (itemIndex !== -1) {
+      const wasNew = this.historyItems[itemIndex].isNew;
       this.historyItems[itemIndex].isNew = false;
+      this.historyItems[itemIndex].lastViewedAt = new Date();
       
       // Persist changes
       await this.persistHistory();
@@ -157,7 +176,7 @@ class HistoryService implements CacheEventListener {
       // Notify listeners
       this.notifyListeners('onHistoryUpdated', this.historyItems);
       
-      console.log(`📚 Marked ${barcode} as viewed (cleared isNew flag)`);
+      console.log(`📚 Marked ${barcode} as viewed (was new: ${wasNew}, cleared isNew flag, set lastViewedAt)`);
     }
   }
 
@@ -189,6 +208,27 @@ class HistoryService implements CacheEventListener {
    */
   public getNewItemsCount(): number {
     return this.historyItems.filter(item => item.isNew === true).length;
+  }
+
+  /**
+   * Check if a product was recently viewed (within last 3 seconds)
+   * This helps prevent isNew flag conflicts when user is actively viewing a product
+   * Reduced from 10 to 3 seconds to allow badges when user takes photo and waits
+   */
+  public wasRecentlyViewed(barcode: string): boolean {
+    const item = this.historyItems.find(item => item.barcode === barcode);
+    if (!item || !item.lastViewedAt) {
+      return false;
+    }
+    
+    const threeSecondsAgo = Date.now() - (3 * 1000); // 3 seconds (reduced from 10)
+    const wasRecentlyViewed = item.lastViewedAt.getTime() > threeSecondsAgo;
+    
+    if (wasRecentlyViewed) {
+      console.log(`📚 Product ${barcode} was recently viewed at ${item.lastViewedAt.toISOString()}`);
+    }
+    
+    return wasRecentlyViewed;
   }
 
   

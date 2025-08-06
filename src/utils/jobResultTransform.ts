@@ -62,10 +62,21 @@ export const transformJobResultToProduct = async (job: BackgroundJob): Promise<P
         break;
         
       case 'ingredient_parsing':
-        // For ingredient parsing, we need to get the updated product from database
-        // since the job result only contains parsing results, not full product data
-        console.log(`🔄 [transformJobResultToProduct] INGREDIENT_PARSING: Result doesn't contain full product data (expected)`);
-        return null; // Fall back to fresh lookup for this case
+        console.log(`🔄 [transformJobResultToProduct] INGREDIENT_PARSING: Checking for product data`);
+        console.log(`🔄 [transformJobResultToProduct] job.resultData.product exists: ${!!job.resultData.product}`);
+        console.log(`🔄 [transformJobResultToProduct] job.resultData.classification exists: ${!!job.resultData.classification}`);
+        
+        if (job.resultData.product) {
+          console.log(`🔄 [transformJobResultToProduct] ✅ Found complete product data in job result`);
+          productData = job.resultData.product;
+          classification = job.resultData.classification || productData.classification;
+          console.log(`🔄 [transformJobResultToProduct] Product name: ${productData.product_name || 'NO_NAME'}`);
+          console.log(`🔄 [transformJobResultToProduct] Classification: ${classification || 'NO_CLASSIFICATION'}`);
+        } else {
+          console.log(`🔄 [transformJobResultToProduct] ⚠️ FALLBACK: No product data in job result, using fresh lookup`);
+          console.log(`🔄 [transformJobResultToProduct] This might be from an older edge function version`);
+          return null; // Fall back to fresh lookup for legacy cases
+        }
         
       default:
         console.log(`🔄 [transformJobResultToProduct] ❌ UNKNOWN job type: ${job.jobType}`);

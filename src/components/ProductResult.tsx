@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
@@ -18,10 +18,9 @@ import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
 import { cacheService, CacheEventListener } from '../services/CacheService'
 import { ProductImageUrlService } from '../services/productImageUrlService'
-import { backgroundQueueService } from '../services/backgroundQueueService'
+import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
 import { transformJobResultToProduct } from '../utils/jobResultTransform'
 import { Product, VeganStatus } from '../types'
-import { BackgroundJob } from '../types/backgroundJobs'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
 import TakePhotoButton from './TakePhotoButton'
@@ -47,56 +46,58 @@ export default function ProductResult({
 	const router = useRouter()
 	const { addToHistory } = useApp()
 	const [currentProduct, setCurrentProduct] = useState<Product>(product)
+	const { activeJobs, completedJobs } = useBackgroundJobs() // Listen to job completion directly
+	
+	// FORCE IMAGE REFRESH - Add timestamp when image URL changes to bust browser cache
+	const resolvedImageUrl = useMemo(() => {
+		if (!currentProduct.imageUrl) return undefined;
+		
+		const baseUrl = ProductImageUrlService.resolveImageUrl(currentProduct.imageUrl, currentProduct.barcode);
+		if (!baseUrl) return undefined;
+		
+		// Add cache busting timestamp to force browser to reload image
+		const timestamp = Date.now();
+		const separator = baseUrl.includes('?') ? '&' : '?';
+		const finalUrl = `${baseUrl}${separator}cache_bust=${timestamp}`;
+		
+		console.log(`📱 [ProductResult] FORCE REFRESH - Image URL:`, {
+			barcode: currentProduct.barcode,
+			originalUrl: currentProduct.imageUrl,
+			baseUrl: baseUrl,
+			finalUrl: finalUrl
+		});
+		
+		return finalUrl;
+	}, [currentProduct.imageUrl, currentProduct.barcode]);
+	
+	// Listen for completed background jobs for this product and update UI directly
+	useEffect(() => {
+		const relevantCompletedJob = completedJobs.find(job => 
+			job.upc === currentProduct.barcode && 
+			job.jobType === 'product_photo_upload' &&
+			job.status === 'completed' &&
+			job.resultData?.success
+		);
+		
+		if (relevantCompletedJob) {
+			console.log(`📱 [ProductResult] *** DIRECT JOB COMPLETION UPDATE ***`);
+			console.log(`📱 [ProductResult] Found completed photo upload job for ${currentProduct.barcode}`);
+			console.log(`📱 [ProductResult] Job result:`, relevantCompletedJob.resultData);
+			
+			// Transform job result to product and update UI directly
+			transformJobResultToProduct(relevantCompletedJob).then(productFromJob => {
+				if (productFromJob) {
+					console.log(`📱 [ProductResult] ✅ Updating UI directly from completed job`);
+					console.log(`📱 [ProductResult] New image URL: ${productFromJob.imageUrl}`);
+					setCurrentProduct(productFromJob);
+				}
+			});
+		}
+	}, [completedJobs, currentProduct.barcode]);
+
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
-
-	// Handle job completion events for this product
-	const handleJobCompleted = useCallback(async (job: BackgroundJob) => {
-		// Only handle jobs for this product
-		if (!job.upc || job.upc !== currentProduct.barcode) {
-			return
-		}
-
-		console.log(`📱 [ProductResult] Job completed for this product: ${job.jobType} - ${job.upc}`)
-
-		// Try to use job result data to avoid redundant lookup
-		const productFromJobResult = await transformJobResultToProduct(job)
-		
-		if (productFromJobResult) {
-			console.log(`📱 [ProductResult] Using job result data - avoiding redundant lookup`)
-			setCurrentProduct(productFromJobResult)
-			
-			// Update cache with job result data
-			await cacheService.setProduct(currentProduct.barcode, productFromJobResult)
-			
-			// Notify parent component if needed
-			if (onProductUpdated) {
-				onProductUpdated(productFromJobResult)
-			}
-			
-			// Refresh ingredient classifications for updated product
-			await fetchIngredientClassifications(productFromJobResult.barcode)
-		} else {
-			// Fallback: only use direct lookup if job result transformation failed
-			console.log(`📱 [ProductResult] Job result transformation failed - falling back to cache lookup first`)
-			
-			// First try to get from cache (which might have been updated by CacheInvalidationService)
-			const cachedProduct = await cacheService.getProduct(currentProduct.barcode)
-			if (cachedProduct) {
-				console.log(`📱 [ProductResult] Using cached product data - avoiding redundant lookup`)
-				setCurrentProduct(cachedProduct)
-				if (onProductUpdated) {
-					onProductUpdated(cachedProduct)
-				}
-				await fetchIngredientClassifications(cachedProduct.barcode)
-			} else {
-				// Last resort: fresh lookup
-				console.log(`📱 [ProductResult] Cache miss - falling back to fresh lookup`)
-				await refreshProductData()
-			}
-		}
-	}, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]) // refreshProductData is intentionally omitted to avoid circular dependency
 
 	// Fetch ingredient classifications from database
 	const fetchIngredientClassifications = useCallback(async (barcode?: string) => {
@@ -118,54 +119,49 @@ export default function ProductResult({
 		}
 	}, [currentProduct.barcode]);
 
-	// Listen for cache updates for this specific product
-	useEffect(() => {
-		console.log(`📱 [ProductResult] Setting up cache listener for barcode: ${currentProduct.barcode}`);
-		
-		const cacheListener: CacheEventListener = {
-			onCacheUpdated: async (barcode: string, updatedProduct: Product) => {
-				console.log(`📱 [ProductResult] Cache event received for barcode: ${barcode}, current product: ${currentProduct.barcode}`);
-				if (barcode === currentProduct.barcode) {
-					console.log(`📱 [ProductResult] ✅ Cache updated for ${barcode}, refreshing UI with new product data`);
-					console.log(`📱 [ProductResult] Updated product imageUrl: ${updatedProduct.imageUrl}`);
-					setCurrentProduct(updatedProduct);
-					
-					// DON'T notify parent component - this would cause a loop since parent might update cache again
-					// The cache update already originated from the system, no need to propagate it back
-					
-					// Refresh ingredient classifications for updated product
-					console.log(`📱 [ProductResult] Refreshing ingredient classifications`);
-					await fetchIngredientClassifications(updatedProduct.barcode);
-				} else {
-					console.log(`📱 [ProductResult] Cache event for different product (${barcode}), ignoring`);
-				}
-			}
-		};
-		
-		cacheService.addListener(cacheListener);
-		console.log(`📱 [ProductResult] Cache listener added for ${currentProduct.barcode}`);
-		
-		return () => {
-			console.log(`📱 [ProductResult] Removing cache listener for ${currentProduct.barcode}`);
-			cacheService.removeListener(cacheListener);
-		};
-	}, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]);
+	// TEMPORARILY DISABLED - Cache listener might be causing photo revert
+	// useEffect(() => {
+	// 	console.log(`📱 [ProductResult] Setting up cache listener for barcode: ${currentProduct.barcode}`);
+	// 	
+	// 	const cacheListener: CacheEventListener = {
+	// 		onCacheUpdated: async (barcode: string, updatedProduct: Product) => {
+	// 			console.log(`📱 [ProductResult] *** CACHE EVENT DEBUG ***`);
+	// 			console.log(`📱 [ProductResult] Cache event received for barcode: ${barcode}, current product: ${currentProduct.barcode}`);
+	// 			console.log(`📱 [ProductResult] Current product imageUrl: ${currentProduct.imageUrl}`);
+	// 			console.log(`📱 [ProductResult] Updated product imageUrl: ${updatedProduct.imageUrl}`);
+	// 			console.log(`📱 [ProductResult] URLs are same: ${currentProduct.imageUrl === updatedProduct.imageUrl}`);
+	// 			console.log(`📱 [ProductResult] Event timestamp: ${new Date().toISOString()}`);
+	// 			
+	// 			if (barcode === currentProduct.barcode) {
+	// 				console.log(`📱 [ProductResult] ✅ Cache updated for ${barcode}, refreshing UI with new product data`);
+	// 				
+	// 				// Always accept cache updates - let the background job system handle cache invalidation
+	// 				
+	// 				setCurrentProduct(updatedProduct);
+	// 				
+	// 				// DON'T notify parent component - this would cause a loop since parent might update cache again
+	// 				// The cache update already originated from the system, no need to propagate it back
+	// 				
+	// 				// Refresh ingredient classifications for updated product
+	// 				console.log(`📱 [ProductResult] Refreshing ingredient classifications`);
+	// 				await fetchIngredientClassifications(updatedProduct.barcode);
+	// 			} else {
+	// 				console.log(`📱 [ProductResult] Cache event for different product (${barcode}), ignoring`);
+	// 			}
+	// 		}
+	// 	};
+	// 	
+	// 	cacheService.addListener(cacheListener);
+	// 	console.log(`📱 [ProductResult] Cache listener added for ${currentProduct.barcode}`);
+	// 	
+	// 	return () => {
+	// 		console.log(`📱 [ProductResult] Removing cache listener for ${currentProduct.barcode}`);
+	// 		cacheService.removeListener(cacheListener);
+	// 	};
+	// }, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]);
 
-	// Subscribe to background job completion events
-	useEffect(() => {
-		console.log(`📱 [ProductResult] Setting up job event listener for barcode: ${currentProduct.barcode}`)
-		
-		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
-			if (event === 'job_completed' && job) {
-				handleJobCompleted(job)
-			}
-		})
-		
-		return () => {
-			console.log(`📱 [ProductResult] Removing job event listener for ${currentProduct.barcode}`)
-			unsubscribe()
-		}
-	}, [currentProduct.barcode, handleJobCompleted])
+	// Job completion is now handled via direct monitoring of completedJobs above
+	// No need for separate event subscription to avoid duplicate handling
 
 	useEffect(() => {
 		fetchIngredientClassifications();
@@ -357,8 +353,8 @@ export default function ProductResult({
 
 				{/* Product Info */}
 				<View style={styles.productInfo}>
-					{currentProduct.imageUrl ? (
-						<Image source={{ uri: ProductImageUrlService.resolveImageUrl(currentProduct.imageUrl, currentProduct.barcode) || undefined }} style={styles.productImage} />
+					{resolvedImageUrl ? (
+						<Image source={{ uri: resolvedImageUrl }} style={styles.productImage} />
 					) : (
 						<TakePhotoButton 
 							onPress={handleTakePhoto}

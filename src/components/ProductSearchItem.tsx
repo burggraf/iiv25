@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Product, VeganStatus } from '../types';
 import { ProductImageUrlService } from '../services/productImageUrlService';
@@ -10,6 +10,20 @@ interface ProductSearchItemProps {
 }
 
 export default function ProductSearchItem({ product, onPress }: ProductSearchItemProps) {
+  // ALWAYS FRESH - Don't memoize search item images, always use fresh cache busting
+  let resolvedImageUrl: string | undefined = undefined;
+  if (product.imageUrl) {
+    const baseUrl = ProductImageUrlService.resolveImageUrl(product.imageUrl, product.barcode);
+    if (baseUrl) {
+      // Always add fresh cache busting timestamp to force browser to reload image
+      const timestamp = Date.now();
+      const separator = baseUrl.includes('?') ? '&' : '?';
+      resolvedImageUrl = `${baseUrl}${separator}cache_bust=${timestamp}`;
+      
+      console.log(`📱 [ProductSearchItem] ALWAYS FRESH - Image URL for ${product.barcode}:`, resolvedImageUrl);
+    }
+  }
+
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -59,8 +73,8 @@ export default function ProductSearchItem({ product, onPress }: ProductSearchIte
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.content}>
         {/* Product Image */}
-        {product.imageUrl ? (
-          <Image source={{ uri: ProductImageUrlService.resolveImageUrl(product.imageUrl, product.barcode) || undefined }} style={styles.productImage} />
+        {resolvedImageUrl ? (
+          <Image source={{ uri: resolvedImageUrl }} style={styles.productImage} />
         ) : (
           <View style={styles.placeholderImage}>
             <Text style={styles.placeholderText}>📦</Text>

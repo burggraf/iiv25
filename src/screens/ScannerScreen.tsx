@@ -1229,7 +1229,17 @@ export default function ScannerScreen() {
 							<TouchableOpacity style={styles.overlayProductInfo} onPress={handleOverlayPress}>
 								<View style={styles.overlayLeft}>
 									{scannedProduct.imageUrl ? (
-										<Image source={{ uri: ProductImageUrlService.resolveImageUrl(scannedProduct.imageUrl, scannedProduct.barcode) || undefined }} style={styles.overlayImage} />
+										<Image source={{ 
+											uri: (() => {
+												const baseUrl = ProductImageUrlService.resolveImageUrl(scannedProduct.imageUrl, scannedProduct.barcode);
+												if (!baseUrl) return undefined;
+												const timestamp = Date.now();
+												const separator = baseUrl.includes('?') ? '&' : '?';
+												const cacheBustedUrl = `${baseUrl}${separator}scanner_cache_bust=${timestamp}`;
+												console.log(`📱 [ScannerScreen] FRESH image URL for ${scannedProduct.barcode}:`, cacheBustedUrl);
+												return cacheBustedUrl;
+											})()
+										}} style={styles.overlayImage} />
 									) : (
 										<TakePhotoButton 
 											onPress={handleTakeProductPhoto}

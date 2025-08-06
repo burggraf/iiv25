@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Product, VeganStatus } from '../types';
@@ -12,6 +12,22 @@ interface HistoryItemProps {
 }
 
 export default function HistoryItem({ product, onPress, isNew = false }: HistoryItemProps) {
+  // FORCE IMAGE REFRESH - Add timestamp when image URL changes to bust browser cache
+  const resolvedImageUrl = useMemo(() => {
+    if (!product.imageUrl) return undefined;
+    
+    const baseUrl = ProductImageUrlService.resolveImageUrl(product.imageUrl, product.barcode);
+    if (!baseUrl) return undefined;
+    
+    // Add cache busting timestamp to force browser to reload image
+    const timestamp = Date.now();
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const finalUrl = `${baseUrl}${separator}cache_bust=${timestamp}`;
+    
+    console.log(`📱 [HistoryItem] Image URL for ${product.barcode}:`, finalUrl);
+    return finalUrl;
+  }, [product.imageUrl, product.barcode, product.lastScanned]); // Add lastScanned to trigger refresh
+
   const getStatusColor = (status: VeganStatus): string => {
     switch (status) {
       case VeganStatus.VEGAN:
@@ -83,8 +99,8 @@ export default function HistoryItem({ product, onPress, isNew = false }: History
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.content}>
         {/* Product Image */}
-        {product.imageUrl ? (
-          <Image source={{ uri: ProductImageUrlService.resolveImageUrl(product.imageUrl, product.barcode) || undefined }} style={styles.productImage} />
+        {resolvedImageUrl ? (
+          <Image source={{ uri: resolvedImageUrl }} style={styles.productImage} />
         ) : (
           <View style={styles.placeholderImage}>
             <Text style={styles.placeholderText}>📦</Text>

@@ -14,6 +14,7 @@ class CacheInvalidationService {
   private static instance: CacheInvalidationService;
   private isInitialized = false;
   private unsubscribeFromJobs?: () => void;
+  private processingJobs = new Set<string>(); // Prevent recursive processing
 
   private constructor() {}
 
@@ -129,9 +130,19 @@ class CacheInvalidationService {
   private async handleJobCompleted(job: BackgroundJob): Promise<void> {
     const { jobType, upc, resultData } = job;
 
-    console.log(`✅ [CacheInvalidation] Processing completed job: ${jobType} for ${upc}`);
+    // Prevent recursive processing of the same job
+    const jobKey = `${jobType}-${upc}`;
+    if (this.processingJobs.has(jobKey)) {
+      console.log(`⚠️ [CacheInvalidation] Already processing ${jobKey}, skipping to prevent loop`);
+      return;
+    }
 
-    switch (jobType) {
+    this.processingJobs.add(jobKey);
+    
+    try {
+      console.log(`✅ [CacheInvalidation] Processing completed job: ${jobType} for ${upc}`);
+
+      switch (jobType) {
       case 'ingredient_parsing':
         await this.handleIngredientParsingCompleted(upc, resultData, job);
         break;
@@ -148,6 +159,10 @@ class CacheInvalidationService {
         console.log(`🔄 [CacheInvalidation] Unknown job type: ${jobType}, invalidating cache for ${upc}`);
         await this.invalidateProductCache(upc, `${jobType} completed`);
         break;
+      }
+    } finally {
+      // Always remove from processing set to allow future processing
+      this.processingJobs.delete(jobKey);
     }
   }
 
@@ -197,10 +212,17 @@ class CacheInvalidationService {
       console.log(`🧪 [CacheInvalidation] Ingredient parsing was successful - ${resultData.ingredients.length} ingredients found`);
       console.log(`🧪 [CacheInvalidation] Classification result: ${resultData.classification || 'none'}`);
       
-      // For successful ingredient parsing, invalidate cache to force fresh lookup
-      // This ensures UI gets the updated product with new ingredients from database
-      console.log(`🧪 [CacheInvalidation] Invalidating cache to trigger fresh lookup for updated ingredients`);
-      await cacheService.invalidateProduct(upc, 'ingredient parsing completed successfully');
+      // Try to use job result data to avoid redundant lookup
+      const productFromJobResult = await transformJobResultToProduct(job);
+      
+      if (productFromJobResult) {
+        console.log(`🧪 [CacheInvalidation] Using job result data - avoiding redundant lookup`);
+        await cacheService.setProduct(upc, productFromJobResult);
+        console.log(`✅ [CacheInvalidation] Updated cache with ingredient parsing from job result for ${upc}`);
+      } else {
+        console.log(`🧪 [CacheInvalidation] FALLBACK: Job result transformation failed - invalidating cache to trigger fresh lookup`);
+        await cacheService.invalidateProduct(upc, 'ingredient parsing completed successfully (fallback)');
+      }
     } else {
       console.log(`🧪 [CacheInvalidation] Ingredient parsing was not successful or no ingredients found`);
       console.log(`🧪 [CacheInvalidation] Result data: isValidIngredientsList=${resultData?.isValidIngredientsList}, ingredients=${resultData?.ingredients?.length || 0}`);
@@ -251,12 +273,16 @@ class CacheInvalidationService {
       console.log(`📸 [CacheInvalidation] Using job result data - avoiding redundant lookup`);
       // Apply cache busting for image updates
       const productWithCacheBusting = this.addImageCacheBusting(productFromJobResult);
+      
+      // Update cache with cache-busted image URL (loop prevention handled by processingJobs set)
       await cacheService.setProduct(upc, productWithCacheBusting);
       console.log(`✅ [CacheInvalidation] Updated cache with photo upload from job result for ${upc}`);
     } else if (resultData?.success && resultData?.updatedProduct) {
       console.log(`📸 [CacheInvalidation] Job result transformation failed - using result data directly`);
       // Apply cache busting for image updates
       const productWithCacheBusting = this.addImageCacheBusting(resultData.updatedProduct);
+      
+      // Update cache with cache-busted image URL (loop prevention handled by processingJobs set)
       await cacheService.setProduct(upc, productWithCacheBusting);
       console.log(`✅ [CacheInvalidation] Updated cache with photo upload from result data for ${upc}`);
     } else {

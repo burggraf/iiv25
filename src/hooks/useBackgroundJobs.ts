@@ -54,33 +54,30 @@ export const useBackgroundJobs = () => {
           productToUse = addImageCacheBusting(productFromJobResult);
           console.log(`🎣 [useBackgroundJobs] Using product from job result with image URL: ${productToUse.imageUrl}`);
         } else {
-          // Fallback to fresh lookup if job result transformation failed
-          console.log(`🎣 [useBackgroundJobs] Job result transformation failed - falling back to fresh lookup`);
+          // RARE FALLBACK: Job result transformation failed - this should be uncommon now
+          console.log(`🎣 [useBackgroundJobs] RARE FALLBACK: Job result transformation failed`);
+          console.log(`🎣 [useBackgroundJobs] This may indicate an older edge function version or unexpected data format`);
           
           const { ProductLookupService } = await import('../services/productLookupService');
           const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
-            context: 'useBackgroundJobs photo completion (fallback)' 
+            context: 'useBackgroundJobs photo completion (rare fallback)' 
           });
           
           if (!freshProductResult.product) {
-            console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after photo upload`);
+            console.log(`🎣 [useBackgroundJobs] FALLBACK FAILED: Could not fetch fresh product data for ${job.upc} after photo upload`);
             return;
           }
           
-          console.log(`🎣 [useBackgroundJobs] Fresh product fetched with image URL: ${freshProductResult.product.imageUrl}`);
-          // Add cache busting to the image URL if it's a Supabase image
+          console.log(`🎣 [useBackgroundJobs] Fallback successful - fresh product fetched with image URL: ${freshProductResult.product.imageUrl}`);
           productToUse = addImageCacheBusting(freshProductResult.product);
         }
         
-        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to photo upload completion`);
+        console.log(`🎣 [useBackgroundJobs] Photo upload completed - updating product in history`);
         
-        // Add to history with isNew flag set to true
-        await historyService.addToHistory(productToUse, true);
+        // Add to history with isNew flag set to true - let HistoryService decide based on recent viewing
+        await historyService.addToHistory(productToUse, true, true);
         
-        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
-        await historyService.markAsNew(job.upc);
-        
-        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated image`);
+        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated image`);
         
       } else if (job.jobType === 'ingredient_parsing') {
         // Try to use job result data to avoid redundant lookup
@@ -94,32 +91,30 @@ export const useBackgroundJobs = () => {
           productToUse = productFromJobResult;
           console.log(`🎣 [useBackgroundJobs] Using product from job result with updated ingredients`);
         } else {
-          // Fallback to fresh lookup (expected for ingredient parsing jobs currently)
-          console.log(`🎣 [useBackgroundJobs] Job result transformation failed - falling back to fresh lookup`);
+          // LEGACY FALLBACK: Should be rare now that edge function returns complete product data
+          console.log(`🎣 [useBackgroundJobs] LEGACY FALLBACK: Job result transformation failed for ingredient parsing`);
+          console.log(`🎣 [useBackgroundJobs] This may indicate an older edge function version or deployment lag`);
           
           const { ProductLookupService } = await import('../services/productLookupService');
           const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
-            context: 'useBackgroundJobs ingredient completion (fallback)' 
+            context: 'useBackgroundJobs ingredient completion (legacy fallback)' 
           });
           
           if (!freshProductResult.product) {
-            console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after ingredient parsing`);
+            console.log(`🎣 [useBackgroundJobs] FALLBACK FAILED: Could not fetch fresh product data for ${job.upc} after ingredient parsing`);
             return;
           }
           
-          console.log(`🎣 [useBackgroundJobs] Fresh product fetched with updated ingredients`);
+          console.log(`🎣 [useBackgroundJobs] Fallback successful - fresh product fetched with updated ingredients`);
           productToUse = freshProductResult.product;
         }
         
-        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to ingredient parsing completion`);
+        console.log(`🎣 [useBackgroundJobs] Ingredient parsing completed - updating product in history`);
         
-        // Add to history with isNew flag set to true
-        await historyService.addToHistory(productToUse, true);
+        // Add to history with isNew flag set to true - let HistoryService decide based on recent viewing
+        await historyService.addToHistory(productToUse, true, true);
         
-        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
-        await historyService.markAsNew(job.upc);
-        
-        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated ingredients`);
+        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated ingredients`);
         
       } else {
         // For other job types, get the updated product from cache
@@ -129,15 +124,12 @@ export const useBackgroundJobs = () => {
           return;
         }
 
-        console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to ${job.jobType} completion`);
+        console.log(`🎣 [useBackgroundJobs] ${job.jobType} completed - updating product in history`);
         
-        // Add to history with isNew flag set to true
-        await historyService.addToHistory(updatedProduct, true);
+        // Add to history with isNew flag set to true - let HistoryService decide based on recent viewing
+        await historyService.addToHistory(updatedProduct, true, true);
         
-        // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
-        await historyService.markAsNew(job.upc);
-        
-        console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history`);
+        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history`);
       }
     } catch (error) {
       console.error(`❌ [useBackgroundJobs] Error handling job completion for ${job.upc}:`, error);
@@ -280,7 +272,7 @@ export const useBackgroundJobs = () => {
     console.log(`🎣 [useBackgroundJobs] Unsubscribe function:`, typeof unsubscribe);
 
     return unsubscribe;
-  }, [refreshJobs]);
+  }, [refreshJobs, handleJobCompletion]);
 
   const queueJob = useCallback(async (params: {
     jobType: 'product_creation' | 'ingredient_parsing' | 'product_photo_upload';
