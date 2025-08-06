@@ -88,6 +88,26 @@ export const transformJobResultToProduct = async (job: BackgroundJob): Promise<P
       return null;
     }
 
+    // DEBUG: Show extracted product data structure
+    console.log(`🔄 [transformJobResultToProduct] *** EXTRACTED PRODUCT DATA DEBUG ***`);
+    console.log(`🔄 [transformJobResultToProduct] ProductData structure:`, JSON.stringify(productData, null, 2));
+    console.log(`🔄 [transformJobResultToProduct] ProductData.ingredients: "${productData.ingredients}"`);
+    console.log(`🔄 [transformJobResultToProduct] ProductData.classification: "${productData.classification}"`);
+    console.log(`🔄 [transformJobResultToProduct] Classification variable: "${classification}"`);
+    console.log(`🔄 [transformJobResultToProduct] *** END DEBUG ***`);
+
+    // TODO: Fix root cause - why does job result contain stale data?
+    // The job result should already have the latest product data
+    console.log(`🔄 [transformJobResultToProduct] ⚠️ WARNING: Job result may contain stale data`);
+    console.log(`🔄 [transformJobResultToProduct] Job timestamp: ${productData.lastupdated}`);
+    console.log(`🔄 [transformJobResultToProduct] This should be investigated and fixed at the job level`);
+    
+    // For now, return null to force fresh lookup through normal ProductLookupService path
+    if (!productData.ingredients && productData.classification === 'undetermined') {
+      console.log(`🔄 [transformJobResultToProduct] ❌ Detected stale job data - returning null to force fresh lookup`);
+      return null;
+    }
+
     // Transform classification to VeganStatus
     const getVeganStatus = (classification: string | null): VeganStatus => {
       if (!classification) return VeganStatus.UNKNOWN;
