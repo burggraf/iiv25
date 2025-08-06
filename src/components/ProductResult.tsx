@@ -18,7 +18,10 @@ import { ProductLookupService } from '../services/productLookupService'
 import { supabase } from '../services/supabaseClient'
 import { cacheService, CacheEventListener } from '../services/CacheService'
 import { ProductImageUrlService } from '../services/productImageUrlService'
+import { backgroundQueueService } from '../services/backgroundQueueService'
+import { transformJobResultToProduct } from '../utils/jobResultTransform'
 import { Product, VeganStatus } from '../types'
+import { BackgroundJob } from '../types/backgroundJobs'
 import Logo from './Logo'
 import LogoWhite from './LogoWhite'
 import TakePhotoButton from './TakePhotoButton'
@@ -47,6 +50,53 @@ export default function ProductResult({
 	const [ingredientClassifications, setIngredientClassifications] = useState<
 		IngredientClassification[]
 	>([])
+
+	// Handle job completion events for this product
+	const handleJobCompleted = useCallback(async (job: BackgroundJob) => {
+		// Only handle jobs for this product
+		if (!job.upc || job.upc !== currentProduct.barcode) {
+			return
+		}
+
+		console.log(`📱 [ProductResult] Job completed for this product: ${job.jobType} - ${job.upc}`)
+
+		// Try to use job result data to avoid redundant lookup
+		const productFromJobResult = await transformJobResultToProduct(job)
+		
+		if (productFromJobResult) {
+			console.log(`📱 [ProductResult] Using job result data - avoiding redundant lookup`)
+			setCurrentProduct(productFromJobResult)
+			
+			// Update cache with job result data
+			await cacheService.setProduct(currentProduct.barcode, productFromJobResult)
+			
+			// Notify parent component if needed
+			if (onProductUpdated) {
+				onProductUpdated(productFromJobResult)
+			}
+			
+			// Refresh ingredient classifications for updated product
+			await fetchIngredientClassifications(productFromJobResult.barcode)
+		} else {
+			// Fallback: only use direct lookup if job result transformation failed
+			console.log(`📱 [ProductResult] Job result transformation failed - falling back to cache lookup first`)
+			
+			// First try to get from cache (which might have been updated by CacheInvalidationService)
+			const cachedProduct = await cacheService.getProduct(currentProduct.barcode)
+			if (cachedProduct) {
+				console.log(`📱 [ProductResult] Using cached product data - avoiding redundant lookup`)
+				setCurrentProduct(cachedProduct)
+				if (onProductUpdated) {
+					onProductUpdated(cachedProduct)
+				}
+				await fetchIngredientClassifications(cachedProduct.barcode)
+			} else {
+				// Last resort: fresh lookup
+				console.log(`📱 [ProductResult] Cache miss - falling back to fresh lookup`)
+				await refreshProductData()
+			}
+		}
+	}, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]) // refreshProductData is intentionally omitted to avoid circular dependency
 
 	// Fetch ingredient classifications from database
 	const fetchIngredientClassifications = useCallback(async (barcode?: string) => {
@@ -101,6 +151,22 @@ export default function ProductResult({
 		};
 	}, [currentProduct.barcode, onProductUpdated, fetchIngredientClassifications]);
 
+	// Subscribe to background job completion events
+	useEffect(() => {
+		console.log(`📱 [ProductResult] Setting up job event listener for barcode: ${currentProduct.barcode}`)
+		
+		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
+			if (event === 'job_completed' && job) {
+				handleJobCompleted(job)
+			}
+		})
+		
+		return () => {
+			console.log(`📱 [ProductResult] Removing job event listener for ${currentProduct.barcode}`)
+			unsubscribe()
+		}
+	}, [currentProduct.barcode, handleJobCompleted])
+
 	useEffect(() => {
 		fetchIngredientClassifications();
 	}, [currentProduct.barcode, fetchIngredientClassifications]);
@@ -108,8 +174,15 @@ export default function ProductResult({
 	const refreshProductData = async () => {
 		if (!currentProduct.barcode) return
 
+		// NOTE: This function is now primarily a fallback. 
+		// ProductResult should ideally get updated data from job completion events
+		// or cache events rather than making direct ProductLookupService calls
+		console.log(`📱 [ProductResult] FALLBACK: refreshProductData called for ${currentProduct.barcode}`)
+
 		try {
-			const result = await ProductLookupService.lookupProductByBarcode(currentProduct.barcode)
+			const result = await ProductLookupService.lookupProductByBarcode(currentProduct.barcode, {
+				context: 'ProductResult refresh (fallback)'
+			})
 
 			if (result.product) {
 				setCurrentProduct(result.product)

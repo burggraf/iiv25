@@ -361,4 +361,96 @@ export class ProductImageUploadService {
       console.error(`❌ Error processing image for product ${upc}:`, error);
     }
   }
+
+  /**
+   * Updates the product record with the uploaded image URL and returns the full response
+   * @param upc - The UPC of the product to update
+   * @param imageUrl - The public URL of the uploaded image
+   * @returns Promise with full edge function response including updatedProduct
+   */
+  static async updateProductImageUrlWithResponse(upc: string, imageUrl: string, maxRetries = 3): Promise<{
+    success: boolean;
+    updatedProduct?: any;
+    error?: string;
+  }> {
+    console.log(`💾 [ProductImageUploadService] *** UPDATING DATABASE WITH FULL RESPONSE ***`);
+    console.log(`💾 [ProductImageUploadService] UPC: ${upc}`);
+    console.log(`💾 [ProductImageUploadService] New image URL: ${imageUrl}`);
+    console.log(`💾 [ProductImageUploadService] Max retries: ${maxRetries}`);
+    console.log(`💾 [ProductImageUploadService] Timestamp: ${new Date().toISOString()}`);
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`💾 [ProductImageUploadService] *** ATTEMPT ${attempt}/${maxRetries} ***`);
+        console.log(`💾 [ProductImageUploadService] Calling edge function: update-product-image`);
+        console.log(`💾 [ProductImageUploadService] Function payload:`, { upc, imageUrl });
+
+        // Call the edge function to update the product (has service role access)
+        const { data, error } = await supabase.functions.invoke('update-product-image', {
+          body: {
+            upc: upc,
+            imageUrl: imageUrl,
+          },
+        });
+
+        console.log(`💾 [ProductImageUploadService] Edge function response:`, {
+          hasData: !!data,
+          hasError: !!error,
+          errorMessage: error?.message,
+          dataSuccess: data?.success,
+          dataError: data?.error,
+          hasUpdatedProduct: !!data?.updatedProduct
+        });
+
+        if (error) {
+          console.error(`💾 [ProductImageUploadService] Edge function error (attempt ${attempt}):`, error.message);
+          if (attempt === maxRetries) {
+            console.error(`💾 [ProductImageUploadService] Max retries reached, giving up`);
+            return { success: false, error: error.message };
+          }
+          console.log(`💾 [ProductImageUploadService] Retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        if (!data?.success) {
+          console.error(`💾 [ProductImageUploadService] Edge function returned failure (attempt ${attempt}):`, data?.error);
+          if (attempt === maxRetries) {
+            console.error(`💾 [ProductImageUploadService] Max retries reached, giving up`);
+            return { success: false, error: data?.error || 'Edge function returned failure' };
+          }
+          console.log(`💾 [ProductImageUploadService] Retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        console.log(`✅ [ProductImageUploadService] *** DATABASE UPDATE SUCCESSFUL WITH FULL RESPONSE ***`);
+        console.log(`✅ [ProductImageUploadService] Successfully updated product via edge function`);
+        
+        if (data.updatedProduct) {
+          console.log(`✅ [ProductImageUploadService] Returning full updated product:`, {
+            product_name: data.updatedProduct.product_name,
+            imageurl: data.updatedProduct.imageurl,
+            classification: data.updatedProduct.classification
+          });
+        }
+
+        return {
+          success: true,
+          updatedProduct: data.updatedProduct
+        };
+
+      } catch (error) {
+        console.error(`💾 [ProductImageUploadService] Unexpected error (attempt ${attempt}):`, error);
+        if (attempt === maxRetries) {
+          console.error(`💾 [ProductImageUploadService] Max retries reached, giving up`);
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+        console.log(`💾 [ProductImageUploadService] Retrying in 1 second...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    return { success: false, error: 'Should never reach here' };
+  }
 }

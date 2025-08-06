@@ -18,12 +18,206 @@ export interface ProductLookupOptions {
 	context?: string // For logging context (e.g., "Scanner", "Manual Entry", "Test")
 }
 
+// Request deduplication to prevent multiple simultaneous lookups for the same barcode
+interface PendingRequest {
+	promise: Promise<ProductLookupResult>
+	timestamp: number
+	contexts: string[]
+}
+
 export class ProductLookupService {
+	private static pendingRequests = new Map<string, PendingRequest>()
+	private static readonly DEDUP_WINDOW_MS = 30000 // 30 seconds deduplication window (extended for debugging)
+	private static lastCleanup = 0
+	private static readonly CLEANUP_INTERVAL_MS = 60000 // Clean up every 60 seconds
+	
+	// Call tracking for debugging (tracks all calls for each barcode)
+	private static callHistory = new Map<string, {context: string, timestamp: number, wasDeduped: boolean}[]>()
+	private static readonly CALL_HISTORY_LIMIT = 50 // Keep last 50 calls per barcode
+	
 	static async lookupProductByBarcode(
 		barcode: string,
 		options: ProductLookupOptions = {}
 	): Promise<ProductLookupResult> {
 		const context = options.context || 'Product Lookup'
+		const now = Date.now()
+		
+		// Track this call for debugging
+		this.trackCall(barcode, context, now, false)
+		
+		// Check for existing pending request for the same barcode
+		const existingRequest = this.pendingRequests.get(barcode)
+		if (existingRequest) {
+			const age = now - existingRequest.timestamp
+			if (age < this.DEDUP_WINDOW_MS) {
+				console.log(`🔄 [ProductLookup] DEDUPLICATION: Request for ${barcode} already in progress (${Math.round(age)}ms ago)`)
+				console.log(`🔄 [ProductLookup] Original contexts: [${existingRequest.contexts.join(', ')}]`)
+				console.log(`🔄 [ProductLookup] Current context: [${context}]`)
+				console.log(`🔄 [ProductLookup] Returning existing promise instead of making new request`)
+				
+				// Update call tracking to mark this as deduped
+				this.trackCall(barcode, context, now, true)
+				
+				// Add current context to the existing request for tracking
+				if (!existingRequest.contexts.includes(context)) {
+					existingRequest.contexts.push(context)
+				}
+				
+				return existingRequest.promise
+			} else {
+				// Request is too old, remove it and proceed with new request
+				console.log(`🔄 [ProductLookup] Removing stale request for ${barcode} (${Math.round(age)}ms old)`)
+				this.pendingRequests.delete(barcode)
+			}
+		}
+		
+		// Periodic cleanup of stale requests to prevent memory leaks
+		this.cleanupStaleRequests()
+		
+		// Create new request
+		console.log(`🔄 [ProductLookup] Creating new request for ${barcode} with context: [${context}]`)
+		const promise = this.performLookup(barcode, context)
+		
+		// Store the pending request for deduplication
+		this.pendingRequests.set(barcode, {
+			promise,
+			timestamp: Date.now(),
+			contexts: [context]
+		})
+		
+		// Clean up the request when it completes (success or failure)
+		promise.finally(() => {
+			const request = this.pendingRequests.get(barcode)
+			if (request && request.timestamp === this.pendingRequests.get(barcode)?.timestamp) {
+				console.log(`🔄 [ProductLookup] Cleaning up completed request for ${barcode}`)
+				console.log(`🔄 [ProductLookup] Final contexts served: [${request.contexts.join(', ')}]`)
+				this.pendingRequests.delete(barcode)
+			}
+		})
+		
+		return promise
+	}
+	
+	private static cleanupStaleRequests(): void {
+		const now = Date.now()
+		if (now - this.lastCleanup < this.CLEANUP_INTERVAL_MS) {
+			return // Don't clean up too frequently
+		}
+		
+		let cleanedCount = 0
+		const cutoffTime = now - (this.DEDUP_WINDOW_MS * 2) // Clean up requests older than 2x the dedup window
+		
+		for (const [barcode, request] of this.pendingRequests.entries()) {
+			if (request.timestamp < cutoffTime) {
+				this.pendingRequests.delete(barcode)
+				cleanedCount++
+			}
+		}
+		
+		if (cleanedCount > 0) {
+			console.log(`🧹 [ProductLookup] Cleaned up ${cleanedCount} stale pending requests`)
+		}
+		
+		this.lastCleanup = now
+	}
+	
+	/**
+	 * Track a call for debugging purposes
+	 */
+	private static trackCall(barcode: string, context: string, timestamp: number, wasDeduped: boolean): void {
+		if (!this.callHistory.has(barcode)) {
+			this.callHistory.set(barcode, [])
+		}
+		
+		const history = this.callHistory.get(barcode)!
+		history.push({ context, timestamp, wasDeduped })
+		
+		// Keep only the last N calls per barcode
+		if (history.length > this.CALL_HISTORY_LIMIT) {
+			history.splice(0, history.length - this.CALL_HISTORY_LIMIT)
+		}
+	}
+	
+	/**
+	 * Get call history for a specific barcode (for debugging)
+	 */
+	static getCallHistory(barcode: string): {context: string, timestamp: number, wasDeduped: boolean, timeFromStart: number}[] {
+		const history = this.callHistory.get(barcode) || []
+		if (history.length === 0) return []
+		
+		const startTime = history[0].timestamp
+		return history.map(call => ({
+			...call,
+			timeFromStart: call.timestamp - startTime
+		}))
+	}
+	
+	/**
+	 * Get summary statistics for a barcode (for debugging)
+	 */
+	static getCallSummary(barcode: string): {
+		totalCalls: number;
+		actualLookups: number;
+		dedupedCalls: number;
+		dedupRate: number;
+		timeSpan: number;
+		contexts: string[];
+	} {
+		const history = this.callHistory.get(barcode) || []
+		if (history.length === 0) {
+			return {
+				totalCalls: 0,
+				actualLookups: 0,
+				dedupedCalls: 0,
+				dedupRate: 0,
+				timeSpan: 0,
+				contexts: []
+			}
+		}
+		
+		const totalCalls = history.length
+		const dedupedCalls = history.filter(call => call.wasDeduped).length
+		const actualLookups = totalCalls - dedupedCalls
+		const dedupRate = totalCalls > 0 ? (dedupedCalls / totalCalls) * 100 : 0
+		const timeSpan = history[history.length - 1].timestamp - history[0].timestamp
+		const contexts = [...new Set(history.map(call => call.context))]
+		
+		return {
+			totalCalls,
+			actualLookups,
+			dedupedCalls,
+			dedupRate,
+			timeSpan,
+			contexts
+		}
+	}
+	
+	/**
+	 * Get current deduplication statistics (for debugging)
+	 */
+	static getDeduplicationStats(): {
+		pendingRequestsCount: number;
+		pendingBarcodes: string[];
+		oldestRequestAge: number;
+	} {
+		const now = Date.now()
+		let oldestAge = 0
+		
+		for (const request of this.pendingRequests.values()) {
+			const age = now - request.timestamp
+			if (age > oldestAge) {
+				oldestAge = age
+			}
+		}
+		
+		return {
+			pendingRequestsCount: this.pendingRequests.size,
+			pendingBarcodes: Array.from(this.pendingRequests.keys()),
+			oldestRequestAge: oldestAge
+		}
+	}
+	
+	private static async performLookup(barcode: string, context: string): Promise<ProductLookupResult> {
 		let finalProduct: Product | null = null
 		let dataSource: string = ''
 		let decisionLog: string[] = []
@@ -33,6 +227,8 @@ export class ProductLookupService {
 			console.log(`🔍 HYBRID PRODUCT LOOKUP (${context})`)
 			console.log('='.repeat(80))
 			console.log(`📊 Barcode: ${barcode}`)
+			console.log(`⏰ Timestamp: ${new Date().toISOString()}`)
+			console.log(`🔢 Current pending requests: ${this.pendingRequests.size}`)
 			console.log('🏪 Step 1: Checking Supabase database...')
 
 			// Step 1: Check our Supabase database first
@@ -201,6 +397,12 @@ export class ProductLookupService {
 				console.log(
 					`🎉 Final Result: ${finalProduct.name} (${finalProduct.veganStatus}) from ${dataSource}`
 				)
+				
+				// Log call summary for this barcode
+				const summary = this.getCallSummary(barcode)
+				console.log(`📊 Call Summary for ${barcode}:`)
+				console.log(`   Total calls: ${summary.totalCalls} | Actual lookups: ${summary.actualLookups} | Deduped: ${summary.dedupedCalls} (${summary.dedupRate.toFixed(1)}%)`)
+				console.log(`   Time span: ${Math.round(summary.timeSpan)}ms | Contexts: [${summary.contexts.join(', ')}]`)
 				console.log('='.repeat(80))
 
 				return {
@@ -210,6 +412,12 @@ export class ProductLookupService {
 				}
 			} else {
 				console.log('❌ No product data found from any source')
+				
+				// Log call summary for this barcode even on failure
+				const summary = this.getCallSummary(barcode)
+				console.log(`📊 Call Summary for ${barcode}:`)
+				console.log(`   Total calls: ${summary.totalCalls} | Actual lookups: ${summary.actualLookups} | Deduped: ${summary.dedupedCalls} (${summary.dedupRate.toFixed(1)}%)`)
+				console.log(`   Time span: ${Math.round(summary.timeSpan)}ms | Contexts: [${summary.contexts.join(', ')}]`)
 				console.log('='.repeat(80))
 				return {
 					product: null,

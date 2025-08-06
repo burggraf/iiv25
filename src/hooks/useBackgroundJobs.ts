@@ -3,6 +3,8 @@ import { BackgroundJob } from '../types/backgroundJobs';
 import { backgroundQueueService } from '../services/backgroundQueueService';
 import { historyService } from '../services/HistoryService';
 import { cacheService } from '../services/CacheService';
+import { Product } from '../types';
+import { transformJobResultToProduct } from '../utils/jobResultTransform';
 
 export const useBackgroundJobs = () => {
   const [activeJobs, setActiveJobs] = useState<BackgroundJob[]>([]);
@@ -40,28 +42,40 @@ export const useBackgroundJobs = () => {
       console.log(`🎣 [useBackgroundJobs] Job type: ${job.jobType}, UPC: ${job.upc}`);
 
       if (job.jobType === 'product_photo_upload') {
-        // For photo upload jobs, we need to fetch fresh product data with the updated image
-        console.log(`🎣 [useBackgroundJobs] Photo upload completed - fetching fresh product data with updated image`);
+        // Try to use job result data to avoid redundant lookup
+        console.log(`🎣 [useBackgroundJobs] Photo upload completed - attempting to use job result data`);
         
-        const { ProductLookupService } = await import('../services/productLookupService');
-        const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
-          context: 'useBackgroundJobs photo completion' 
-        });
+        const productFromJobResult = await transformJobResultToProduct(job);
+        let productToUse: Product;
         
-        if (!freshProductResult.product) {
-          console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after photo upload`);
-          return;
+        if (productFromJobResult) {
+          console.log(`🎣 [useBackgroundJobs] Using job result data - avoiding redundant lookup`);
+          // Add cache busting to the image URL if it's a Supabase image
+          productToUse = addImageCacheBusting(productFromJobResult);
+          console.log(`🎣 [useBackgroundJobs] Using product from job result with image URL: ${productToUse.imageUrl}`);
+        } else {
+          // Fallback to fresh lookup if job result transformation failed
+          console.log(`🎣 [useBackgroundJobs] Job result transformation failed - falling back to fresh lookup`);
+          
+          const { ProductLookupService } = await import('../services/productLookupService');
+          const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+            context: 'useBackgroundJobs photo completion (fallback)' 
+          });
+          
+          if (!freshProductResult.product) {
+            console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after photo upload`);
+            return;
+          }
+          
+          console.log(`🎣 [useBackgroundJobs] Fresh product fetched with image URL: ${freshProductResult.product.imageUrl}`);
+          // Add cache busting to the image URL if it's a Supabase image
+          productToUse = addImageCacheBusting(freshProductResult.product);
         }
-        
-        console.log(`🎣 [useBackgroundJobs] Fresh product fetched with image URL: ${freshProductResult.product.imageUrl}`);
-        
-        // Add cache busting to the image URL if it's a Supabase image
-        const productWithCacheBusting = addImageCacheBusting(freshProductResult.product);
         
         console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to photo upload completion`);
         
         // Add to history with isNew flag set to true
-        await historyService.addToHistory(productWithCacheBusting, true);
+        await historyService.addToHistory(productToUse, true);
         
         // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
         await historyService.markAsNew(job.upc);
@@ -69,24 +83,38 @@ export const useBackgroundJobs = () => {
         console.log(`✅ [useBackgroundJobs] Successfully marked ${job.upc} as new in history with updated image`);
         
       } else if (job.jobType === 'ingredient_parsing') {
-        // For ingredient parsing jobs, we need to fetch fresh product data with updated ingredients
-        console.log(`🎣 [useBackgroundJobs] Ingredient parsing completed - fetching fresh product data with updated ingredients`);
+        // Try to use job result data to avoid redundant lookup
+        console.log(`🎣 [useBackgroundJobs] Ingredient parsing completed - attempting to use job result data`);
         
-        const { ProductLookupService } = await import('../services/productLookupService');
-        const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
-          context: 'useBackgroundJobs ingredient completion' 
-        });
+        const productFromJobResult = await transformJobResultToProduct(job);
+        let productToUse: Product;
         
-        if (!freshProductResult.product) {
-          console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after ingredient parsing`);
-          return;
+        if (productFromJobResult) {
+          console.log(`🎣 [useBackgroundJobs] Using job result data - avoiding redundant lookup`);
+          productToUse = productFromJobResult;
+          console.log(`🎣 [useBackgroundJobs] Using product from job result with updated ingredients`);
+        } else {
+          // Fallback to fresh lookup (expected for ingredient parsing jobs currently)
+          console.log(`🎣 [useBackgroundJobs] Job result transformation failed - falling back to fresh lookup`);
+          
+          const { ProductLookupService } = await import('../services/productLookupService');
+          const freshProductResult = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+            context: 'useBackgroundJobs ingredient completion (fallback)' 
+          });
+          
+          if (!freshProductResult.product) {
+            console.log(`🎣 [useBackgroundJobs] Could not fetch fresh product data for ${job.upc} after ingredient parsing`);
+            return;
+          }
+          
+          console.log(`🎣 [useBackgroundJobs] Fresh product fetched with updated ingredients`);
+          productToUse = freshProductResult.product;
         }
         
-        console.log(`🎣 [useBackgroundJobs] Fresh product fetched with updated ingredients`);
         console.log(`🎣 [useBackgroundJobs] Marking product ${job.upc} as new due to ingredient parsing completion`);
         
         // Add to history with isNew flag set to true
-        await historyService.addToHistory(freshProductResult.product, true);
+        await historyService.addToHistory(productToUse, true);
         
         // Double-check: ensure the isNew flag is set (in case addToHistory didn't work as expected)
         await historyService.markAsNew(job.upc);

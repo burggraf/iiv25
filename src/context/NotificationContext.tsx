@@ -6,6 +6,7 @@ import { BackgroundJob } from '../types/backgroundJobs'
 import { Product } from '../types'
 import { ProductLookupService } from '../services/productLookupService'
 import JobCompletionCard from '../components/JobCompletionCard'
+import { transformJobResultToProduct } from '../utils/jobResultTransform'
 
 export interface JobNotification {
 	id: string
@@ -60,11 +61,34 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
 				}
 
-				// Fetch the updated product data
+				// Try to use job result data to avoid redundant lookup
 				let product: Product | null = null
 				if (job.upc) {
-					const result = await ProductLookupService.lookupProductByBarcode(job.upc, { context: 'JobNotification' })
-					product = result.product || null
+					console.log(`🔔 [Notification] Attempting to use job result data for ${job.jobType} - avoiding redundant lookup`)
+					
+					// Skip transformation for ingredient_parsing jobs since they don't contain full product data
+					if (job.jobType === 'ingredient_parsing') {
+						console.log(`🔔 [Notification] Skipping transformation for ingredient_parsing job - getting product from database`)
+						const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+							context: 'JobNotification (ingredient parsing)' 
+						})
+						product = result.product || null
+					} else {
+						// Try to transform job result data for other job types
+						product = await transformJobResultToProduct(job)
+						
+						if (product) {
+							console.log(`🔔 [Notification] Successfully used job result data - avoiding redundant ProductLookupService call`)
+							console.log(`🔔 [Notification] Product from job result: ${product.name} (${product.veganStatus})`)
+						} else {
+							// Fallback to fresh lookup if job result transformation failed
+							console.log(`🔔 [Notification] Job result transformation failed - falling back to ProductLookupService lookup`)
+							const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+								context: 'JobNotification (fallback)' 
+							})
+							product = result.product || null
+						}
+					}
 					
 					// For photo-related jobs, ensure we have fresh image URL with cache busting
 					if (product && (job.jobType === 'product_photo_upload' || job.jobType === 'product_creation')) {

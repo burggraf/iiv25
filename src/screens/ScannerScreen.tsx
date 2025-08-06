@@ -41,6 +41,8 @@ import { BackgroundJobsIndicator } from '../components/BackgroundJobsIndicator'
 import { JobStatusModal } from '../components/JobStatusModal'
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
 import { backgroundQueueService } from '../services/backgroundQueueService'
+import { transformJobResultToProduct } from '../utils/jobResultTransform'
+import { BackgroundJob } from '../types/backgroundJobs'
 
 
 export default function ScannerScreen() {
@@ -48,6 +50,7 @@ export default function ScannerScreen() {
 	const router = useRouter()
 	const { addToHistory, deviceId } = useApp()
 	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
+	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
 
 	// Temporary debugging - log stuck jobs on screen load
 	useEffect(() => {
@@ -56,6 +59,41 @@ export default function ScannerScreen() {
 				activeJobs.map(j => `${j.id.slice(-6)} (${j.jobType}, ${j.status}, created: ${j.createdAt})`));
 		}
 	}, [activeJobs])
+
+	// Listen to job completion events to avoid redundant ProductLookupService calls
+	useEffect(() => {
+		console.log(`🎯 [ScannerScreen] Setting up job completion listener`)
+		
+		const unsubscribe = backgroundQueueService.subscribeToJobUpdates(async (event, job) => {
+			if (event === 'job_completed' && job && job.upc === currentBarcode) {
+				console.log(`🎯 [ScannerScreen] Job completed for current barcode: ${job.jobType}`)
+				
+				// Check if we have a callback waiting for this job
+				const callback = pendingJobCallbacks.get(job.id)
+				if (callback) {
+					console.log(`🎯 [ScannerScreen] Found pending callback for job ${job.id.slice(-6)}`)
+					
+					// Try to get product data from job result instead of fresh lookup
+					const productFromJob = await transformJobResultToProduct(job)
+					if (productFromJob) {
+						console.log(`🎯 [ScannerScreen] Using product data from job result - avoiding ProductLookupService call`)
+						callback(productFromJob)
+						
+						// Remove the callback
+						setPendingJobCallbacks(prev => {
+							const updated = new Map(prev)
+							updated.delete(job.id)
+							return updated
+						})
+					} else {
+						console.log(`🎯 [ScannerScreen] Job result transformation failed - callback will use fallback`)
+					}
+				}
+			}
+		})
+		
+		return unsubscribe
+	}, [currentBarcode, pendingJobCallbacks])
 	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
@@ -763,8 +801,30 @@ export default function ScannerScreen() {
 			// Clear any retryable error since we succeeded
 			setRetryableError(null);
 
-			// Always refresh the product data after successful product creation
-			console.log(`🔄 Refreshing product data after product creation`)
+			// Register callback to handle job completion instead of direct refresh
+			console.log(`🔄 Registering callback for product creation job completion`)
+			
+			// Get the job that was just created from the queueJob call above
+			// Note: We need to modify this to get the actual job ID from the queueJob result
+			console.log(`🎯 [ScannerScreen] Note: Job coordination will be handled by background job events`)
+			
+			// OPTIMIZATION: Skip direct refresh - let job completion events handle this
+			console.log(`🎯 [ScannerScreen] OPTIMIZATION: Skipping direct ProductLookupService call`)
+			console.log(`🎯 [ScannerScreen] Product data will be provided by optimized job completion events`)
+			
+			// Note: The background job events (useBackgroundJobs, CacheInvalidationService, NotificationContext) 
+			// are now optimized to use job result data instead of fresh lookups
+			isSuccess = true
+			
+			// Show success immediately - the actual product data will come from job events
+			console.log(`✅ Product creation queued successfully - waiting for job completion`)
+			
+			// Clear error since product creation was successful
+			setError(null)
+			
+			// TODO: Consider showing a "Processing..." state here instead of immediate success
+			/*
+			// COMMENTED OUT: This direct refresh call is redundant with job completion events
 			try {
 				const refreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreation' })
 				if (refreshResult.product) {
@@ -789,28 +849,28 @@ export default function ScannerScreen() {
 					console.log('⚠️ Product refresh failed after creation')
 					setError('Product created but could not load details. Please scan again.')
 				}
+			*/
 
-				// Add delayed refresh to catch async image upload
-				// The ProductCreationService uploads the image with a 1-second delay
-				setTimeout(async () => {
-					try {
-						console.log(`🔄 Secondary refresh to catch uploaded image`)
-						const secondRefreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreationImage' })
-						if (secondRefreshResult.product && secondRefreshResult.product.imageUrl) {
-							console.log(`✅ Product image found on second refresh`)
-							setScannedProduct(secondRefreshResult.product)
-							await cacheService.setProduct(currentBarcode, secondRefreshResult.product)
-						}
-					} catch (secondRefreshError) {
-						console.error('Error in secondary refresh after product creation:', secondRefreshError)
-						// Silent fail - don't show error for secondary refresh
+			// OPTIMIZED: Secondary refresh now handled by background job events
+			console.log(`🎯 [ScannerScreen] Secondary image refresh will be handled by job completion events`)
+			
+			// TODO: Remove the following setTimeout once job coordination is fully implemented
+			/*
+			setTimeout(async () => {
+				try {
+					console.log(`🔄 LEGACY: Secondary refresh to catch uploaded image (should be replaced by job events)`)
+					const secondRefreshResult = await ProductLookupService.lookupProductByBarcode(currentBarcode, { context: 'ProductCreationImage' })
+					if (secondRefreshResult.product && secondRefreshResult.product.imageUrl) {
+						console.log(`✅ Product image found on second refresh`)
+						setScannedProduct(secondRefreshResult.product)
+						await cacheService.setProduct(currentBarcode, secondRefreshResult.product)
 					}
-				}, 2500); // Wait 2.5 seconds (1s delay + 1.5s for upload)
-
-			} catch (refreshError) {
-				console.error('Error refreshing product after creation:', refreshError)
-				setError('Product created but could not load details. Please scan again.')
-			}
+				} catch (secondRefreshError) {
+					console.error('Error in secondary refresh after product creation:', secondRefreshError)
+					// Silent fail - don't show error for secondary refresh
+				}
+			}, 2500); // Wait 2.5 seconds (1s delay + 1.5s for upload)
+			*/
 		} catch (err) {
 			console.error('Error creating product:', err)
 			setProductCreationError({

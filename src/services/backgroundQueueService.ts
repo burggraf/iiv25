@@ -468,8 +468,8 @@ class BackgroundQueueServiceClass extends EventEmitter {
     console.log(`📸 [BackgroundQueue] Image URI: ${job.imageUri}`);
     console.log(`📸 [BackgroundQueue] Processing timestamp:`, new Date().toISOString());
     
-    // This will use existing ProductImageUploadService
-    const { ProductImageUploadService } = await import('./productImageUploadService');
+    // Import ProductImageUploadService statically to avoid module loading issues
+    const { ProductImageUploadService } = require('./productImageUploadService');
     
     console.log(`📸 [BackgroundQueue] Step 1: Uploading image to storage...`);
     
@@ -491,17 +491,18 @@ class BackgroundQueueServiceClass extends EventEmitter {
     console.log(`📸 [BackgroundQueue] Step 3: Updating database with new image URL...`);
     console.log(`📸 [BackgroundQueue] New image URL: ${uploadResult.imageUrl}`);
     
-    // Update the database with the new image URL
-    const updateSuccess = await ProductImageUploadService.updateProductImageUrl(job.upc, uploadResult.imageUrl);
+    // Update the database with the new image URL and get full response
+    const updateResult = await ProductImageUploadService.updateProductImageUrlWithResponse(job.upc, uploadResult.imageUrl);
     
     console.log(`📸 [BackgroundQueue] Step 4: Database update result:`, {
-      success: updateSuccess,
+      success: updateResult.success,
+      hasUpdatedProduct: !!updateResult.updatedProduct,
       upc: job.upc,
       imageUrl: uploadResult.imageUrl
     });
     
-    if (!updateSuccess) {
-      const errorMessage = 'Image uploaded but failed to update product record';
+    if (!updateResult.success) {
+      const errorMessage = updateResult.error || 'Image uploaded but failed to update product record';
       console.error(`❌ [BackgroundQueue] Database update failed: ${errorMessage}`);
       throw new Error(errorMessage);
     }
@@ -509,6 +510,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
     const result = {
       success: true,
       imageUrl: uploadResult.imageUrl,
+      updatedProduct: updateResult.updatedProduct, // Include the full product data!
     };
     
     console.log(`✅ [BackgroundQueue] Photo upload job completed successfully:`, result);

@@ -3,6 +3,8 @@ import { backgroundQueueService } from './backgroundQueueService';
 import { ProductLookupService } from './productLookupService';
 import { ProductImageUrlService } from './productImageUrlService';
 import { BackgroundJob } from '../types/backgroundJobs';
+import { transformJobResultToProduct } from '../utils/jobResultTransform';
+import { Product } from '../types';
 
 /**
  * Centralized cache invalidation service that coordinates cache updates
@@ -131,15 +133,15 @@ class CacheInvalidationService {
 
     switch (jobType) {
       case 'ingredient_parsing':
-        await this.handleIngredientParsingCompleted(upc, resultData);
+        await this.handleIngredientParsingCompleted(upc, resultData, job);
         break;
       
       case 'product_creation':
-        await this.handleProductCreationCompleted(upc, resultData);
+        await this.handleProductCreationCompleted(upc, resultData, job);
         break;
       
       case 'product_photo_upload':
-        await this.handleProductPhotoUploadCompleted(upc, resultData);
+        await this.handleProductPhotoUploadCompleted(upc, resultData, job);
         break;
       
       default:
@@ -187,81 +189,116 @@ class CacheInvalidationService {
   /**
    * Handle ingredient parsing completion
    */
-  private async handleIngredientParsingCompleted(upc: string, resultData: any): Promise<void> {
+  private async handleIngredientParsingCompleted(upc: string, resultData: any, job: BackgroundJob): Promise<void> {
     console.log(`🧪 [CacheInvalidation] Ingredient parsing completed for ${upc}`);
     
-    // Check if the parsing was successful and actually updated ingredients
-    if (resultData?.success && resultData?.updatedProduct) {
-      // Update cache with new product data including parsed ingredients
-      await cacheService.setProduct(upc, resultData.updatedProduct);
-      console.log(`✅ [CacheInvalidation] Updated cache with parsed ingredients for ${upc}`);
+    // Check if ingredient parsing was successful
+    if (resultData?.isValidIngredientsList && resultData?.ingredients?.length > 0) {
+      console.log(`🧪 [CacheInvalidation] Ingredient parsing was successful - ${resultData.ingredients.length} ingredients found`);
+      console.log(`🧪 [CacheInvalidation] Classification result: ${resultData.classification || 'none'}`);
+      
+      // For successful ingredient parsing, invalidate cache to force fresh lookup
+      // This ensures UI gets the updated product with new ingredients from database
+      console.log(`🧪 [CacheInvalidation] Invalidating cache to trigger fresh lookup for updated ingredients`);
+      await cacheService.invalidateProduct(upc, 'ingredient parsing completed successfully');
     } else {
-      // If parsing failed or didn't update product, refresh cache with latest data
-      await this.refreshProductCache(upc, 'ingredient parsing completed (no updates)');
+      console.log(`🧪 [CacheInvalidation] Ingredient parsing was not successful or no ingredients found`);
+      console.log(`🧪 [CacheInvalidation] Result data: isValidIngredientsList=${resultData?.isValidIngredientsList}, ingredients=${resultData?.ingredients?.length || 0}`);
+      
+      // For failed parsing, don't invalidate cache - keep existing product data
+      console.log(`🧪 [CacheInvalidation] Keeping existing cache for failed ingredient parsing`);
     }
   }
 
   /**
    * Handle product creation completion
    */
-  private async handleProductCreationCompleted(upc: string, resultData: any): Promise<void> {
+  private async handleProductCreationCompleted(upc: string, resultData: any, job: BackgroundJob): Promise<void> {
     console.log(`🆕 [CacheInvalidation] Product creation completed for ${upc}`);
     
-    // Product creation means we have a completely new product
-    // Refresh cache with fresh data from database
-    await this.refreshProductCache(upc, 'new product created');
+    // Try to use job result data to avoid redundant lookup
+    const productFromJobResult = await transformJobResultToProduct(job);
+    
+    if (productFromJobResult) {
+      console.log(`🆕 [CacheInvalidation] Using job result data - avoiding redundant lookup`);
+      await cacheService.setProduct(upc, productFromJobResult);
+      console.log(`✅ [CacheInvalidation] Updated cache with new product from job result for ${upc}`);
+    } else {
+      // Fallback: Product creation means we have a completely new product
+      // Refresh cache with fresh data from database
+      console.log(`🆕 [CacheInvalidation] Job result transformation failed - falling back to fresh lookup`);
+      await this.refreshProductCacheWithFallback(upc, 'new product created');
+    }
   }
 
   /**
    * Handle product photo upload completion
    */
-  private async handleProductPhotoUploadCompleted(upc: string, resultData: any): Promise<void> {
+  private async handleProductPhotoUploadCompleted(upc: string, resultData: any, job: BackgroundJob): Promise<void> {
     console.log(`📸 [CacheInvalidation] *** PHOTO UPLOAD COMPLETED ***`);
     console.log(`📸 [CacheInvalidation] UPC: ${upc}`);
     console.log(`📸 [CacheInvalidation] Result data:`, {
       success: resultData?.success,
-      imageUrl: resultData?.imageUrl,
+      updatedProduct: resultData?.updatedProduct ? 'YES' : 'NO',
       hasError: resultData?.error ? 'YES' : 'NO',
       errorMessage: resultData?.error
     });
     
-    if (resultData?.success && resultData?.imageUrl) {
-      console.log(`📸 [CacheInvalidation] Photo upload successful, but deferring cache update to useBackgroundJobs`);
-      console.log(`📸 [CacheInvalidation] New image URL: ${resultData.imageUrl}`);
-    } else {
-      console.log(`⚠️ [CacheInvalidation] Photo upload may have failed or no image URL returned`);
-    }
+    // Try to use job result data to avoid redundant lookup
+    const productFromJobResult = await transformJobResultToProduct(job);
     
-    // IMPORTANT: Don't update cache here for photo upload jobs!
-    // The useBackgroundJobs hook needs to handle the isNew flag logic first,
-    // then it will trigger the cache update through historyService.addToHistory()
-    console.log(`📸 [CacheInvalidation] Skipping automatic cache update for photo upload - letting useBackgroundJobs handle isNew logic`);
+    if (productFromJobResult) {
+      console.log(`📸 [CacheInvalidation] Using job result data - avoiding redundant lookup`);
+      // Apply cache busting for image updates
+      const productWithCacheBusting = this.addImageCacheBusting(productFromJobResult);
+      await cacheService.setProduct(upc, productWithCacheBusting);
+      console.log(`✅ [CacheInvalidation] Updated cache with photo upload from job result for ${upc}`);
+    } else if (resultData?.success && resultData?.updatedProduct) {
+      console.log(`📸 [CacheInvalidation] Job result transformation failed - using result data directly`);
+      // Apply cache busting for image updates
+      const productWithCacheBusting = this.addImageCacheBusting(resultData.updatedProduct);
+      await cacheService.setProduct(upc, productWithCacheBusting);
+      console.log(`✅ [CacheInvalidation] Updated cache with photo upload from result data for ${upc}`);
+    } else {
+      console.log(`⚠️ [CacheInvalidation] Photo upload may have failed or no product data available`);
+      console.log(`📸 [CacheInvalidation] Skipping cache update for failed photo upload`);
+    }
   }
 
   /**
-   * Refresh product cache with fresh data from database
+   * Refresh product cache with fresh data from database (FALLBACK - tries to avoid this)
    */
-  private async refreshProductCache(upc: string, reason: string): Promise<void> {
-    console.log(`🔄 [CacheInvalidation] Refreshing cache for ${upc}: ${reason}`);
+  private async refreshProductCacheWithFallback(upc: string, reason: string): Promise<void> {
+    console.log(`🔄 [CacheInvalidation] FALLBACK: Refreshing cache for ${upc}: ${reason}`);
+    console.log(`⚠️ [CacheInvalidation] Note: This is a fallback - job result data was not usable`);
     
     try {
       // Fetch fresh product data from database
       const freshProductResult = await ProductLookupService.lookupProductByBarcode(upc, { 
-        context: 'CacheInvalidation' 
+        context: 'CacheInvalidation (fallback)' 
       });
       
       if (freshProductResult.product) {
         // Update cache with fresh data - this will emit onCacheUpdated event
         await cacheService.setProduct(upc, freshProductResult.product);
-        console.log(`✅ [CacheInvalidation] Cache refreshed for ${upc}`);
+        console.log(`✅ [CacheInvalidation] FALLBACK: Cache refreshed for ${upc}`);
       } else {
-        console.log(`⚠️ [CacheInvalidation] Could not fetch fresh product data for ${upc}`);
+        console.log(`⚠️ [CacheInvalidation] FALLBACK: Could not fetch fresh product data for ${upc}`);
         // DON'T invalidate cache if we can't get fresh data
       }
     } catch (error) {
-      console.error(`❌ [CacheInvalidation] Error refreshing cache for ${upc}:`, error);
+      console.error(`❌ [CacheInvalidation] FALLBACK: Error refreshing cache for ${upc}:`, error);
       // DON'T invalidate cache on error
     }
+  }
+
+  /**
+   * Refresh product cache with fresh data from database (DEPRECATED - use job result data instead)
+   */
+  private async refreshProductCache(upc: string, reason: string): Promise<void> {
+    console.log(`🔄 [CacheInvalidation] DEPRECATED: refreshProductCache called for ${upc}: ${reason}`);
+    console.log(`⚠️ [CacheInvalidation] This method should be replaced with job result data usage`);
+    await this.refreshProductCacheWithFallback(upc, reason);
   }
 
   /**
