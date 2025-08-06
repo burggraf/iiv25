@@ -1,5 +1,5 @@
 import { CameraView } from 'expo-camera'
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import {
 	StyleSheet,
 	Text,
@@ -11,20 +11,56 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
+import CameraResourceManager from '../services/CameraResourceManager'
+import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
 
 export default function ProductCreationCameraScreen() {
 	const router = useRouter()
 	const { barcode } = useLocalSearchParams<{ barcode: string }>()
 	const { queueJob } = useBackgroundJobs()
+	const cameraManager = CameraResourceManager.getInstance()
 	
 	const cameraRef = useRef<CameraView>(null)
 	const [currentStep, setCurrentStep] = useState<'front-photo' | 'ingredients-photo'>('front-photo')
 	const [isCapturing, setIsCapturing] = useState(false)
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
+	const [cameraActive, setCameraActive] = useState(false)
+
+	// Camera resource management
+	useEffect(() => {
+		const cleanup = () => {
+			try {
+				if (cameraRef.current) {
+					console.log('📷 ProductCreation camera cleanup')
+				}
+			} catch (error) {
+				console.warn('ProductCreation camera cleanup failed:', error)
+			}
+		}
+		
+		if (cameraManager.requestCamera('product-creation', cleanup)) {
+			setCameraActive(true)
+			console.log('📷 ProductCreation camera activated')
+		} else {
+			setCameraActive(false)
+			console.log('📷 ProductCreation camera blocked by another instance')
+			// Navigate back if camera is not available
+			Alert.alert(
+				'Camera Unavailable',
+				'Camera is currently in use by another screen. Please try again.',
+				[{ text: 'OK', onPress: () => router.back() }]
+			)
+		}
+		
+		return () => {
+			cameraManager.releaseCamera('product-creation')
+			setCameraActive(false)
+		}
+	}, [])
 
 	const handleTakePhoto = async () => {
-		if (!cameraRef.current || !barcode) {
+		if (!cameraRef.current || !barcode || !cameraActive) {
 			Alert.alert('Error', 'Camera not available or missing barcode')
 			return
 		}
@@ -53,6 +89,7 @@ export default function ProductCreationCameraScreen() {
 	}
 
 	const handleCancel = () => {
+		cameraManager.releaseCamera('product-creation')
 		router.back()
 	}
 
@@ -89,6 +126,7 @@ export default function ProductCreationCameraScreen() {
 				})
 				
 				// Go back after queuing both photos
+				cameraManager.releaseCamera('product-creation')
 				router.back()
 			}
 		} catch (error) {
@@ -149,13 +187,35 @@ export default function ProductCreationCameraScreen() {
 
 	// Camera Mode - Normal camera view
 	return (
-		<View style={styles.container}>
+		<CameraErrorBoundary 
+			fallbackMessage="Camera error during product creation. Please try again or go back to scanner."
+			onCancel={handleCancel}
+			onRetry={() => {
+				// Reset camera state and try again
+				setCameraActive(false)
+				setTimeout(() => {
+					cameraManager.releaseCamera('product-creation')
+					setTimeout(() => {
+						if (cameraManager.requestCamera('product-creation')) {
+							setCameraActive(true)
+						}
+					}, 100)
+				}, 100)
+			}}
+		>
+			<View style={styles.container}>
 			{/* Full Screen Camera */}
-			<CameraView
-				ref={cameraRef}
-				style={styles.camera}
-				facing="back"
-			/>
+			{cameraActive ? (
+				<CameraView
+					ref={cameraRef}
+					style={styles.camera}
+					facing="back"
+				/>
+			) : (
+				<View style={[styles.camera, { backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }]}>
+					<Text style={{ color: 'white', fontSize: 16 }}>Camera not available</Text>
+				</View>
+			)}
 			
 			{/* Photo Frame Overlay */}
 			<View style={styles.frameOverlay}>
@@ -196,7 +256,8 @@ export default function ProductCreationCameraScreen() {
 					</TouchableOpacity>
 				</View>
 			</SafeAreaView>
-		</View>
+			</View>
+		</CameraErrorBoundary>
 	)
 }
 

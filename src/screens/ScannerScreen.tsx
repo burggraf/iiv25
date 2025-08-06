@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { useIsFocused } from '@react-navigation/native'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import CameraResourceManager from '../services/CameraResourceManager'
 import {
 	ActivityIndicator,
 	Alert,
@@ -43,6 +44,7 @@ import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
 import { backgroundQueueService } from '../services/backgroundQueueService'
 import { transformJobResultToProduct } from '../utils/jobResultTransform'
 import { BackgroundJob } from '../types/backgroundJobs'
+import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
 
 
 export default function ScannerScreen() {
@@ -51,6 +53,41 @@ export default function ScannerScreen() {
 	const { addToHistory, deviceId } = useApp()
 	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
 	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
+	const cameraManager = CameraResourceManager.getInstance()
+
+	// State declarations
+	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
+	const [isLoading, setIsLoading] = useState(false)
+	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
+	const [showProductDetail, setShowProductDetail] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const [overlayHeight] = useState(new Animated.Value(0))
+	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
+	const [isCreatingProduct, setIsCreatingProduct] = useState(false)
+	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
+	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
+	const [isSoundEnabled, setIsSoundEnabled] = useState(true)
+	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
+	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
+	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
+	const [showIngredientScanSuccess, setShowIngredientScanSuccess] = useState(false)
+	const [showProductCreationSuccess, setShowProductCreationSuccess] = useState(false)
+	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
+	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
+	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
+	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
+	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
+	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
+	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
+	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
+	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
+	const [showJobsModal, setShowJobsModal] = useState(false)
+	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
+	const processingBarcodeRef = useRef<string | null>(null)
+	const lastScannedBarcodeRef = useRef<string | null>(null)
+	const lastScannedTimeRef = useRef<number>(0)
+	const cameraRef = useRef<CameraView>(null)
+	const [cameraActive, setCameraActive] = useState(false)
 
 	// Temporary debugging - log stuck jobs on screen load
 	useEffect(() => {
@@ -94,37 +131,6 @@ export default function ScannerScreen() {
 		
 		return unsubscribe
 	}, [currentBarcode, pendingJobCallbacks])
-	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
-	const [isLoading, setIsLoading] = useState(false)
-	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
-	const [showProductDetail, setShowProductDetail] = useState(false)
-	const [error, setError] = useState<string | null>(null)
-	const [overlayHeight] = useState(new Animated.Value(0))
-	const [isParsingIngredients, setIsParsingIngredients] = useState(false)
-	const [isCreatingProduct, setIsCreatingProduct] = useState(false)
-	const [parsedIngredients, setParsedIngredients] = useState<string[] | null>(null)
-	const [currentBarcode, setCurrentBarcode] = useState<string | null>(null)
-	const [isSoundEnabled, setIsSoundEnabled] = useState(true)
-	const [showCreateProductModal, setShowCreateProductModal] = useState(false)
-	const [showIngredientScanModal, setShowIngredientScanModal] = useState(false)
-	const [showProductCreationModal, setShowProductCreationModal] = useState(false)
-	const [showIngredientScanSuccess, setShowIngredientScanSuccess] = useState(false)
-	const [showProductCreationSuccess, setShowProductCreationSuccess] = useState(false)
-	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
-	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
-	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
-	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
-	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
-	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
-	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
-	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
-	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
-	const [showJobsModal, setShowJobsModal] = useState(false)
-	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
-	const processingBarcodeRef = useRef<string | null>(null)
-	const lastScannedBarcodeRef = useRef<string | null>(null)
-	const lastScannedTimeRef = useRef<number>(0)
-	const cameraRef = useRef<CameraView>(null)
 	
 	// Cache service integration (unified caching)
 
@@ -164,8 +170,31 @@ export default function ScannerScreen() {
 		// Cleanup on unmount
 		return () => {
 			SoundUtils.cleanup()
+			cameraManager.releaseCamera('scanner')
+			setCameraActive(false)
 		}
 	}, [])
+
+	const loadSubscriptionData = useCallback(async () => {
+		try {
+			if (!deviceId) {
+				console.log('Device ID not available, skipping subscription data load')
+				return
+			}
+
+			// Load subscription status and usage stats in parallel
+			const [status, stats] = await Promise.all([
+				SubscriptionService.getSubscriptionStatus(deviceId),
+				SubscriptionService.getUsageStats(deviceId)
+			])
+
+			setSubscriptionStatus(status)
+			setUsageStats(stats)
+			
+		} catch (error) {
+			console.error('Failed to load subscription data:', error)
+		}
+	}, [deviceId])
 
 	// Load subscription data when deviceId becomes available
 	useEffect(() => {
@@ -173,6 +202,41 @@ export default function ScannerScreen() {
 			loadSubscriptionData()
 		}
 	}, [deviceId, loadSubscriptionData])
+
+	// Camera resource management based on screen focus
+	useEffect(() => {
+		if (isFocused && hasPermission && !showProductDetail) {
+			// Request camera access when screen is focused
+			const cleanup = () => {
+				try {
+					if (cameraRef.current) {
+						// No direct pause method available, we manage through rendering
+						console.log('📷 Scanner camera cleanup')
+					}
+				} catch (error) {
+					console.warn('Scanner camera cleanup failed:', error)
+				}
+			}
+			
+			if (cameraManager.requestCamera('scanner', cleanup)) {
+				setCameraActive(true)
+				console.log('📷 Scanner camera activated')
+			} else {
+				setCameraActive(false)
+				console.log('📷 Scanner camera blocked by another instance')
+			}
+		} else {
+			// Release camera when screen loses focus or shows product detail
+			cameraManager.releaseCamera('scanner')
+			setCameraActive(false)
+			console.log('📷 Scanner camera deactivated')
+		}
+		
+		return () => {
+			cameraManager.releaseCamera('scanner')
+			setCameraActive(false)
+		}
+	}, [isFocused, hasPermission, showProductDetail])
 
 	// Cache invalidation is now handled by CacheInvalidationService
 	// No need for individual component listeners
@@ -195,27 +259,6 @@ export default function ScannerScreen() {
 			cacheService.removeListener(cacheListener);
 		};
 	}, [scannedProduct])
-
-	const loadSubscriptionData = useCallback(async () => {
-		try {
-			if (!deviceId) {
-				console.log('Device ID not available, skipping subscription data load')
-				return
-			}
-
-			// Load subscription status and usage stats in parallel
-			const [status, stats] = await Promise.all([
-				SubscriptionService.getSubscriptionStatus(deviceId),
-				SubscriptionService.getUsageStats(deviceId)
-			])
-
-			setSubscriptionStatus(status)
-			setUsageStats(stats)
-			
-		} catch (error) {
-			console.error('Failed to load subscription data:', error)
-		}
-	}, [deviceId])
 
 	const refreshUsageStats = async () => {
 		try {
@@ -480,6 +523,11 @@ export default function ScannerScreen() {
 			}
 
 			// Take photo using the camera ref
+			if (!cameraRef.current || !cameraActive) {
+				setError('Camera not available')
+				return
+			}
+			
 			const photo = await cameraRef.current.takePictureAsync({
 				quality: 0.8,
 				base64: false,
@@ -1116,29 +1164,49 @@ export default function ScannerScreen() {
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={handleBarcodeScanned} />
-				) : isFocused && !showProductDetail && hasPermission ? (
-					<>
-						<CameraView
-							ref={cameraRef}
-							style={styles.camera}
-							facing='back'
-							onBarcodeScanned={handleBarcodeScanned}
-							barcodeScannerSettings={{
-								barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8', 'code128', 'code39'],
-							}}
-						/>
-						<View style={styles.overlay}>
-							<View style={styles.unfocusedContainer}></View>
-							<View style={styles.middleContainer}>
+				) : isFocused && !showProductDetail && hasPermission && cameraActive ? (
+					<CameraErrorBoundary 
+						fallbackMessage="Scanner camera error. This may be due to hardware conflicts. Please restart the app if this continues."
+						onRetry={() => {
+							// Reset scanner camera state
+							setCameraActive(false)
+							setTimeout(() => {
+								cameraManager.releaseCamera('scanner')
+								setTimeout(() => {
+									if (cameraManager.requestCamera('scanner')) {
+										setCameraActive(true)
+									}
+								}, 100)
+							}, 100)
+						}}
+					>
+						<>
+							<CameraView
+								ref={cameraRef}
+								style={styles.camera}
+								facing='back'
+								onBarcodeScanned={handleBarcodeScanned}
+								barcodeScannerSettings={{
+									barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8', 'code128', 'code39'],
+								}}
+							/>
+							<View style={styles.overlay}>
 								<View style={styles.unfocusedContainer}></View>
-								<View style={styles.focusedContainer}>
-									<View style={styles.scanningFrame} />
+								<View style={styles.middleContainer}>
+									<View style={styles.unfocusedContainer}></View>
+									<View style={styles.focusedContainer}>
+										<View style={styles.scanningFrame} />
+									</View>
+									<View style={styles.unfocusedContainer}></View>
 								</View>
 								<View style={styles.unfocusedContainer}></View>
 							</View>
-							<View style={styles.unfocusedContainer}></View>
-						</View>
-					</>
+						</>
+					</CameraErrorBoundary>
+				) : isFocused && !showProductDetail && hasPermission && !cameraActive ? (
+					<View style={styles.inactiveCamera}>
+						<Text style={styles.inactiveCameraText}>Camera in use by another screen</Text>
+					</View>
 				) : isFocused && !showProductDetail && !hasPermission ? (
 					<View style={styles.permissionContainer}>
 						<Text style={styles.permissionText}>Camera access is required to scan barcodes</Text>
