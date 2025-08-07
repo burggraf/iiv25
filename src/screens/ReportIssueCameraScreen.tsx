@@ -9,14 +9,15 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
+// Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext
+import { useApp } from '../context/AppContext'
 import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
 import UnifiedCameraService from '../services/UnifiedCameraService'
 
 export default function ReportIssueCameraScreen() {
 	const router = useRouter()
 	const { barcode, type } = useLocalSearchParams<{ barcode: string; type: 'product' | 'ingredients' }>()
-	const { queueJob } = useBackgroundJobs()
+	const { queueJob } = useApp()
 	const cameraService = UnifiedCameraService.getInstance()
 	
 	console.log(`📷 ReportIssue: Screen loaded with barcode='${barcode}', type='${type}'`)

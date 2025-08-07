@@ -40,7 +40,7 @@ import { SoundUtils } from '../utils/soundUtils'
 import { validateIngredientParsingResult } from '../utils/ingredientValidation'
 import { BackgroundJobsIndicator } from '../components/BackgroundJobsIndicator'
 import { JobStatusModal } from '../components/JobStatusModal'
-import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
+// Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext
 import { backgroundQueueService } from '../services/backgroundQueueService'
 import { transformJobResultToProduct } from '../utils/jobResultTransform'
 import { BackgroundJob } from '../types/backgroundJobs'
@@ -50,8 +50,7 @@ import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
 	const router = useRouter()
-	const { addToHistory, deviceId } = useApp()
-	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
+	const { addToHistory, deviceId, queueJob, clearAllJobs, activeJobs } = useApp()
 	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
 	const cameraService = UnifiedCameraService.getInstance()
 

@@ -18,6 +18,10 @@ interface AppContextType {
   updateHistoryProduct: (barcode: string, product: Product) => void;
   newItemsCount: number;
   markAsViewed: (barcode: string) => void;
+  // Background jobs (centralized to prevent memory leaks)
+  queueJob: (params: any) => Promise<any>;
+  clearAllJobs: () => Promise<void>;
+  activeJobs: any[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -35,9 +39,9 @@ export function AppProvider({ children }: AppProviderProps) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [newItemsCount, setNewItemsCount] = useState<number>(0);
 
-  // Ensure background job processing runs at app level
+  // Centralized background job processing to prevent memory leaks from multiple subscriptions
   // This is critical - without this, job completion won't be processed when components unmount
-  useBackgroundJobs();
+  const backgroundJobsHook = useBackgroundJobs();
 
   // Initialize device ID and load history on app start
   useEffect(() => {
@@ -156,7 +160,11 @@ export function AppProvider({ children }: AppProviderProps) {
     deviceId,
     updateHistoryProduct,
     newItemsCount,
-    markAsViewed
+    markAsViewed,
+    // Background jobs (centralized to prevent memory leaks)
+    queueJob: backgroundJobsHook.queueJob,
+    clearAllJobs: backgroundJobsHook.clearAllJobs,
+    activeJobs: backgroundJobsHook.activeJobs,
   };
 
   return (
