@@ -291,7 +291,7 @@ export class ProductLookupService {
 							// The ingredients array will be populated, indicating no scan is needed
 						} else {
 							console.log('❌ No ingredients found - scan option will be available')
-							decisionLog.push('❌ Product has undetermined classification and no ingredients - scan option available')
+							decisionLog.push('Product has undetermined classification and no ingredients - scan option available')
 						}
 					}
 
@@ -326,8 +326,8 @@ export class ProductLookupService {
 						}
 					}
 				} else {
-					console.log('❌ Product not found in Supabase database')
-					decisionLog.push('❌ Product not found in Supabase database')
+					console.log('Product not found in Supabase database')
+					decisionLog.push('Product not found in Supabase database')
 				}
 			} catch (supabaseErr) {
 				console.log('⚠️ Supabase lookup error:', supabaseErr)
@@ -367,7 +367,7 @@ export class ProductLookupService {
 								console.log('⚠️ Async product creation failed (non-blocking):', err)
 							})
 						} else {
-							console.log('❌ Product has no ingredients - creating basic record for future ingredient scanning')
+							console.log('Product has no ingredients - creating basic record for future ingredient scanning')
 							decisionLog.push('🔄 Creating database record without ingredients - ready for user ingredient scan')
 							
 							// Fire and forget - create basic product record using update-product-from-off edge function
@@ -376,8 +376,8 @@ export class ProductLookupService {
 							})
 						}
 					} else {
-						console.log('❌ Product not found in OpenFoodFacts')
-						decisionLog.push('❌ Product not found in OpenFoodFacts')
+						console.log('Product not found in OpenFoodFacts')
+						decisionLog.push('Product not found in OpenFoodFacts')
 					}
 				} catch (offErr) {
 					console.log('⚠️ OpenFoodFacts lookup error:', offErr)

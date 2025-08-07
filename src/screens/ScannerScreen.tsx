@@ -298,8 +298,11 @@ export default function ScannerScreen() {
 	}
 
 	const handleBarcodeScanned = async (data: string) => {
+		console.log(`🔍 handleBarcodeScanned called with: ${data}`)
+		
 		// Only process barcodes when screen is focused and no modal is shown, and not in product creation mode
 		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal || productCreationMode !== 'off') {
+			console.log(`❌ Early return - focus/modal check failed`)
 			return
 		}
 
@@ -307,11 +310,13 @@ export default function ScannerScreen() {
 		
 		// Prevent concurrent processing
 		if (processingBarcodeRef.current !== null) {
+			console.log(`❌ Early return - already processing: ${processingBarcodeRef.current}`)
 			return
 		}
 
 		// Check if this barcode is for the currently displayed product - if so, don't beep or process
 		if (scannedProduct && scannedProduct.barcode === data) {
+			console.log(`❌ Early return - same as currently displayed product`)
 			// Update last scanned info to reset debounce timer
 			lastScannedBarcodeRef.current = data
 			lastScannedTimeRef.current = currentTime
@@ -320,6 +325,7 @@ export default function ScannerScreen() {
 
 		// Debounce same barcode scans - ignore if same barcode scanned within last 3 seconds
 		if (lastScannedBarcodeRef.current === data && currentTime - lastScannedTimeRef.current < 3000) {
+			console.log(`❌ Early return - debounced (last scanned ${currentTime - lastScannedTimeRef.current}ms ago)`)
 			return
 		}
 
@@ -580,6 +586,40 @@ export default function ScannerScreen() {
 		console.log('Retrying product creation...');
 		setRetryableError(null); // Clear the retry error
 		await processProductCreation(retryableError.imageBase64, retryableError.imageUri);
+	}
+
+	const handleClearScreen = () => {
+		console.log('🧹 handleClearScreen called')
+		console.log(`   Before clear - lastScannedBarcodeRef: ${lastScannedBarcodeRef.current}`)
+		console.log(`   Before clear - processingBarcodeRef: ${processingBarcodeRef.current}`)
+		
+		// Reset all state back to initial scanner state
+		setScannedProduct(null)
+		setError(null)
+		setIsLoading(false)
+		setParsedIngredients(null)
+		setCurrentBarcode(null)
+		setShowProductDetail(false)
+		setIsParsingIngredients(false)
+		setIsCreatingProduct(false)
+		setShowCreateProductModal(false)
+		setShowIngredientScanModal(false)
+		setShowProductCreationModal(false)
+		setShowIngredientScanSuccess(false)
+		setShowProductCreationSuccess(false)
+		setRetryableError(null)
+		setIngredientScanError(null)
+		setProductCreationError(null)
+		setShowCacheHitMessage(false)
+		// Clear barcode refs to allow re-scanning the same barcode
+		lastScannedBarcodeRef.current = null
+		lastScannedTimeRef.current = 0
+		processingBarcodeRef.current = null
+		
+		// Clear the camera component's last scanned barcode
+		cameraRef.current?.clearLastScannedBarcode()
+		
+		console.log('   After clear - all refs set to null')
 	}
 
 	const handleCancelRetry = () => {
@@ -1108,7 +1148,7 @@ export default function ScannerScreen() {
 						</View>
 					) : error && !parsedIngredients ? (
 						<View style={styles.overlayErrorContent}>
-							<Text style={styles.overlayErrorText}>❌ {error}</Text>
+							<Text style={styles.overlayErrorText}>{error}</Text>
 							{error.includes('Product not found for barcode:') ? (
 								// Only show Create Product button for unknown products
 								<TouchableOpacity
@@ -1176,7 +1216,21 @@ export default function ScannerScreen() {
 						</Text>
 					)
 				})()}
-				<Text style={styles.tipText}>💡 Scan food product barcodes{'\n'}Tap product to view details</Text>
+				<View style={styles.tipContainer}>
+					<Text style={styles.tipText}>💡 Scan food product barcodes{'\n'}Tap product to view details</Text>
+					<TouchableOpacity
+						style={[
+							styles.clearButton,
+							{
+								opacity: (scannedProduct || error || isLoading || parsedIngredients || currentBarcode) ? 1 : 0.3
+							}
+						]}
+						onPress={handleClearScreen}
+						disabled={!scannedProduct && !error && !isLoading && !parsedIngredients && !currentBarcode}
+					>
+						<Text style={styles.clearButtonText}>Clear</Text>
+					</TouchableOpacity>
+				</View>
 			</View>
 
 			{/* Ingredient Scan Modal */}
@@ -1756,11 +1810,29 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		backgroundColor: 'white',
 	},
+	tipContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+	},
 	tipText: {
 		fontSize: 14,
-		textAlign: 'center',
+		textAlign: 'left',
 		color: '#666',
 		fontStyle: 'italic',
+		flex: 1,
+	},
+	clearButton: {
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		backgroundColor: '#666',
+		borderRadius: 6,
+		marginLeft: 16,
+	},
+	clearButtonText: {
+		color: 'white',
+		fontSize: 14,
+		fontWeight: '600',
 	},
 	scanCounterText: {
 		fontSize: 12,

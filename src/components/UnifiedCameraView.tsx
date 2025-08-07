@@ -47,6 +47,7 @@ export interface UnifiedCameraViewProps {
 export interface CameraViewRef {
   takePictureAsync: (options?: any) => Promise<{ uri: string } | null>;
   getState: () => CameraState;
+  clearLastScannedBarcode: () => void;
 }
 
 const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps>(
@@ -107,6 +108,14 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         }
       },
       getState: () => cameraState,
+      clearLastScannedBarcode: () => {
+        console.log('🎥 UnifiedCameraView: Clearing last scanned barcode');
+        setLastScannedBarcode('');
+        if (barcodeTimeout) {
+          clearTimeout(barcodeTimeout);
+          setBarcodeTimeout(null);
+        }
+      },
     }));
 
     // Request camera permissions
