@@ -1230,11 +1230,11 @@ export default function ScannerScreen() {
 						style={[
 							styles.clearButton,
 							{
-								opacity: (scannedProduct || error || isLoading || parsedIngredients || currentBarcode) ? 1 : 0.3
+								opacity: (scannedProduct || error || isLoading || parsedIngredients || currentBarcode || lastScannedBarcodeRef.current) ? 1 : 0.3
 							}
 						]}
 						onPress={handleClearScreen}
-						disabled={!scannedProduct && !error && !isLoading && !parsedIngredients && !currentBarcode}
+						disabled={!scannedProduct && !error && !isLoading && !parsedIngredients && !currentBarcode && !lastScannedBarcodeRef.current}
 					>
 						<Text style={styles.clearButtonText}>Clear</Text>
 					</TouchableOpacity>
