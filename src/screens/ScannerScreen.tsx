@@ -1220,7 +1220,13 @@ export default function ScannerScreen() {
 					)
 				})()}
 				<View style={styles.tipContainer}>
-					<Text style={styles.tipText}>💡 Scan food product barcodes{'\n'}Tap product to view details</Text>
+					<View style={styles.tipContent}>
+						<Text style={styles.tipLightbulb}>💡</Text>
+						<View style={styles.tipTextContainer}>
+							<Text style={styles.tipText}>Scan food product barcodes</Text>
+							<Text style={styles.tipText}>Tap product to view details</Text>
+						</View>
+					</View>
 					<TouchableOpacity
 						style={[
 							styles.clearButton,
@@ -1818,12 +1824,25 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'space-between',
 	},
+	tipContent: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		flex: 1,
+	},
+	tipLightbulb: {
+		fontSize: 20,
+		marginRight: 8,
+		lineHeight: 24,
+	},
+	tipTextContainer: {
+		flex: 1,
+	},
 	tipText: {
 		fontSize: 14,
 		textAlign: 'left',
 		color: '#666',
 		fontStyle: 'italic',
-		flex: 1,
+		lineHeight: 18,
 	},
 	clearButton: {
 		paddingHorizontal: 16,
