@@ -616,6 +616,9 @@ export default function ScannerScreen() {
 		lastScannedTimeRef.current = 0
 		processingBarcodeRef.current = null
 		
+		// Hide the product overlay to remove white space
+		hideOverlay()
+		
 		// Clear the camera component's last scanned barcode
 		cameraRef.current?.clearLastScannedBarcode()
 		
