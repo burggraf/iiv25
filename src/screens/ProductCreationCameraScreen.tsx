@@ -1,4 +1,3 @@
-import { CameraView } from 'expo-camera'
 import React, { useRef, useState, useEffect } from 'react'
 import {
 	StyleSheet,
@@ -11,85 +10,74 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs'
-import CameraResourceManager from '../services/CameraResourceManager'
-import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
+import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
+import UnifiedCameraService from '../services/UnifiedCameraService'
 
 export default function ProductCreationCameraScreen() {
 	const router = useRouter()
 	const { barcode } = useLocalSearchParams<{ barcode: string }>()
 	const { queueJob } = useBackgroundJobs()
-	const cameraManager = CameraResourceManager.getInstance()
+	const cameraService = UnifiedCameraService.getInstance()
 	
-	const cameraRef = useRef<CameraView>(null)
+	const cameraRef = useRef<CameraViewRef>(null)
 	const [currentStep, setCurrentStep] = useState<'front-photo' | 'ingredients-photo'>('front-photo')
-	const [isCapturing, setIsCapturing] = useState(false)
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
-	const [cameraActive, setCameraActive] = useState(false)
 
-	// Camera resource management
+	// Initialize unified camera service for photo mode
 	useEffect(() => {
-		const cleanup = () => {
-			try {
-				if (cameraRef.current) {
-					console.log('📷 ProductCreation camera cleanup')
-				}
-			} catch (error) {
-				console.warn('ProductCreation camera cleanup failed:', error)
+		const initializeCamera = async () => {
+			// Switch to appropriate photo mode based on current step
+			const mode = currentStep === 'front-photo' ? 'product-photo' : 'ingredients-photo'
+			console.log(`📷 ProductCreation: Initializing ${mode} mode`)
+			
+			const success = await cameraService.switchToMode(mode, {}, 'ProductCreationScreen')
+			if (!success) {
+				console.error('📷 ProductCreation: Failed to initialize camera mode')
+				Alert.alert(
+					'Camera Error',
+					'Failed to initialize camera. Please try again.',
+					[{ text: 'OK', onPress: () => router.back() }]
+				)
 			}
 		}
 		
-		if (cameraManager.requestCamera('product-creation', cleanup)) {
-			setCameraActive(true)
-			console.log('📷 ProductCreation camera activated')
-		} else {
-			setCameraActive(false)
-			console.log('📷 ProductCreation camera blocked by another instance')
-			// Navigate back if camera is not available
-			Alert.alert(
-				'Camera Unavailable',
-				'Camera is currently in use by another screen. Please try again.',
-				[{ text: 'OK', onPress: () => router.back() }]
-			)
-		}
+		initializeCamera()
 		
 		return () => {
-			cameraManager.releaseCamera('product-creation')
-			setCameraActive(false)
+			// Switch back to inactive mode when component unmounts
+			cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
 		}
-	}, [])
+	}, [currentStep])
 
 	const handleTakePhoto = async () => {
-		if (!cameraRef.current || !barcode || !cameraActive) {
+		if (!cameraRef.current || !barcode) {
 			Alert.alert('Error', 'Camera not available or missing barcode')
 			return
 		}
 
-		setIsCapturing(true)
 		try {
-			const photo = await cameraRef.current.takePictureAsync({
+			const result = await cameraRef.current.takePictureAsync({
 				quality: 0.8,
 				base64: false,
 			})
 
-			if (!photo?.uri) {
+			if (!result?.uri) {
 				Alert.alert('Error', 'Failed to capture image')
 				return
 			}
 
 			// Set captured photo and enter preview mode
-			setCapturedPhoto(photo.uri)
+			setCapturedPhoto(result.uri)
 			setIsPreviewMode(true)
 		} catch (error) {
 			console.error('Error capturing photo:', error)
 			Alert.alert('Error', 'Failed to capture photo. Please try again.')
-		} finally {
-			setIsCapturing(false)
 		}
 	}
 
 	const handleCancel = () => {
-		cameraManager.releaseCamera('product-creation')
+		cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
 		router.back()
 	}
 
@@ -126,7 +114,7 @@ export default function ProductCreationCameraScreen() {
 				})
 				
 				// Go back after queuing both photos
-				cameraManager.releaseCamera('product-creation')
+				cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
 				router.back()
 			}
 		} catch (error) {
@@ -186,78 +174,69 @@ export default function ProductCreationCameraScreen() {
 	}
 
 	// Camera Mode - Normal camera view
+	const currentMode = currentStep === 'front-photo' ? 'product-photo' : 'ingredients-photo'
+	
 	return (
-		<CameraErrorBoundary 
-			fallbackMessage="Camera error during product creation. Please try again or go back to scanner."
-			onCancel={handleCancel}
-			onRetry={() => {
-				// Reset camera state and try again
-				setCameraActive(false)
-				setTimeout(() => {
-					cameraManager.releaseCamera('product-creation')
-					setTimeout(() => {
-						if (cameraManager.requestCamera('product-creation')) {
-							setCameraActive(true)
-						}
-					}, 100)
-				}, 100)
-			}}
-		>
-			<View style={styles.container}>
-			{/* Full Screen Camera */}
-			{cameraActive ? (
-				<CameraView
-					ref={cameraRef}
-					style={styles.camera}
-					facing="back"
-				/>
-			) : (
-				<View style={[styles.camera, { backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }]}>
-					<Text style={{ color: 'white', fontSize: 16 }}>Camera not available</Text>
-				</View>
-			)}
-			
-			{/* Photo Frame Overlay */}
-			<View style={styles.frameOverlay}>
-				<View style={styles.frameTopBottom} />
-				<View style={styles.frameMiddle}>
-					<View style={styles.frameSide} />
-					<View style={styles.photoFrame}>
-						<View style={[styles.frameCorner, styles.frameCornerTopLeft]} />
-						<View style={[styles.frameCorner, styles.frameCornerTopRight]} />
-						<View style={[styles.frameCorner, styles.frameCornerBottomLeft]} />
-						<View style={[styles.frameCorner, styles.frameCornerBottomRight]} />
-					</View>
-					<View style={styles.frameSide} />
-				</View>
-				<View style={styles.frameTopBottom} />
-			</View>
-			
-			{/* Minimal Top Overlay - Text Only */}
-			<SafeAreaView style={styles.topOverlay}>
-				<View style={styles.instructionContainer}>
-					<Text style={styles.stepText}>{getStepText()}</Text>
-					<Text style={styles.instructionText}>{getInstructionText()}</Text>
-				</View>
-				<TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-					<Text style={styles.cancelButtonText}>Cancel</Text>
-				</TouchableOpacity>
-			</SafeAreaView>
+		<View style={styles.container}>
+			{/* Unified Camera View */}
+			<UnifiedCameraView
+				ref={cameraRef}
+				mode={currentMode}
+				owner="ProductCreationScreen"
+				onPhotoCaptured={(uri) => {
+					setCapturedPhoto(uri)
+					setIsPreviewMode(true)
+				}}
+				onError={(error) => {
+					console.error('Camera error:', error)
+					Alert.alert('Camera Error', error)
+				}}
+				style={styles.camera}
+				renderOverlay={(mode, state) => (
+					<>
+						{/* Photo Frame Overlay */}
+						<View style={styles.frameOverlay}>
+							<View style={styles.frameTopBottom} />
+							<View style={styles.frameMiddle}>
+								<View style={styles.frameSide} />
+								<View style={styles.photoFrame}>
+									<View style={[styles.frameCorner, styles.frameCornerTopLeft]} />
+									<View style={[styles.frameCorner, styles.frameCornerTopRight]} />
+									<View style={[styles.frameCorner, styles.frameCornerBottomLeft]} />
+									<View style={[styles.frameCorner, styles.frameCornerBottomRight]} />
+								</View>
+								<View style={styles.frameSide} />
+							</View>
+							<View style={styles.frameTopBottom} />
+						</View>
+						
+						{/* Top Overlay */}
+						<SafeAreaView style={styles.topOverlay}>
+							<View style={styles.instructionContainer}>
+								<Text style={styles.stepText}>{getStepText()}</Text>
+								<Text style={styles.instructionText}>{getInstructionText()}</Text>
+							</View>
+							<TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+								<Text style={styles.cancelButtonText}>Cancel</Text>
+							</TouchableOpacity>
+						</SafeAreaView>
 
-			{/* Bottom Camera Button */}
-			<SafeAreaView style={styles.bottomControlsContainer}>
-				<View style={styles.bottomControls}>
-					<TouchableOpacity
-						style={[styles.captureButton, isCapturing && styles.captureButtonDisabled]}
-						onPress={handleTakePhoto}
-						disabled={isCapturing}
-					>
-						<View style={styles.captureButtonInner} />
-					</TouchableOpacity>
-				</View>
-			</SafeAreaView>
-			</View>
-		</CameraErrorBoundary>
+						{/* Bottom Camera Button */}
+						<SafeAreaView style={styles.bottomControlsContainer}>
+							<View style={styles.bottomControls}>
+								<TouchableOpacity
+									style={[styles.captureButton, state.isCapturing && styles.captureButtonDisabled]}
+									onPress={handleTakePhoto}
+									disabled={state.isCapturing}
+								>
+									<View style={styles.captureButtonInner} />
+								</TouchableOpacity>
+							</View>
+						</SafeAreaView>
+					</>
+				)}
+			/>
+		</View>
 	)
 }
 

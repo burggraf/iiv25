@@ -1,10 +1,10 @@
-import { BarcodeScanningResult, Camera, CameraView } from 'expo-camera'
+import { BarcodeScanningResult, Camera } from 'expo-camera'
 import { isDevice } from 'expo-device'
-import * as ImagePicker from 'expo-image-picker'
 import { useIsFocused } from '@react-navigation/native'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import CameraResourceManager from '../services/CameraResourceManager'
+import UnifiedCameraService from '../services/UnifiedCameraService'
+import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
 import {
 	ActivityIndicator,
 	Alert,
@@ -53,7 +53,7 @@ export default function ScannerScreen() {
 	const { addToHistory, deviceId } = useApp()
 	const { queueJob, clearAllJobs, activeJobs } = useBackgroundJobs()
 	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
-	const cameraManager = CameraResourceManager.getInstance()
+	const cameraService = UnifiedCameraService.getInstance()
 
 	// State declarations
 	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -83,11 +83,12 @@ export default function ScannerScreen() {
 	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
 	const [showJobsModal, setShowJobsModal] = useState(false)
 	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
+	const [frontPhotoTaken, setFrontPhotoTaken] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
-	const cameraRef = useRef<CameraView>(null)
-	const [cameraActive, setCameraActive] = useState(false)
+	const cameraRef = useRef<CameraViewRef>(null)
+	const [cameraMode, setCameraMode] = useState<'scanner' | 'inactive'>('inactive')
 
 	// Temporary debugging - log stuck jobs on screen load
 	useEffect(() => {
@@ -170,8 +171,14 @@ export default function ScannerScreen() {
 		// Cleanup on unmount
 		return () => {
 			SoundUtils.cleanup()
-			cameraManager.releaseCamera('scanner')
-			setCameraActive(false)
+			// Only cleanup camera if we own it
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Component unmount - releasing scanner mode')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+			}
+			setCameraMode('inactive')
 		}
 	}, [])
 
@@ -205,36 +212,53 @@ export default function ScannerScreen() {
 
 	// Camera resource management based on screen focus
 	useEffect(() => {
-		if (isFocused && hasPermission && !showProductDetail) {
-			// Request camera access when screen is focused
-			const cleanup = () => {
-				try {
-					if (cameraRef.current) {
-						// No direct pause method available, we manage through rendering
-						console.log('📷 Scanner camera cleanup')
-					}
-				} catch (error) {
-					console.warn('Scanner camera cleanup failed:', error)
-				}
-			}
+		console.log(`📷 Scanner: useEffect triggered - focused: ${isFocused}, permission: ${hasPermission}, showDetail: ${showProductDetail}`)
+		const shouldActivate = isFocused && hasPermission && !showProductDetail
+
+		if (shouldActivate) {
+			// Only take control if camera is truly available (inactive mode AND no other owner)
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			console.log(`📷 Scanner: Should activate - current mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}`)
 			
-			if (cameraManager.requestCamera('scanner', cleanup)) {
-				setCameraActive(true)
-				console.log('📷 Scanner camera activated')
+			if ((currentState.mode === 'inactive' && !currentOwner) || 
+				(currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen')) {
+				console.log('📷 Scanner: Camera available, switching to scanner mode')
+				cameraService.switchToMode('scanner', {}, 'ScannerScreen')
+				setCameraMode('scanner')
 			} else {
-				setCameraActive(false)
-				console.log('📷 Scanner camera blocked by another instance')
+				console.log(`📷 Scanner: Camera busy - mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}, not taking control`)
+				setCameraMode('inactive')
 			}
 		} else {
-			// Release camera when screen loses focus or shows product detail
-			cameraManager.releaseCamera('scanner')
-			setCameraActive(false)
-			console.log('📷 Scanner camera deactivated')
+			// Only switch to inactive if we currently own the camera in scanner mode
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			console.log(`📷 Scanner: Should not activate - current mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}`)
+			
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Releasing scanner mode (going inactive)')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+				setCameraMode('inactive')
+			} else {
+				// Camera is owned by another screen, don't interfere at all
+				console.log(`📷 Scanner: Camera owned by ${currentOwner?.owner || 'none'} in ${currentState.mode} mode, NOT INTERFERING`)
+				setCameraMode('inactive')
+			}
 		}
 		
 		return () => {
-			cameraManager.releaseCamera('scanner')
-			setCameraActive(false)
+			// Only cleanup if we currently own the camera (scanner mode)
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Cleanup - releasing scanner mode')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+				setCameraMode('inactive')
+			} else {
+				console.log(`📷 Scanner: Cleanup - camera owned by ${currentOwner?.owner || 'none'}, not releasing`)
+			}
 		}
 	}, [isFocused, hasPermission, showProductDetail])
 
@@ -272,7 +296,7 @@ export default function ScannerScreen() {
 		}
 	}
 
-	const handleBarcodeScanned = async ({ type, data }: BarcodeScanningResult) => {
+	const handleBarcodeScanned = async (data: string) => {
 		// Only process barcodes when screen is focused and no modal is shown, and not in product creation mode
 		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal || productCreationMode !== 'off') {
 			return
@@ -298,7 +322,7 @@ export default function ScannerScreen() {
 			return
 		}
 
-		console.log(`📱 Barcode scanned: ${type} - ${data}`)
+		console.log(`📱 Barcode scanned: ${data}`)
 
 		// Play beep sound if enabled (only for different products)
 		if (isSoundEnabled) {
@@ -432,64 +456,8 @@ export default function ScannerScreen() {
 	}
 
 	const handleScanIngredientsBackground = async () => {
-		try {
-			setIsParsingIngredients(true)
-			setParsedIngredients(null)
-			
-			// Request camera permission for image picker
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			if (status !== 'granted') {
-				setIngredientScanError('Camera permission is required to scan ingredients')
-				setIsParsingIngredients(false)
-				return
-			}
-
-			// Launch camera to take photo
-			const result = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: false, // We don't need base64 for background processing
-			})
-
-			if (result.canceled) {
-				setIsParsingIngredients(false)
-				hideOverlay()
-				return
-			}
-
-			if (!result.assets[0].uri || !currentBarcode) {
-				setIngredientScanError('Failed to capture image or missing barcode')
-				setIsParsingIngredients(false)
-				return
-			}
-
-			// Queue the job for background processing
-			const job = await queueJob({
-				jobType: 'ingredient_parsing',
-				imageUri: result.assets[0].uri,
-				upc: currentBarcode,
-				existingProductData: scannedProduct,
-				priority: 2, // High priority for user-initiated actions
-			})
-
-			// Show success feedback and clear overlay
-			setIsParsingIngredients(false)
-			hideOverlay()
-			
-			// Show brief confirmation
-			Alert.alert(
-				"Photo Queued",
-				"Your ingredients photo has been queued for processing. You'll receive a notification when it's complete. You can continue using the app.",
-				[{ text: "OK" }]
-			)
-
-		} catch (err) {
-			console.error('Error queuing background ingredient scan:', err)
-			setIngredientScanError('Failed to queue photo for processing. Please try again.')
-			setIsParsingIngredients(false)
-		}
+		// Use the unified camera system instead of ImagePicker
+		handleScanIngredients()
 	}
 
 	const handleCreateProduct = async () => {
@@ -523,7 +491,7 @@ export default function ScannerScreen() {
 			}
 
 			// Take photo using the camera ref
-			if (!cameraRef.current || !cameraActive) {
+			if (!cameraRef.current || cameraMode !== 'scanner') {
 				setError('Camera not available')
 				return
 			}
@@ -585,179 +553,15 @@ export default function ScannerScreen() {
 	}
 
 	const handleCreateProductConfirm = async () => {
-		try {
-			setShowCreateProductModal(false)
-			setIsCreatingProduct(true)
-			setError(null)
-
-			// Request camera permission for image picker
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			if (status !== 'granted') {
-				setProductCreationError({
-					error: 'Camera permission is required to create product',
-					imageBase64: '',
-					imageUri: '',
-					retryable: false
-				});
-				setIsCreatingProduct(false)
-				return
-			}
-
-			// Step 1: Take front product photo
-			const frontPhotoResult = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: false,
-			})
-
-			if (frontPhotoResult.canceled) {
-				setIsCreatingProduct(false)
-				hideOverlay()
-				return
-			}
-
-			if (!frontPhotoResult.assets[0].uri || !currentBarcode) {
-				setProductCreationError({
-					error: 'Failed to capture front photo or missing barcode',
-					imageBase64: '',
-					imageUri: '',
-					retryable: true
-				});
-				setIsCreatingProduct(false)
-				return
-			}
-
-			// Queue the front product photo for processing
-			await queueJob({
-				jobType: 'product_creation',
-				imageUri: frontPhotoResult.assets[0].uri,
-				upc: currentBarcode,
-				priority: 3, // Highest priority for product creation
-			})
-
-			// Step 2: Take ingredients photo
-			const ingredientsPhotoResult = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: false,
-			})
-
-			if (!ingredientsPhotoResult.canceled && ingredientsPhotoResult.assets[0].uri) {
-				// Queue the ingredients photo for processing (lower priority than product creation)
-				await queueJob({
-					jobType: 'ingredient_parsing',
-					imageUri: ingredientsPhotoResult.assets[0].uri,
-					upc: currentBarcode,
-					existingProductData: null, // Product doesn't exist yet
-					priority: 2,
-				})
-			}
-
-			// Show success feedback and clear overlay
-			setIsCreatingProduct(false)
-			hideOverlay()
-			
-			// Show confirmation
-			const ingredientMessage = ingredientsPhotoResult.canceled 
-				? "Product photo has been queued for processing." 
-				: "Both product and ingredients photos have been queued for processing."
-			
-			Alert.alert(
-				"Photos Queued",
-				`${ingredientMessage} You'll receive notifications when they're complete. You can continue using the app.`,
-				[{ text: "OK" }]
-			)
-
-		} catch (err) {
-			console.error('Error in photo capture flow:', err)
-			setProductCreationError({
-				error: 'Failed to capture photos. Please try again.',
-				imageBase64: '',
-				imageUri: '',
-				retryable: true
-			});
-			setIsCreatingProduct(false)
-		}
+		// Use the unified camera system instead of ImagePicker
+		setShowCreateProductModal(false)
+		handleCreateProduct()
 	}
 
 	const handleCreateProductBackground = async () => {
-		try {
-			setShowCreateProductModal(false)
-			setIsCreatingProduct(true)
-			setError(null)
-
-			// Request camera permission for image picker
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			if (status !== 'granted') {
-				setProductCreationError({
-					error: 'Camera permission is required to create product',
-					imageBase64: '',
-					imageUri: '',
-					retryable: false
-				});
-				setIsCreatingProduct(false)
-				return
-			}
-
-			// Launch camera to take photo
-			const result = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: false, // We don't need base64 for background processing
-			})
-
-			if (result.canceled) {
-				setIsCreatingProduct(false)
-				hideOverlay()
-				return
-			}
-
-			if (!result.assets[0].uri || !currentBarcode) {
-				setProductCreationError({
-					error: 'Failed to capture image or missing barcode',
-					imageBase64: '',
-					imageUri: '',
-					retryable: true
-				});
-				setIsCreatingProduct(false)
-				return
-			}
-
-			// Queue the job for background processing
-			const job = await queueJob({
-				jobType: 'product_creation',
-				imageUri: result.assets[0].uri,
-				upc: currentBarcode,
-				priority: 2, // High priority for user-initiated actions
-			})
-
-			// Show success feedback and clear overlay
-			setIsCreatingProduct(false)
-			hideOverlay()
-			
-			// Show brief confirmation
-			Alert.alert(
-				"Photo Queued",
-				"Your photo has been queued for processing. You'll receive a notification when it's complete. You can continue using the app.",
-				[{ text: "OK" }]
-			)
-
-		} catch (err) {
-			console.error('Error queuing background job:', err)
-			setProductCreationError({
-				error: 'Failed to queue photo for processing. Please try again.',
-				imageBase64: '',
-				imageUri: '',
-				retryable: true
-			});
-			setIsCreatingProduct(false)
-		}
+		// Use the unified camera system instead of ImagePicker
+		setShowCreateProductModal(false)
+		handleCreateProduct()
 	}
 
 	const handleRetryProductCreation = async () => {
@@ -946,46 +750,8 @@ export default function ScannerScreen() {
 	}
 
 	const captureProductPhoto = async () => {
-		try {
-			setIsCapturingPhoto(true)
-			setError(null)
-
-			// Request camera permission for image picker
-			const { status } = await ImagePicker.requestCameraPermissionsAsync()
-			if (status !== 'granted') {
-				setProductPhotoError('Camera permission is required to take product photo');
-				setIsCapturingPhoto(false)
-				return
-			}
-
-			// Launch camera to take photo
-			const result = await ImagePicker.launchCameraAsync({
-				mediaTypes: 'images',
-				allowsEditing: true,
-				aspect: [4, 3],
-				quality: 0.8,
-				base64: true,
-			})
-
-			if (result.canceled) {
-				setIsCapturingPhoto(false)
-				return
-			}
-
-			if (!result.assets[0].base64 || !result.assets[0].uri) {
-				setProductPhotoError('Failed to capture image data');
-				setIsCapturingPhoto(false)
-				return
-			}
-
-			// Process the photo upload
-			await processProductPhotoUpload(result.assets[0].uri)
-
-		} catch (err) {
-			console.error('Error in photo capture flow:', err)
-			setProductPhotoError('Failed to capture photo. Please try again.');
-			setIsCapturingPhoto(false)
-		}
+		// Use the unified camera system instead of ImagePicker
+		handleTakeProductPhoto()
 	}
 
 	const processProductPhotoUpload = async (imageUri: string) => {
@@ -1163,67 +929,37 @@ export default function ScannerScreen() {
 			{/* Camera View */}
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
-					<SimulatorBarcodeTester onBarcodeScanned={handleBarcodeScanned} />
-				) : isFocused && !showProductDetail && hasPermission && cameraActive ? (
-					<CameraErrorBoundary 
-						fallbackMessage="Scanner camera error. This may be due to hardware conflicts. Please restart the app if this continues."
-						onRetry={() => {
-							// Reset scanner camera state
-							setCameraActive(false)
-							setTimeout(() => {
-								cameraManager.releaseCamera('scanner')
-								setTimeout(() => {
-									if (cameraManager.requestCamera('scanner')) {
-										setCameraActive(true)
-									}
-								}, 100)
-							}, 100)
+					<SimulatorBarcodeTester onBarcodeScanned={({ data }: BarcodeScanningResult) => handleBarcodeScanned(data)} />
+				) : (
+					<UnifiedCameraView
+						ref={cameraRef}
+						mode={cameraMode}
+						owner="ScannerScreen"
+						onBarcodeScanned={handleBarcodeScanned}
+						onError={(error) => {
+							console.error('📷 Scanner: Camera error:', error);
+							setError(`Camera error: ${error}`);
 						}}
-					>
-						<>
-							<CameraView
-								ref={cameraRef}
-								style={styles.camera}
-								facing='back'
-								onBarcodeScanned={handleBarcodeScanned}
-								barcodeScannerSettings={{
-									barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8', 'code128', 'code39'],
-								}}
-							/>
-							<View style={styles.overlay}>
-								<View style={styles.unfocusedContainer}></View>
-								<View style={styles.middleContainer}>
+						renderOverlay={(mode, state) => {
+							// Only render scanner overlay when in scanner mode
+							if (mode !== 'scanner' || !state.isActive) return null;
+							
+							return (
+								<View style={styles.overlay}>
 									<View style={styles.unfocusedContainer}></View>
-									<View style={styles.focusedContainer}>
-										<View style={styles.scanningFrame} />
+									<View style={styles.middleContainer}>
+										<View style={styles.unfocusedContainer}></View>
+										<View style={styles.focusedContainer}>
+											<View style={styles.scanningFrame} />
+										</View>
+										<View style={styles.unfocusedContainer}></View>
 									</View>
 									<View style={styles.unfocusedContainer}></View>
 								</View>
-								<View style={styles.unfocusedContainer}></View>
-							</View>
-						</>
-					</CameraErrorBoundary>
-				) : isFocused && !showProductDetail && hasPermission && !cameraActive ? (
-					<View style={styles.inactiveCamera}>
-						<Text style={styles.inactiveCameraText}>Camera in use by another screen</Text>
-					</View>
-				) : isFocused && !showProductDetail && !hasPermission ? (
-					<View style={styles.permissionContainer}>
-						<Text style={styles.permissionText}>Camera access is required to scan barcodes</Text>
-						<TouchableOpacity 
-							style={styles.permissionButton}
-							onPress={async () => {
-								const { status } = await Camera.requestCameraPermissionsAsync()
-								setHasPermission(status === 'granted')
-							}}
-						>
-							<Text style={styles.permissionButtonText}>Grant Camera Access</Text>
-						</TouchableOpacity>
-					</View>
-				) : (
-					<View style={styles.inactiveCamera}>
-						<Text style={styles.inactiveCameraText}>Scanner inactive</Text>
-					</View>
+							);
+						}}
+						style={styles.camera}
+					/>
 				)}
 
 				{/* Loading Indicator */}
@@ -1660,23 +1396,6 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		backgroundColor: 'white',
-	},
-	permissionContainer: {
-		flex: 1,
-		justifyContent: 'center',
-		alignItems: 'center',
-		padding: 20,
-	},
-	permissionText: {
-		fontSize: 18,
-		fontWeight: 'bold',
-		textAlign: 'center',
-		marginBottom: 20,
-	},
-	permissionSubText: {
-		fontSize: 14,
-		textAlign: 'center',
-		color: '#666',
 	},
 	header: {
 		flexDirection: 'row',
@@ -2246,6 +1965,13 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		marginBottom: 24,
 		lineHeight: 24,
+	},
+	permissionSubText: {
+		color: '#ccc',
+		fontSize: 14,
+		textAlign: 'center',
+		lineHeight: 20,
+		marginBottom: 20,
 	},
 	permissionButton: {
 		backgroundColor: '#007AFF',
