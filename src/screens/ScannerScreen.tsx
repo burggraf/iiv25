@@ -83,6 +83,8 @@ export default function ScannerScreen() {
 	const [showJobsModal, setShowJobsModal] = useState(false)
 	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
 	const [frontPhotoTaken, setFrontPhotoTaken] = useState(false)
+	// Generate unique workflow ID for add_new_product workflow
+	const [workflowId] = useState(() => `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -512,6 +514,9 @@ export default function ScannerScreen() {
 					imageUri: photo.uri,
 					upc: currentBarcode,
 					priority: 3, // Highest priority for product creation
+					workflowId,
+					workflowType: 'add_new_product',
+					workflowSteps: { total: 3, current: 1 },
 				})
 				
 				// Move to ingredients photo step
@@ -525,6 +530,9 @@ export default function ScannerScreen() {
 					upc: currentBarcode,
 					existingProductData: null, // Product doesn't exist yet
 					priority: 2,
+					workflowId,
+					workflowType: 'add_new_product',
+					workflowSteps: { total: 3, current: 2 },
 				})
 				
 				// Complete the flow

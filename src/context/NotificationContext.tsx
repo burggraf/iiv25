@@ -49,6 +49,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 		failedJobs: Set<string>;
 		totalSteps: number;
 		latestProduct: Product | null;
+		notificationShown: boolean; // Prevent duplicate completion notifications
 	}>>(new Map())
 	
 	// Helper function to handle workflow job completion
@@ -64,7 +65,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				completedJobs: new Set(),
 				failedJobs: new Set(),
 				totalSteps: job.workflowSteps!.total,
-				latestProduct: null
+				latestProduct: null,
+				notificationShown: false
 			}
 			
 			current.completedJobs.add(job.id)
@@ -134,7 +136,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				
 				console.log(`🔔 [Notification] Workflow ${job.workflowId!.slice(-6)} status: ${current.completedJobs.size}/${current.totalSteps} completed, ${current.failedJobs.size} failed`)
 				
-				if (isComplete || hasFailed) {
+				if ((isComplete || hasFailed) && !current.notificationShown) {
+					// Mark notification as shown to prevent duplicates
+					current.notificationShown = true
 					// Show single workflow notification
 					const notificationId = `notification_workflow_${job.workflowId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 					const notification: JobNotification = {
@@ -199,7 +203,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				completedJobs: new Set(),
 				failedJobs: new Set(),
 				totalSteps: job.workflowSteps?.total || 1,
-				latestProduct: null
+				latestProduct: null,
+				notificationShown: false
 			}
 			
 			current.failedJobs.add(job.id)
@@ -439,6 +444,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				// Convert pending results to notifications
 				const pendingNotifications: JobNotification[] = []
 				pendingJobResults.forEach(({ job, product }, jobId) => {
+					// CRITICAL FIX: Skip workflow jobs when showing pending notifications
+					// Workflow jobs should only be handled by workflow logic, not shown as individual notifications
+					if (job.workflowId && job.workflowType) {
+						console.log(`🔔 [Notification] Skipping pending notification for workflow job ${job.id.slice(-6)} (part of workflow ${job.workflowId.slice(-6)})`)
+						return
+					}
+					
 					const notification: JobNotification = {
 						id: `notification_${job.id}`,
 						job,
