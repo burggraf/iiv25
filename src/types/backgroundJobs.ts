@@ -12,6 +12,11 @@ export interface BackgroundJob {
   upc: string;
   deviceId: string;
   
+  // Workflow context for grouping related jobs
+  workflowId?: string; // Unique ID for grouping related jobs
+  workflowType?: 'add_new_product' | 'individual_action'; // Workflow classification
+  workflowSteps?: { total: number; current: number }; // Progress tracking
+  
   // Input data
   imageUri: string; // Local file path
   imageBase64?: string; // Base64 encoded image data

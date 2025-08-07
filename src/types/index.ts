@@ -151,3 +151,33 @@ export interface UserSubscription {
   expires_at?: Date;
   is_active: boolean;
 }
+
+// Unified Camera System Types
+export type CameraMode = 'scanner' | 'product-photo' | 'ingredients-photo' | 'inactive';
+
+export interface CameraConfig {
+  mode: CameraMode;
+  facing: 'front' | 'back';
+  enableBarcode: boolean;
+  barcodeTypes: ('upc_a' | 'upc_e' | 'ean13' | 'ean8' | 'code128' | 'code39')[];
+  enablePhotoCapture: boolean;
+  quality?: number;
+  flashMode?: 'on' | 'off' | 'auto';
+}
+
+export interface CameraState {
+  mode: CameraMode;
+  isActive: boolean;
+  isCapturing: boolean;
+  hasPermission: boolean | null;
+  error: string | null;
+  config: CameraConfig;
+}
+
+export interface CameraModeTransition {
+  fromMode: CameraMode;
+  toMode: CameraMode;
+  timestamp: Date;
+  success: boolean;
+  error?: string;
+}

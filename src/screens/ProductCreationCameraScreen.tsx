@@ -24,6 +24,9 @@ export default function ProductCreationCameraScreen() {
 	const [currentStep, setCurrentStep] = useState<'front-photo' | 'ingredients-photo'>('front-photo')
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
+	
+	// Generate unique workflow ID for this add_new_product workflow
+	const [workflowId] = useState(() => `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 
 	// Initialize unified camera service for photo mode
 	useEffect(() => {
@@ -92,12 +95,15 @@ export default function ProductCreationCameraScreen() {
 
 		try {
 			if (currentStep === 'front-photo') {
-				// Queue the front product photo for processing
+				// Queue the front product photo for processing with workflow context
 				await queueJob({
 					jobType: 'product_creation',
 					imageUri: capturedPhoto,
 					upc: barcode,
 					priority: 3,
+					workflowId,
+					workflowType: 'add_new_product',
+					workflowSteps: { total: 3, current: 1 },
 				})
 				
 				// Move to ingredients photo step
@@ -105,13 +111,16 @@ export default function ProductCreationCameraScreen() {
 				setCapturedPhoto(null)
 				setIsPreviewMode(false)
 			} else if (currentStep === 'ingredients-photo') {
-				// Queue the ingredients photo for processing
+				// Queue the ingredients photo for processing with workflow context
 				await queueJob({
 					jobType: 'ingredient_parsing',
 					imageUri: capturedPhoto,
 					upc: barcode,
 					existingProductData: null,
 					priority: 2,
+					workflowId,
+					workflowType: 'add_new_product',
+					workflowSteps: { total: 3, current: 2 },
 				})
 				
 				// Go back after queuing both photos
@@ -133,7 +142,7 @@ export default function ProductCreationCameraScreen() {
 	}
 
 	const getStepText = () => {
-		return currentStep === 'front-photo' ? 'Step 1 of 2: Product Front' : 'Step 2 of 2: Ingredients'
+		return currentStep === 'front-photo' ? 'Step 1 of 3: Product Front' : 'Step 2 of 3: Ingredients'
 	}
 
 	if (isPreviewMode && capturedPhoto) {

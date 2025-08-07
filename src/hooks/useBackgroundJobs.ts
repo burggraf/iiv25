@@ -257,8 +257,15 @@ export const useBackgroundJobs = () => {
           console.log(`🎣 [useBackgroundJobs] *** JOB COMPLETED: ${job.jobType} ***`);
           console.log(`🎣 [useBackgroundJobs] Job result:`, job.resultData);
           
-          // Handle different job types that should mark items as new
-          handleJobCompletion(job);
+          // CRITICAL FIX: Skip individual job processing for workflow jobs
+          // Workflow jobs should only be processed by NotificationContext workflow logic
+          if (job.workflowId && job.workflowType) {
+            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is part of workflow ${job.workflowId.slice(-6)} - skipping individual job processing`);
+          } else {
+            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is an individual job - processing for history updates`);
+            // Handle different job types that should mark items as new
+            handleJobCompletion(job);
+          }
         }
       } else {
         console.log(`🎣 [useBackgroundJobs] Event: ${event} - No job data`);
@@ -280,6 +287,10 @@ export const useBackgroundJobs = () => {
     upc: string;
     existingProductData?: any;
     priority?: number;
+    // Workflow fields
+    workflowId?: string;
+    workflowType?: 'add_new_product' | 'individual_action';
+    workflowSteps?: { total: number; current: number };
   }) => {
     const job = await backgroundQueueService.queueJob(params);
     // Don't call refreshJobs() here - the 'job_added' event will trigger it automatically

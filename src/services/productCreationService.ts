@@ -18,7 +18,15 @@ export interface CreateProductResponse {
 }
 
 export class ProductCreationService {
-  static async createProductFromPhoto(imageBase64: string, upc: string, imageUri?: string): Promise<CreateProductResponse> {
+  static async createProductFromPhoto(
+    imageBase64: string, 
+    upc: string, 
+    imageUri?: string,
+    workflowContext?: {
+      workflowId?: string;
+      workflowType?: 'add_new_product' | 'individual_action';
+    }
+  ): Promise<CreateProductResponse> {
     try {
       const { data, error } = await supabase.functions.invoke('create-product-from-photo', {
         body: {
@@ -60,19 +68,39 @@ export class ProductCreationService {
 
       // Queue async image upload job if imageUri is provided
       if (imageUri && data?.productName) {
-        console.log(`📸 Queueing image upload job for UPC: ${upc}`);
-        try {
-          // Queue the photo upload as a background job
-          const job = await backgroundQueueService.queueJob({
-            jobType: 'product_photo_upload',
-            imageUri: imageUri,
-            upc: upc,
-            existingProductData: data,
-            priority: 1
-          });
-          console.log(`✅ Image upload job queued: ${job.id.slice(-8)}`);
-        } catch (error) {
-          console.error(`❌ Failed to queue image upload job for UPC: ${upc}`, error);
+        if (workflowContext?.workflowId) {
+          // Queue as part of workflow with step 3 of 3
+          console.log(`📸 Queueing image upload job for UPC: ${upc} (workflow context: ${workflowContext.workflowId.slice(-6)})`);
+          try {
+            const job = await backgroundQueueService.queueJob({
+              jobType: 'product_photo_upload',
+              imageUri: imageUri,
+              upc: upc,
+              existingProductData: data,
+              priority: 1,
+              workflowId: workflowContext.workflowId,
+              workflowType: workflowContext.workflowType,
+              workflowSteps: { total: 3, current: 3 }
+            });
+            console.log(`✅ Image upload job queued as workflow step 3: ${job.id.slice(-8)}`);
+          } catch (error) {
+            console.error(`❌ Failed to queue workflow image upload job for UPC: ${upc}`, error);
+          }
+        } else {
+          // Queue as individual job (non-workflow context)
+          console.log(`📸 Queueing image upload job for UPC: ${upc} (non-workflow context)`);
+          try {
+            const job = await backgroundQueueService.queueJob({
+              jobType: 'product_photo_upload',
+              imageUri: imageUri,
+              upc: upc,
+              existingProductData: data,
+              priority: 1
+            });
+            console.log(`✅ Image upload job queued: ${job.id.slice(-8)}`);
+          } catch (error) {
+            console.error(`❌ Failed to queue image upload job for UPC: ${upc}`, error);
+          }
         }
       }
       

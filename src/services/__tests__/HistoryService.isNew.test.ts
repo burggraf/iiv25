@@ -1,5 +1,7 @@
 import { VeganStatus, Product } from '../../types';
 
+import { historyService } from '../HistoryService';
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -15,8 +17,6 @@ jest.mock('../CacheService', () => ({
     addListener: jest.fn(),
   },
 }));
-
-import { historyService } from '../HistoryService';
 
 describe('HistoryService isNew functionality', () => {
   const mockProduct: Product = {

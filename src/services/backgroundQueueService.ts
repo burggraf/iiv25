@@ -42,6 +42,9 @@ class BackgroundQueueServiceClass extends EventEmitter {
     upc: string;
     existingProductData?: any;
     priority?: number;
+    workflowId?: string;
+    workflowType?: 'add_new_product' | 'individual_action';
+    workflowSteps?: { total: number; current: number };
   }): Promise<BackgroundJob> {
     await this.initialize();
     
@@ -92,6 +95,10 @@ class BackgroundQueueServiceClass extends EventEmitter {
       maxRetries: 3,
       createdAt: new Date(),
       estimatedCompletionAt: new Date(Date.now() + this.getEstimatedProcessingTime(params.jobType)),
+      // Workflow fields
+      workflowId: params.workflowId,
+      workflowType: params.workflowType,
+      workflowSteps: params.workflowSteps,
       metadata: {
         fileSize: imageInfo.exists ? (imageInfo as any).size : undefined,
       }
@@ -429,7 +436,11 @@ class BackgroundQueueServiceClass extends EventEmitter {
     const result = await ProductCreationService.createProductFromPhoto(
       job.imageBase64,
       job.upc,
-      job.imageUri
+      job.imageUri,
+      {
+        workflowId: job.workflowId,
+        workflowType: job.workflowType
+      }
     );
     
     return result;
