@@ -43,15 +43,42 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	const [processedJobIds, setProcessedJobIds] = useState<Set<string>>(new Set())
 	const [handledConfidenceErrors, setHandledConfidenceErrors] = useState<Set<string>>(new Set())
 	
-	// Track workflow completion states
-	const [workflowStates, setWorkflowStates] = useState<Map<string, {
+	// Helper function to detect errors for each job type
+	const hasJobErrors = (job: BackgroundJob): { hasError: boolean; errorType: 'photo_upload' | 'ingredient_scan' | 'product_creation' | null } => {
+		switch (job.jobType) {
+			case 'product_photo_upload':
+				return { 
+					hasError: !job.resultData?.success || !!job.resultData?.error || job.resultData?.uploadFailed,
+					errorType: 'photo_upload'
+				};
+			case 'ingredient_parsing':
+				return { 
+					hasError: job.resultData?.error && job.resultData.error.includes('photo quality too low'),
+					errorType: 'ingredient_scan'
+				};
+			case 'product_creation':
+				return { 
+					hasError: !job.resultData?.success || !!job.resultData?.error,
+					errorType: 'product_creation'
+				};
+			default:
+				return { hasError: false, errorType: null };
+		}
+	};
+	
+	// Interface for WorkflowState
+	interface WorkflowState {
 		type: 'add_new_product' | 'individual_action';
 		completedJobs: Set<string>;
 		failedJobs: Set<string>;
+		errorTypes: Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>;
 		totalSteps: number;
 		latestProduct: Product | null;
 		notificationShown: boolean; // Prevent duplicate completion notifications
-	}>>(new Map())
+	}
+	
+	// Track workflow completion states
+	const [workflowStates, setWorkflowStates] = useState<Map<string, WorkflowState>>(new Map())
 	
 	// Helper function to handle workflow job completion
 	const handleWorkflowJobCompleted = async (job: BackgroundJob) => {
@@ -65,12 +92,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				type: job.workflowType!,
 				completedJobs: new Set(),
 				failedJobs: new Set(),
+				errorTypes: new Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>(),
 				totalSteps: job.workflowSteps!.total,
 				latestProduct: null,
 				notificationShown: false
 			}
 			
 			current.completedJobs.add(job.id)
+			
+			// Check for errors and track error types
+			const { hasError, errorType } = hasJobErrors(job)
+			if (hasError && errorType) {
+				current.errorTypes.add(errorType)
+				current.failedJobs.add(job.id)
+				console.log(`🔔 [Notification] Detected ${errorType} error for job ${job.id.slice(-6)} in workflow ${job.workflowId!.slice(-6)}`)
+			}
 			
 			// Get the latest product data for this workflow
 			const getLatestProduct = async () => {
@@ -133,11 +169,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				
 				// Check if workflow is complete
 				const isComplete = current.completedJobs.size >= current.totalSteps
-				const hasFailed = current.failedJobs.size > 0
+				const hasErrors = current.errorTypes.size > 0
 				
-				console.log(`🔔 [Notification] Workflow ${job.workflowId!.slice(-6)} status: ${current.completedJobs.size}/${current.totalSteps} completed, ${current.failedJobs.size} failed`)
+				console.log(`🔔 [Notification] Workflow ${job.workflowId!.slice(-6)} status: ${current.completedJobs.size}/${current.totalSteps} completed, ${current.errorTypes.size} error types: [${Array.from(current.errorTypes).join(', ')}]`)
 				
-				if ((isComplete || hasFailed) && !current.notificationShown) {
+				if ((isComplete || hasErrors) && !current.notificationShown) {
 					// Mark notification as shown to prevent duplicates
 					current.notificationShown = true
 					// Show single workflow notification
@@ -146,8 +182,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 						id: notificationId,
 						job: { ...job, id: `workflow_${job.workflowId}` }, // Use workflow ID for the notification job
 						product: current.latestProduct,
-						message: getWorkflowMessage(current.type, hasFailed),
-						type: hasFailed ? 'error' : 'success',
+						message: getWorkflowMessage(current.type, current.errorTypes),
+						type: hasErrors ? 'error' : 'success',
 						timestamp: new Date(),
 					}
 
@@ -161,7 +197,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					// CRITICAL: Update history for completed workflows
 					// Since we've disabled individual job processing for workflow jobs in useBackgroundJobs,
 					// we need to handle history updates here when workflows complete
-					if (!hasFailed && current.latestProduct && current.type === 'add_new_product') {
+					if (!hasErrors && current.latestProduct && current.type === 'add_new_product') {
 						console.log(`🔔 [Notification] Workflow ${job.workflowId!.slice(-6)} completed successfully - updating history with product ${current.latestProduct.barcode}`)
 						try {
 							// Import historyService dynamically to avoid circular dependencies
@@ -203,6 +239,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				type: job.workflowType!,
 				completedJobs: new Set(),
 				failedJobs: new Set(),
+				errorTypes: new Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>(),
 				totalSteps: job.workflowSteps?.total || 1,
 				latestProduct: null,
 				notificationShown: false
@@ -210,32 +247,43 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			
 			current.failedJobs.add(job.id)
 			
-			// Show immediate failure notification for workflows
-			const notificationId = `notification_workflow_failed_${job.workflowId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-			const notification: JobNotification = {
-				id: notificationId,
-				job: { ...job, id: `workflow_failed_${job.workflowId}` },
-				product: null,
-				message: getWorkflowMessage(current.type, true),
-				type: 'error',
-				timestamp: new Date(),
-			}
-
-			if (AppState.currentState === 'active') {
-				setNotifications(prev => [notification, ...prev.slice(0, 4)])
+			// Detect error type for job failure and add to error types
+			const { errorType } = hasJobErrors(job)
+			if (errorType) {
+				current.errorTypes.add(errorType)
+				console.log(`🔔 [Notification] Added ${errorType} error type for failed job ${job.id.slice(-6)}`)
 			} else {
-				setPendingJobResults(prev => new Map(prev).set(`workflow_failed_${job.workflowId}`, { job, product: null }))
+				// Fallback: determine error type based on job type
+				switch (job.jobType) {
+					case 'product_photo_upload':
+						current.errorTypes.add('photo_upload')
+						break
+					case 'ingredient_parsing':
+						current.errorTypes.add('ingredient_scan')
+						break
+					case 'product_creation':
+						current.errorTypes.add('product_creation')
+						break
+				}
 			}
 			
-			// Clean up failed workflow
-			const updated = new Map(prev)
-			updated.delete(job.workflowId!)
-			return updated
+			// Don't show immediate failure notifications for workflows
+			// Let the workflow completion handler show the final notification with proper priority-based messaging
+			console.log(`🔔 [Notification] Job ${job.id.slice(-6)} failed, will show notification when workflow completes`)
+			
+			return new Map(prev).set(job.workflowId!, current)
 		})
 	}
 	
 	// Helper function to handle individual job completion (original behavior)
 	const handleIndividualJobCompleted = async (job: BackgroundJob) => {
+		// CRITICAL: Never show individual notifications for workflow jobs
+		// This prevents duplicate notifications when both workflow and individual handlers are triggered
+		if (isWorkflowJob(job)) {
+			console.log(`🔔 [Notification] Skipping individual job completion notification for workflow job: ${job.id.slice(-6)} (workflow: ${job.workflowId?.slice(-6)})`)
+			return
+		}
+		
 		try {
 			// For photo upload jobs, add a delay to ensure the image is fully processed
 			if (job.jobType === 'product_photo_upload' || job.jobType === 'product_creation') {
@@ -410,8 +458,37 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 		}
 	}
 	
+	// Helper function to detect if a job belongs to a workflow (even with missing metadata)
+	const isWorkflowJob = (job: BackgroundJob): boolean => {
+		// Primary detection: explicit workflow metadata
+		if (job.workflowId || job.workflowType) {
+			return true
+		}
+		
+		// Secondary detection: jobs created within the last 5 minutes that could be part of "Add New Product" workflow
+		// This catches workflow jobs that might be missing metadata due to timing or processing issues
+		const recentlyCreated = Date.now() - new Date(job.createdAt).getTime() < 5 * 60 * 1000 // 5 minutes
+		const isWorkflowJobType = ['product_creation', 'ingredient_parsing', 'product_photo_upload'].includes(job.jobType)
+		
+		if (recentlyCreated && isWorkflowJobType) {
+			// Check if there are any other recent jobs with the same UPC that ARE marked as workflow jobs
+			// This is a heuristic to catch orphaned jobs from the same workflow
+			console.log(`🔔 [Notification] Checking if job ${job.id.slice(-6)} (${job.jobType}) might be an orphaned workflow job`)
+			return true // For now, assume recent workflow-type jobs are workflow jobs
+		}
+		
+		return false
+	}
+
 	// Helper function to handle individual job failure (original behavior)
 	const handleIndividualJobFailed = (job: BackgroundJob) => {
+		// CRITICAL: Never show individual notifications for workflow jobs
+		// This prevents duplicate notifications when both workflow and individual handlers are triggered
+		if (isWorkflowJob(job)) {
+			console.log(`🔔 [Notification] Skipping individual job failure notification for workflow job: ${job.id.slice(-6)} (workflow: ${job.workflowId?.slice(-6)})`)
+			return
+		}
+		
 		// Don't show notifications for very old stuck jobs (older than 1 hour)
 		const jobAge = Date.now() - new Date(job.createdAt).getTime()
 		const oneHour = 60 * 60 * 1000
@@ -529,8 +606,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				pendingJobResults.forEach(({ job, product }, jobId) => {
 					// CRITICAL FIX: Skip workflow jobs when showing pending notifications
 					// Workflow jobs should only be handled by workflow logic, not shown as individual notifications
-					if (job.workflowId && job.workflowType) {
-						console.log(`🔔 [Notification] Skipping pending notification for workflow job ${job.id.slice(-6)} (part of workflow ${job.workflowId.slice(-6)})`)
+					if (isWorkflowJob(job)) {
+						console.log(`🔔 [Notification] Skipping pending notification for workflow job ${job.id.slice(-6)} (part of workflow ${job.workflowId?.slice(-6) || 'unknown'})`)
 						return
 					}
 					
@@ -623,26 +700,32 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	)
 }
 
-// Workflow message functions
-function getWorkflowMessage(workflowType: 'add_new_product' | 'individual_action', hasFailed: boolean): string {
-	if (hasFailed) {
-		switch (workflowType) {
-			case 'add_new_product':
-				return 'Failed to add product'
-			case 'individual_action':
-				return 'Action failed'
-			default:
-				return 'Workflow failed'
+// Workflow message functions with priority-based error handling
+function getWorkflowMessage(
+	workflowType: 'add_new_product' | 'individual_action', 
+	errorTypes: Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>
+): string {
+	if (errorTypes.size > 0) {
+		// Error priority: ingredient_scan > photo_upload > product_creation
+		if (errorTypes.has('ingredient_scan')) {
+			return '⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.'
 		}
-	} else {
-		switch (workflowType) {
-			case 'add_new_product':
-				return 'New product added'
-			case 'individual_action':
-				return 'Action completed'
-			default:
-				return 'Workflow completed'
+		if (errorTypes.has('photo_upload')) {
+			return '⚠️ Product photo upload failed. Please try again.'
 		}
+		if (errorTypes.has('product_creation')) {
+			return '⚠️ Failed to add product. Please try again.'
+		}
+	}
+	
+	// Success cases remain the same
+	switch (workflowType) {
+		case 'add_new_product':
+			return '✅ New product added'
+		case 'individual_action':
+			return '✅ Action completed'
+		default:
+			return '✅ Workflow completed'
 	}
 }
 

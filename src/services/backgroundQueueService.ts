@@ -503,7 +503,13 @@ class BackgroundQueueServiceClass extends EventEmitter {
     if (!uploadResult.success || !uploadResult.imageUrl) {
       const errorMessage = uploadResult.error || 'Failed to upload image';
       console.error(`❌ [BackgroundQueue] Image upload failed: ${errorMessage}`);
-      throw new Error(errorMessage);
+      
+      // Return structured error instead of throwing to enable workflow error detection
+      return {
+        success: false,
+        error: errorMessage,
+        uploadFailed: true // Flag for workflow error detection
+      };
     }
     
     console.log(`📸 [BackgroundQueue] Step 3: Updating database with new image URL...`);
@@ -522,7 +528,13 @@ class BackgroundQueueServiceClass extends EventEmitter {
     if (!updateResult.success) {
       const errorMessage = updateResult.error || 'Image uploaded but failed to update product record';
       console.error(`❌ [BackgroundQueue] Database update failed: ${errorMessage}`);
-      throw new Error(errorMessage);
+      
+      // Return structured error instead of throwing to enable workflow error detection
+      return {
+        success: false,
+        error: errorMessage,
+        uploadFailed: true // Flag for workflow error detection
+      };
     }
     
     const result = {
