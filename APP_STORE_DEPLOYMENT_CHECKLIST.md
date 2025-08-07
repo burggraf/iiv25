@@ -68,7 +68,7 @@ All required icons and splash screens have been generated for both iOS and Andro
 ```json
 {
   "name": "Is It Vegan?",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "bundleIdentifier": "net.isitvegan.free",
   "package": "net.isitvegan.free"
 }

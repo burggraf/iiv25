@@ -438,7 +438,7 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
         responseType: 'arraybuffer',
         timeout: 30000,
         headers: {
-          'User-Agent': 'IsItVegan/4.0.0 (ingredient-processor)'
+          'User-Agent': 'IsItVegan/4.0.2 (ingredient-processor)'
         }
       });
 

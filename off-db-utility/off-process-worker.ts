@@ -322,7 +322,7 @@ CRITICAL: Both fields must be 100% English. If no ingredients found (only warnin
           responseType: 'arraybuffer',
           timeout: 20000,
           headers: {
-            'User-Agent': 'IsItVegan/4.0.0 (parallel-processor)',
+            'User-Agent': 'IsItVegan/4.0.2 (parallel-processor)',
             'Accept': 'image/jpeg,image/png,image/webp,*/*',
             'Connection': 'keep-alive'
           },
