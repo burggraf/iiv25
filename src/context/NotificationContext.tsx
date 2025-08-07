@@ -57,9 +57,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					errorType: 'ingredient_scan'
 				};
 			case 'product_creation':
+				// For product creation, only consider it an error if the product wasn't actually created
+				// Even if resultData has success: false or error, if the product exists in DB, creation succeeded
+				const hasResultError = !job.resultData?.success || !!job.resultData?.error;
+				const productWasCreated = job.resultData?.productData || job.resultData?.product;
+				
+				// Only mark as error if there's a result error AND no product was created
+				const actualError = hasResultError && !productWasCreated;
+				
 				return { 
-					hasError: !job.resultData?.success || !!job.resultData?.error,
-					errorType: 'product_creation'
+					hasError: actualError,
+					errorType: actualError ? 'product_creation' : null
 				};
 			default:
 				return { hasError: false, errorType: null };
@@ -102,10 +110,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			
 			// Check for errors and track error types
 			const { hasError, errorType } = hasJobErrors(job)
+			console.log(`🔔 [Notification] ERROR DETECTION DEBUG for job ${job.id.slice(-6)} (${job.jobType}):`)
+			console.log(`  - job.resultData?.success: ${job.resultData?.success}`)
+			console.log(`  - job.resultData?.error: ${job.resultData?.error}`)
+			console.log(`  - hasError: ${hasError}`)
+			console.log(`  - errorType: ${errorType}`)
+			
 			if (hasError && errorType) {
 				current.errorTypes.add(errorType)
 				current.failedJobs.add(job.id)
-				console.log(`🔔 [Notification] Detected ${errorType} error for job ${job.id.slice(-6)} in workflow ${job.workflowId!.slice(-6)}`)
+				console.log(`🔔 [Notification] ✅ ADDED ERROR TYPE: ${errorType} for job ${job.id.slice(-6)} in workflow ${job.workflowId!.slice(-6)}`)
+			} else {
+				console.log(`🔔 [Notification] ✅ NO ERROR: Job ${job.id.slice(-6)} (${job.jobType}) completed successfully`)
 			}
 			
 			// Get the latest product data for this workflow
@@ -197,15 +213,38 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					// CRITICAL: Update history for completed workflows
 					// Since we've disabled individual job processing for workflow jobs in useBackgroundJobs,
 					// we need to handle history updates here when workflows complete
-					if (!hasErrors && current.latestProduct && current.type === 'add_new_product') {
-						console.log(`🔔 [Notification] Workflow ${job.workflowId!.slice(-6)} completed successfully - updating history with product ${current.latestProduct.barcode}`)
+					// Add to history if product was successfully created, even if other steps failed
+					const productCreationSucceeded = !current.errorTypes.has('product_creation')
+					
+					console.log(`🔔 [Notification] HISTORY UPDATE DEBUG:`)
+					console.log(`  - productCreationSucceeded: ${productCreationSucceeded}`)
+					console.log(`  - current.latestProduct exists: ${!!current.latestProduct}`)
+					console.log(`  - current.latestProduct barcode: ${current.latestProduct?.barcode || 'N/A'}`)
+					console.log(`  - current.type: ${current.type}`)
+					console.log(`  - hasErrors: ${hasErrors}`)
+					console.log(`  - errorTypes: [${Array.from(current.errorTypes).join(', ')}]`)
+					
+					if (productCreationSucceeded && current.latestProduct && current.type === 'add_new_product') {
+						const statusMessage = hasErrors ? 'with some errors' : 'successfully'
+						console.log(`🔔 [Notification] ✅ ADDING TO HISTORY: Workflow ${job.workflowId!.slice(-6)} completed ${statusMessage} - product was created, updating history with product ${current.latestProduct.barcode}`)
 						try {
 							// Import historyService dynamically to avoid circular dependencies
 							const { historyService } = await import('../services/HistoryService')
 							await historyService.addToHistory(current.latestProduct, true, true)
-							console.log(`✅ [Notification] Successfully updated history for completed workflow: ${current.latestProduct.barcode}`)
+							console.log(`✅ [Notification] Successfully updated history for product creation workflow: ${current.latestProduct.barcode}`)
 						} catch (error) {
-							console.error(`❌ [Notification] Error updating history for completed workflow:`, error)
+							console.error(`❌ [Notification] Error updating history for product creation workflow:`, error)
+						}
+					} else {
+						console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY:`)
+						if (!productCreationSucceeded) {
+							console.log(`  - Product creation failed`)
+						}
+						if (!current.latestProduct) {
+							console.log(`  - No latestProduct available`)
+						}
+						if (current.type !== 'add_new_product') {
+							console.log(`  - Wrong workflow type: ${current.type}`)
 						}
 					}
 					
