@@ -2,6 +2,8 @@
 off-database.db
 off-database.db-shm
 off-database.db-wal
+deploy-development-build.sh
+dev-builds/
 
 .mcp.json
 
