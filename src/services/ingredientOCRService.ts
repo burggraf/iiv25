@@ -27,6 +27,9 @@ export class IngredientOCRService {
       if (error) {
         throw new Error(`Edge function error: ${error.message}`);
       }
+
+      // Don't throw on application-level errors - let them be handled by the caller
+      // This ensures backward compatibility and prevents unhandled promise rejections
       
       // Log API cost information
       if (data?.apiCost) {

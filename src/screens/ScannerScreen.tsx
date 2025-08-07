@@ -37,7 +37,6 @@ import { SubscriptionService, SubscriptionStatus, UsageStats } from '../services
 import { cacheService, CacheEventListener } from '../services/CacheService'
 import { Product, VeganStatus } from '../types'
 import { SoundUtils } from '../utils/soundUtils'
-import { validateIngredientParsingResult } from '../utils/ingredientValidation'
 import { BackgroundJobsIndicator } from '../components/BackgroundJobsIndicator'
 import { JobStatusModal } from '../components/JobStatusModal'
 // Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext

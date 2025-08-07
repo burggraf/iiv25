@@ -247,6 +247,23 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
         parsedResult.apiCost = apiCostInfo;
       }
 
+      // Validate confidence threshold (90%)
+      if (!parsedResult.isValidIngredientsList || parsedResult.confidence < 0.9) {
+        const confidencePercentage = Math.round(parsedResult.confidence * 100);
+        console.log(`❌ Low confidence result: ${confidencePercentage}% (threshold: 90%)`);
+        
+        return new Response(JSON.stringify({
+          ingredients: [],
+          confidence: parsedResult.confidence,
+          isValidIngredientsList: false,
+          error: `Ingredients scan failed for ${upc.slice(-6)} - photo quality too low. Try again with better lighting.`,
+          apiCost: apiCostInfo
+        }), {
+          status: 200, // Still 200 OK, but with error in response
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // If ingredients were successfully parsed, update the database
       if (parsedResult.isValidIngredientsList && parsedResult.ingredients.length > 0) {
         console.log(`🔍 Processing ingredients for UPC: ${upc}`);

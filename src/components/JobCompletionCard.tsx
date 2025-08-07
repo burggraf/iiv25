@@ -165,44 +165,46 @@ export default function JobCompletionCard({
 									<Text style={styles.productName} numberOfLines={1}>
 										{product.name}
 									</Text>
-									<Text style={styles.jobMessage} numberOfLines={1}>
+									<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 1}>
 										{message}
 									</Text>
 								</>
 							) : (
-								<Text style={styles.jobMessage} numberOfLines={1}>
+								<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 1}>
 									{message}
 								</Text>
 							)}
 						</View>
 
-						{/* Right: Status Badge */}
-						<View style={styles.rightSection}>
-							{product ? (
-								<View
-									style={[
-										styles.statusBadge,
-										{ backgroundColor: getStatusColor(product.veganStatus) },
-									]}>
-									{getStatusIcon(product.veganStatus)}
-									<Text style={styles.statusText}>
-										{getStatusText(product.veganStatus)}
-									</Text>
-								</View>
-							) : (
-								<View style={[styles.statusBadge, { backgroundColor: type === 'success' ? '#4CAF50' : '#F44336' }]}>
-									<Text style={styles.statusIcon}>{type === 'success' ? '✅' : '❌'}</Text>
-								</View>
-							)}
+						{/* Right: Status Badge - hidden for errors to show more text */}
+						{type !== 'error' && (
+							<View style={styles.rightSection}>
+								{product ? (
+									<View
+										style={[
+											styles.statusBadge,
+											{ backgroundColor: getStatusColor(product.veganStatus) },
+										]}>
+										{getStatusIcon(product.veganStatus)}
+										<Text style={styles.statusText}>
+											{getStatusText(product.veganStatus)}
+										</Text>
+									</View>
+								) : (
+									<View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
+										<Text style={styles.statusIcon}>✅</Text>
+									</View>
+								)}
+							</View>
+						)}
 							
-							{/* Show warning if there are issues */}
-							{product?.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && (
-								<View style={styles.warningRow}>
-									<Text style={styles.warningIcon}>⚠️</Text>
-									<Text style={styles.warningText}>see product detail</Text>
-								</View>
-							)}
-						</View>
+						{/* Show warning if there are issues (not for error notifications) */}
+						{product?.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && type !== 'error' && (
+							<View style={styles.warningRow}>
+								<Text style={styles.warningIcon}>⚠️</Text>
+								<Text style={styles.warningText}>see product detail</Text>
+							</View>
+						)}
 					</View>
 
 					{/* Dismiss Button */}
@@ -273,6 +275,9 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: '#007AFF',
 		marginBottom: 2,
+	},
+	errorMessage: {
+		color: '#F44336', // Red color for error messages
 	},
 	productName: {
 		fontSize: 14,

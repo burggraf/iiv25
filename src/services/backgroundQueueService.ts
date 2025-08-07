@@ -466,6 +466,13 @@ class BackgroundQueueServiceClass extends EventEmitter {
       job.existingProductData
     );
     
+    // Handle confidence validation errors gracefully without throwing
+    // This prevents unhandled promise rejections while still providing error feedback
+    if (result.error && result.error.includes('Photo quality too low')) {
+      console.log(`🚫 [BackgroundQueue] Low confidence result for job ${job.id.slice(-6)}: ${result.error}`);
+      // Return the error result - let the UI handle it gracefully
+    }
+    
     return result;
   }
 

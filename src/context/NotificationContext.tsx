@@ -41,6 +41,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	const [notifications, setNotifications] = useState<JobNotification[]>([])
 	const [pendingJobResults, setPendingJobResults] = useState<Map<string, { job: BackgroundJob; product: Product | null }>>(new Map())
 	const [processedJobIds, setProcessedJobIds] = useState<Set<string>>(new Set())
+	const [handledConfidenceErrors, setHandledConfidenceErrors] = useState<Set<string>>(new Set())
 	
 	// Track workflow completion states
 	const [workflowStates, setWorkflowStates] = useState<Map<string, {
@@ -246,8 +247,52 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			if (job.upc) {
 				console.log(`🔔 [Notification] Attempting to use job result data for ${job.jobType} - avoiding redundant lookup`)
 				
-				// Skip transformation for ingredient_parsing jobs since they don't contain full product data
+				// Handle ingredient_parsing jobs - check for confidence validation errors
 				if (job.jobType === 'ingredient_parsing') {
+					console.log(`🔔 [Notification] DEBUG: Ingredient parsing job ${job.id.slice(-6)}`)
+					console.log(`🔔 [Notification] DEBUG: job.resultData exists: ${!!job.resultData}`)
+					console.log(`🔔 [Notification] DEBUG: job.resultData.error: ${job.resultData?.error}`)
+					
+					// Check if the job result contains a confidence validation error
+					if (job.resultData?.error && job.resultData.error.includes('photo quality too low')) {
+						console.log(`🔔 [Notification] *** CONFIDENCE ERROR DETECTED *** Ingredient parsing job failed with confidence error: ${job.resultData.error}`)
+						
+						// Prevent duplicate error notifications for same job
+						if (handledConfidenceErrors.has(job.id)) {
+							console.log(`🔔 [Notification] *** ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+							return
+						}
+						
+						setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+						
+						// Get product data for error notification to show product info in the card
+						let errorProduct: Product | null = null
+						try {
+							const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+								context: 'Individual JobNotification (confidence error)' 
+							})
+							errorProduct = result.product || null
+							console.log(`🔔 [Notification] Got product data for confidence error notification: ${errorProduct?.name || 'No product found'}`)
+						} catch (error) {
+							console.log(`🔔 [Notification] Could not fetch product for confidence error notification: ${error}`)
+						}
+						
+						// Show error notification with product information
+						const errorNotification: JobNotification = {
+							id: `confidence_error_${job.id}`,
+							job: job,
+							product: errorProduct,
+							type: 'error',
+							message: `⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.`,
+							timestamp: new Date()
+						}
+						console.log(`🔔 [Notification] *** SHOWING ERROR NOTIFICATION WITH PRODUCT INFO ***`)
+						setNotifications(prev => [errorNotification, ...prev.slice(0, 4)])
+						return // Exit early, don't show success notification
+					} else {
+						console.log(`🔔 [Notification] *** NO CONFIDENCE ERROR - PROCEEDING WITH SUCCESS LOGIC ***`)
+					}
+					
 					console.log(`🔔 [Notification] Skipping transformation for ingredient_parsing job - getting product from database`)
 					const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
 						context: 'Individual JobNotification (ingredient parsing)' 
@@ -289,12 +334,31 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
 			// Create notification with unique ID to prevent React key conflicts
 			const notificationId = `notification_${job.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+			// Check for confidence errors in ingredient_parsing jobs FIRST
+			let message: string
+			let type: 'success' | 'error' = 'success'
+			
+			if (job.jobType === 'ingredient_parsing' && job.resultData?.error && job.resultData.error.includes('photo quality too low')) {
+				// Check if this confidence error was already handled
+				if (handledConfidenceErrors.has(job.id)) {
+					console.log(`🔔 [Notification] *** PATH 1 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+					return
+				}
+				setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+				console.log(`🔔 [Notification] *** PATH 1 - CONFIDENCE ERROR DETECTED ***`)
+				message = `⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.`
+				type = 'error'
+			} else {
+				// Only use success message if no error detected
+				message = getIndividualSuccessMessage(job.jobType)
+			}
+
 			const notification: JobNotification = {
 				id: notificationId,
 				job,
 				product,
-				message: getIndividualSuccessMessage(job.jobType),
-				type: 'success',
+				message,
+				type,
 				timestamp: new Date(),
 			}
 
@@ -310,12 +374,31 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			console.error('Error handling individual job completion notification:', error)
 			// Still show notification even if product fetch failed
 			const notificationId = `notification_${job.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+			// Check for confidence errors in ingredient_parsing jobs FIRST
+			let message: string
+			let type: 'success' | 'error' = 'success'
+			
+			if (job.jobType === 'ingredient_parsing' && job.resultData?.error && job.resultData.error.includes('photo quality too low')) {
+				// Check if this confidence error was already handled
+				if (handledConfidenceErrors.has(job.id)) {
+					console.log(`🔔 [Notification] *** PATH 2 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+					return
+				}
+				setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+				console.log(`🔔 [Notification] *** PATH 2 - CONFIDENCE ERROR DETECTED ***`)
+				message = `⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.`
+				type = 'error'
+			} else {
+				// Only use success message if no error detected
+				message = getIndividualSuccessMessage(job.jobType)
+			}
+
 			const notification: JobNotification = {
 				id: notificationId,
 				job,
 				product: null,
-				message: getIndividualSuccessMessage(job.jobType),
-				type: 'success',
+				message,
+				type,
 				timestamp: new Date(),
 			}
 
@@ -383,7 +466,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	useEffect(() => {
 		// Listen for job completion events
 		const handleJobCompleted = async (job: BackgroundJob) => {
-			console.log(`🔔 [Notification] Job completed: ${job.id.slice(-6)} (${job.jobType})`)
+			console.log(`🔔 [Notification] *** NOTIFICATION CONTEXT *** Job completed: ${job.id.slice(-6)} (${job.jobType})`)
 			
 			// Prevent duplicate notifications for the same job
 			if (processedJobIds.has(job.id)) {
@@ -451,12 +534,31 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 						return
 					}
 					
+					// Check for confidence errors in completed ingredient_parsing jobs
+					let message: string
+					let type: 'success' | 'error' = 'success'
+					
+					if (job.status === 'completed' && job.jobType === 'ingredient_parsing' && 
+						job.resultData?.error && job.resultData.error.includes('photo quality too low')) {
+						// Check if this confidence error was already handled
+						if (handledConfidenceErrors.has(job.id)) {
+							console.log(`🔔 [Notification] *** PATH 3 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+							return
+						}
+						setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+						message = '⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.'
+						type = 'error'
+					} else {
+						message = job.status === 'completed' ? getIndividualSuccessMessage(job.jobType) : getIndividualErrorMessage(job.jobType, job)
+						type = job.status === 'completed' ? 'success' : 'error'
+					}
+
 					const notification: JobNotification = {
 						id: `notification_${job.id}`,
 						job,
 						product,
-						message: job.status === 'completed' ? getIndividualSuccessMessage(job.jobType) : getIndividualErrorMessage(job.jobType, job),
-						type: job.status === 'completed' ? 'success' : 'error',
+						message,
+						type,
 						timestamp: new Date(),
 					}
 					pendingNotifications.push(notification)
