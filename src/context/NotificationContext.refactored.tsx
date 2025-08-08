@@ -103,22 +103,39 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       const product = await getProductFromJob(job);
       
       // Update history for workflow jobs to ensure fresh data
-      if (product && job.workflowType === 'add_new_product') {
-        if (job.jobType === 'product_creation') {
-          // Create history entry with isNew flag but DON'T show notification (less confusing)
-          const isNewProduct = true;
-          await handleHistoryUpdate(product, isNewProduct);
-          console.log(`📚 [NotificationContext] Created history entry - isNew: ${isNewProduct} (job: ${job.jobType}) - no notification shown`);
-          // Skip notification creation for product_creation to reduce user confusion
-          return;
-        } else if (job.jobType === 'ingredient_parsing') {
-          // Update existing history entry with fresh data (preserve isNew flag)
+      if (product && job.workflowType) {
+        if (job.workflowType === 'add_new_product') {
+          if (job.jobType === 'product_creation') {
+            // Create history entry with isNew flag but DON'T show notification (less confusing)
+            const isNewProduct = true;
+            await handleHistoryUpdate(product, isNewProduct);
+            console.log(`📚 [NotificationContext] Created history entry - isNew: ${isNewProduct} (job: ${job.jobType}) - no notification shown`);
+            // Skip notification creation for product_creation to reduce user confusion
+            return;
+          } else if (job.jobType === 'ingredient_parsing') {
+            // Update existing history entry with fresh data (preserve isNew flag)
+            const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
+            const preserveIsNew = existingHistoryItem?.isNew || false;
+            await handleHistoryUpdate(product, preserveIsNew);
+            console.log(`📚 [NotificationContext] Updated history entry with fresh data - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+          } else {
+            console.log(`📚 [NotificationContext] Skipping history update for ${job.jobType} job in add_new_product workflow`);
+          }
+        } else if (job.workflowType === 'report_product_issue' || job.workflowType === 'report_ingredients_issue') {
+          // Update existing history entry with fresh data from report issue workflows
           const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
-          const preserveIsNew = existingHistoryItem?.isNew || false;
-          await handleHistoryUpdate(product, preserveIsNew);
-          console.log(`📚 [NotificationContext] Updated history entry with fresh data - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+          if (existingHistoryItem) {
+            // Preserve isNew flag for existing items
+            const preserveIsNew = existingHistoryItem.isNew || false;
+            await handleHistoryUpdate(product, preserveIsNew);
+            console.log(`📚 [NotificationContext] Updated history with fresh data from ${job.workflowType} - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+          } else {
+            // If product not in history, add it as non-new (since user is reporting an issue on existing product)
+            await handleHistoryUpdate(product, false);
+            console.log(`📚 [NotificationContext] Added product to history from ${job.workflowType} - isNew: false (job: ${job.jobType})`);
+          }
         } else {
-          console.log(`📚 [NotificationContext] Skipping history update for ${job.jobType} job in add_new_product workflow`);
+          console.log(`📚 [NotificationContext] Unknown workflow type: ${job.workflowType}, skipping history update`);
         }
       }
       
