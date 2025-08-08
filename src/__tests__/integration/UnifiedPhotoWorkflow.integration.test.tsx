@@ -471,7 +471,7 @@ describe('UnifiedPhotoWorkflow Integration', () => {
       expect(config.metadata?.issueType).toBe('product');
 
       const stepConfig = PhotoWorkflowConfigService.getStepConfig(config.type, 0);
-      expect(stepConfig?.jobType).toBe('product_photo_upload');
+      expect(stepConfig?.jobType).toBe('product_creation');
       expect(stepConfig?.totalSteps).toBe(1);
 
       const errorHandling = PhotoWorkflowConfigService.getErrorHandling(config.type);

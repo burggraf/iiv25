@@ -72,10 +72,10 @@ export class ProductImageUploadService {
         }
       }
       
-      // Step 3: Generate filename using UPC
+      // Step 4: Generate filename using UPC
       const fileName = `${upc}.jpg`;
       
-      // Step 4: Upload to Supabase Storage
+      // Step 5: Upload to Supabase Storage
       console.log(`Uploading image to Supabase: ${fileName}`);
       console.log(`Blob details before upload: size=${blob.size}, type=${blob.type}`);
       
@@ -147,11 +147,11 @@ export class ProductImageUploadService {
 
       console.log('Upload completed successfully');
       
-      // Step 5: Return the Supabase marker instead of full URL
+      // Step 6: Return the Supabase marker instead of full URL
       const supabaseMarker = ProductImageUrlService.getSupabaseMarker();
       console.log(`✅ Image upload successful. Using Supabase marker: ${supabaseMarker}`);
       
-      // Step 6: Verify the uploaded file by trying to download it
+      // Step 7: Verify the uploaded file by trying to download it
       console.log('Verifying uploaded file...');
       try {
         const { data: downloadData, error: downloadError } = await supabase.storage

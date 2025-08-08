@@ -77,8 +77,8 @@ export class JobSubmissionService {
         if (!params.workflowId) {
           errors.push('Workflow ID is required for product creation jobs');
         }
-        if (params.workflowType !== 'add_new_product') {
-          errors.push('Product creation jobs must use add_new_product workflow type');
+        if (params.workflowType !== 'add_new_product' && params.workflowType !== 'report_product_issue') {
+          errors.push('Product creation jobs must use add_new_product or report_product_issue workflow type');
         }
         if (!params.workflowSteps || params.workflowSteps.total < 1) {
           errors.push('Valid workflow steps required for product creation jobs');

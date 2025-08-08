@@ -1,5 +1,4 @@
 import { supabase } from './supabaseClient';
-import { ProductImageUploadService } from './productImageUploadService';
 import { backgroundQueueService } from './backgroundQueueService';
 import { PhotoWorkflowType } from '../types/photoWorkflow';
 
