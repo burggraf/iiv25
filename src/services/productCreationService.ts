@@ -66,8 +66,8 @@ export class ProductCreationService {
         console.log(`🎯 Confidence: ${data.confidence}%`);
       }
 
-      // Queue async image upload job if imageUri is provided
-      if (imageUri && data?.productName) {
+      // Queue async image upload job if imageUri is provided and product creation succeeded
+      if (imageUri && data?.productName && !data?.error) {
         if (workflowContext?.workflowId) {
           // Queue as part of workflow with step 3 of 3
           console.log(`📸 Queueing image upload job for UPC: ${upc} (workflow context: ${workflowContext.workflowId.slice(-6)})`);
@@ -102,6 +102,8 @@ export class ProductCreationService {
             console.error(`❌ Failed to queue image upload job for UPC: ${upc}`, error);
           }
         }
+      } else if (imageUri && data?.error) {
+        console.log(`📸 Skipping image upload job for UPC: ${upc} due to product creation error: ${data.error}`);
       }
       
       return data as CreateProductResponse;

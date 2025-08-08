@@ -35,7 +35,8 @@ Instructions:
 2. Identify the brand name if visible
 3. Focus on the front-facing text that would help identify the product
 4. If you can't clearly read the product name, respond with null values
-5. Provide a confidence score from 0-100
+5. If the image contains inappropriate, offensive, or non-product content, set confidence to 0 and respond with null values
+6. Provide a confidence score from 0-100
 
 Return your response in this exact JSON format:
 {
@@ -49,7 +50,7 @@ Do not include any other text or explanation, only the JSON response.`;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Attempting Gemini API call (attempt ${attempt}/${maxRetries})`);
-      
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
@@ -127,7 +128,7 @@ Do not include any other text or explanation, only the JSON response.`;
 
     } catch (networkError) {
       console.error(`Network error on attempt ${attempt}:`, networkError);
-      
+
       if (attempt === maxRetries) {
         return {
           success: false,
@@ -174,11 +175,11 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
+
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
-    
+
     const supabaseService = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify user authentication
@@ -213,17 +214,17 @@ Deno.serve(async (req) => {
     }
 
     const geminiApiResult = await callGeminiWithRetry(geminiApiKey, imageBase64);
-    
+
     if (!geminiApiResult.success) {
       console.error('Gemini API failed after retries:', geminiApiResult.error);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: geminiApiResult.error,
           retryable: geminiApiResult.retryable
         }),
-        { 
+        {
           status: 503, // Service Unavailable
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -235,7 +236,7 @@ Deno.serve(async (req) => {
     const usageMetadata = geminiResult.usageMetadata;
     const inputTokens = usageMetadata?.promptTokenCount || 0;
     const outputTokens = usageMetadata?.candidatesTokenCount || 0;
-    
+
     // Gemini 1.5 Flash pricing: $0.075 per 1M input tokens, $0.30 per 1M output tokens
     const inputCost = (inputTokens / 1000000) * 0.075;
     const outputCost = (outputTokens / 1000000) * 0.30;
@@ -251,7 +252,7 @@ Deno.serve(async (req) => {
       if (responseText) {
         const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '').trim();
         const parsedResponse = JSON.parse(cleanedResponse);
-        
+
         if (parsedResponse.productName && parsedResponse.productName !== null) {
           productName = parsedResponse.productName;
         }
@@ -263,6 +264,43 @@ Deno.serve(async (req) => {
     } catch (parseError) {
       console.error('Error parsing Gemini response:', parseError);
       // Continue with default values
+    }
+
+    // Normalize confidence score to 0-1 range with error handling
+    try {
+      const confidenceValue = Number(confidence);
+      if (isNaN(confidenceValue)) {
+        confidence = 0.0;
+      } else if (confidenceValue > 1) {
+        confidence = confidenceValue / 100;
+      } else {
+        confidence = confidenceValue;
+      }
+    } catch (error) {
+      console.warn('Failed to normalize confidence score:', confidence);
+      confidence = 0.0;
+    }
+
+    // Validate confidence threshold (90%)
+    if (confidence < 0.9) {
+      const confidencePercentage = Math.round(confidence * 100);
+      console.log(`❌ Low confidence product title scan: ${confidencePercentage}% (threshold: 90%)`);
+
+      return new Response(JSON.stringify({
+        productName: 'unknown product',
+        brand: '',
+        confidence: confidence,
+        error: 'Product title scan failed.',
+        retryable: false,
+        apiCost: {
+          inputTokens,
+          outputTokens,
+          totalCost: totalCost.toFixed(6),
+        },
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     console.log('Extracted product info:', { productName, brand, confidence });
@@ -297,7 +335,7 @@ Deno.serve(async (req) => {
       // Update existing product
       product = existingProducts[0];
       console.log('Found existing product, updating with new info');
-      
+
       const { data: updatedProduct, error: updateError } = await supabaseService
         .from('products')
         .update({
@@ -318,7 +356,7 @@ Deno.serve(async (req) => {
       // Create new product
       isNewProduct = true;
       console.log('Creating new product with extracted info');
-      
+
       const { data: newProduct, error: insertError } = await supabaseService
         .from('products')
         .insert({
@@ -375,7 +413,7 @@ Deno.serve(async (req) => {
     };
 
     console.log('Product creation completed successfully');
-    
+
     // Debug: Test if we can immediately query the product we just created/updated
     // This helps determine if the timing issue is between edge function and client
     try {
@@ -384,7 +422,7 @@ Deno.serve(async (req) => {
         .select('upc, ean13, product_name, imageurl')
         .or(`upc.eq.${normalizedUpc},ean13.eq.${ean13}`)
         .limit(1);
-        
+
       if (verifyError) {
         console.log('❌ Edge function immediate verification failed:', verifyError);
       } else if (verifyProduct && verifyProduct.length > 0) {
@@ -403,21 +441,21 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify(response),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 
   } catch (error) {
     console.error('Error in create-product-from-photo function:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }

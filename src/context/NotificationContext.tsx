@@ -57,13 +57,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					errorType: 'ingredient_scan'
 				};
 			case 'product_creation':
+				// Check for confidence errors in product creation (like title scan failures)
+				const hasConfidenceError = job.resultData?.error === 'Product title scan failed.';
+				
 				// For product creation, only consider it an error if the product wasn't actually created
 				// Even if resultData has success: false or error, if the product exists in DB, creation succeeded
 				const hasResultError = !job.resultData?.success || !!job.resultData?.error;
 				const productWasCreated = job.resultData?.productData || job.resultData?.product;
 				
-				// Only mark as error if there's a result error AND no product was created
-				const actualError = hasResultError && !productWasCreated;
+				// Mark as error if confidence failed OR (result error AND no product created)
+				const actualError = hasConfidenceError || (hasResultError && !productWasCreated);
 				
 				return { 
 					hasError: actualError,
@@ -385,6 +388,47 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 						context: 'Individual JobNotification (ingredient parsing)' 
 					})
 					product = result.product || null
+				} else if (job.jobType === 'product_creation') {
+					console.log(`🔔 [Notification] DEBUG: Product creation job ${job.id.slice(-6)}`)
+					console.log(`🔔 [Notification] DEBUG: job.resultData exists: ${!!job.resultData}`)
+					console.log(`🔔 [Notification] DEBUG: job.resultData.error: ${job.resultData?.error}`)
+					
+					// Check if the job result contains a confidence validation error
+					if (job.resultData?.error === 'Product title scan failed.') {
+						console.log(`🔔 [Notification] *** CONFIDENCE ERROR DETECTED *** Product creation job failed with confidence error: ${job.resultData.error}`)
+						
+						// Prevent duplicate error notifications for same job
+						if (handledConfidenceErrors.has(job.id)) {
+							console.log(`🔔 [Notification] *** ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+							return
+						}
+						
+						setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+						
+						// Show error notification without product lookup since creation failed
+						const errorNotification: JobNotification = {
+							id: `confidence_error_${job.id}`,
+							job: job,
+							product: null, // No product since creation failed
+							type: 'error',
+							message: `⚠️ Product title scan failed. Try again with better lighting and make sure the product title is visible.`,
+							timestamp: new Date()
+						}
+						console.log(`🔔 [Notification] *** SHOWING ERROR NOTIFICATION FOR PRODUCT CREATION ***`)
+						setNotifications(prev => [errorNotification, ...prev.slice(0, 4)])
+						return // Exit early, don't show success notification
+					} else {
+						console.log(`🔔 [Notification] *** NO CONFIDENCE ERROR - PROCEEDING WITH SUCCESS LOGIC ***`)
+					}
+					
+					// For successful product creation, use the product from result data or lookup
+					product = job.resultData?.product || null
+					if (!product && job.upc) {
+						const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
+							context: 'Individual JobNotification (product creation)' 
+						})
+						product = result.product || null
+					}
 				} else {
 					// Try to transform job result data for other job types
 					product = await transformJobResultToProduct(job)
@@ -435,6 +479,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				console.log(`🔔 [Notification] *** PATH 1 - CONFIDENCE ERROR DETECTED ***`)
 				message = `⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.`
 				type = 'error'
+			} else if (job.jobType === 'product_creation' && job.resultData?.error === 'Product title scan failed.') {
+				// Check if this confidence error was already handled
+				if (handledConfidenceErrors.has(job.id)) {
+					console.log(`🔔 [Notification] *** PATH 1 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+					return
+				}
+				setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+				console.log(`🔔 [Notification] *** PATH 1 - PRODUCT CREATION CONFIDENCE ERROR DETECTED ***`)
+				message = `⚠️ Product title scan failed. Try again with better lighting and make sure the product title is visible.`
+				type = 'error'
 			} else {
 				// Only use success message if no error detected
 				message = getIndividualSuccessMessage(job.jobType)
@@ -474,6 +528,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 				setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
 				console.log(`🔔 [Notification] *** PATH 2 - CONFIDENCE ERROR DETECTED ***`)
 				message = `⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.`
+				type = 'error'
+			} else if (job.jobType === 'product_creation' && job.resultData?.error === 'Product title scan failed.') {
+				// Check if this confidence error was already handled
+				if (handledConfidenceErrors.has(job.id)) {
+					console.log(`🔔 [Notification] *** PATH 2 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+					return
+				}
+				setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+				console.log(`🔔 [Notification] *** PATH 2 - PRODUCT CREATION CONFIDENCE ERROR DETECTED ***`)
+				message = `⚠️ Product title scan failed. Try again with better lighting and make sure the product title is visible.`
 				type = 'error'
 			} else {
 				// Only use success message if no error detected
@@ -664,6 +728,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 						setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
 						message = '⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.'
 						type = 'error'
+					} else if (job.status === 'completed' && job.jobType === 'product_creation' && 
+						job.resultData?.error === 'Product title scan failed.') {
+						// Check if this confidence error was already handled
+						if (handledConfidenceErrors.has(job.id)) {
+							console.log(`🔔 [Notification] *** PATH 3 - ALREADY HANDLED CONFIDENCE ERROR FOR JOB ${job.id.slice(-6)} - SKIPPING ***`)
+							return
+						}
+						setHandledConfidenceErrors(prev => new Set(prev).add(job.id))
+						message = '⚠️ Product title scan failed. Try again with better lighting and make sure the product title is visible.'
+						type = 'error'
 					} else {
 						message = job.status === 'completed' ? getIndividualSuccessMessage(job.jobType) : getIndividualErrorMessage(job.jobType, job)
 						type = job.status === 'completed' ? 'success' : 'error'
@@ -745,15 +819,15 @@ function getWorkflowMessage(
 	errorTypes: Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>
 ): string {
 	if (errorTypes.size > 0) {
-		// Error priority: ingredient_scan > photo_upload > product_creation
+		// Error priority: product_creation > ingredient_scan > photo_upload
+		if (errorTypes.has('product_creation')) {
+			return '⚠️ Product title scan failed. Try again with better lighting and make sure the product title is visible.'
+		}
 		if (errorTypes.has('ingredient_scan')) {
 			return '⚠️ Ingredients scan failed - photo quality too low. Try again with better lighting.'
 		}
 		if (errorTypes.has('photo_upload')) {
 			return '⚠️ Product photo upload failed. Please try again.'
-		}
-		if (errorTypes.has('product_creation')) {
-			return '⚠️ Failed to add product. Please try again.'
 		}
 	}
 	

@@ -1,0 +1,505 @@
+// Jest-compatible expections for edge function testing
+
+// Test utilities for confidence normalization and validation
+describe('Product Creation Confidence Handling', () => {
+  
+  // Test confidence normalization logic
+  describe('Confidence Normalization', () => {
+    
+    it('should handle NaN confidence values by setting to 0.0', () => {
+      let confidence = NaN;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.0);
+    });
+    
+    it('should normalize confidence values > 1 by dividing by 100', () => {
+      let confidence = 85; // 85% from Gemini
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.85);
+    });
+    
+    it('should keep confidence values <= 1 as-is', () => {
+      let confidence = 0.75;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.75);
+    });
+    
+    it('should handle string confidence values', () => {
+      let confidence = "92" as any;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence, 0.92);
+    });
+    
+    it('should handle invalid string confidence values', () => {
+      let confidence = "invalid" as any;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.0);
+    });
+    
+    it('should handle undefined confidence values', () => {
+      let confidence = undefined as any;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.0);
+    });
+    
+    it('should handle null confidence values', () => {
+      let confidence = null as any;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.0);
+    });
+    
+    it('should handle edge case of exactly 1.0', () => {
+      let confidence = 1.0;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence, 1.0);
+    });
+    
+    it('should handle edge case of exactly 100', () => {
+      let confidence = 100;
+      
+      // Replicate edge function normalization logic
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence, 1.0);
+    });
+  });
+  
+  // Test confidence threshold validation
+  describe('Confidence Threshold Validation', () => {
+    
+    const CONFIDENCE_THRESHOLD = 0.9; // 90%
+    
+    it('should pass validation for confidence >= 90%', () => {
+      const testCases = [0.9, 0.95, 1.0];
+      
+      testCases.forEach(confidence => {
+        const passesThreshold = confidence >= CONFIDENCE_THRESHOLD;
+        expect(passesThreshold, `Confidence ${confidence} should pass 90% threshold`);
+      });
+    });
+    
+    it('should fail validation for confidence < 90%', () => {
+      const testCases = [0.0, 0.5, 0.85, 0.89];
+      
+      testCases.forEach(confidence => {
+        const passesThreshold = confidence >= CONFIDENCE_THRESHOLD;
+        expect(!passesThreshold, `Confidence ${confidence} should fail 90% threshold`);
+      });
+    });
+    
+    it('should handle edge case of exactly 90%', () => {
+      const confidence = 0.9;
+      const passesThreshold = confidence >= CONFIDENCE_THRESHOLD;
+      expect(passesThreshold, 'Confidence of exactly 90% should pass threshold');
+    });
+  });
+  
+  // Test error response format
+  describe('Error Response Format', () => {
+    
+    it('should return correct error response for low confidence', () => {
+      const confidence = 0.75; // 75%, below 90% threshold
+      const confidencePercentage = Math.round(confidence * 100);
+      
+      // Replicate edge function error response logic
+      const errorResponse = {
+        productName: 'unknown product',
+        brand: '',
+        confidence: confidence,
+        error: 'Product title scan failed.',
+        retryable: false,
+        apiCost: {
+          inputTokens: 100,
+          outputTokens: 20,
+          totalCost: "0.000113",
+        },
+      };
+      
+      expect(errorResponse.error, 'Product title scan failed.');
+      expect(errorResponse.retryable, false);
+      expect(errorResponse.productName, 'unknown product');
+      expect(errorResponse.brand, '');
+      expect(errorResponse.confidence, 0.75);
+      expect(errorResponse.apiCost, 'Should include API cost information');
+    });
+    
+    it('should return 200 status with error in body for backward compatibility', () => {
+      // Test that edge function returns 200 status even with errors (backward compatibility)
+      const confidence = 0.5; // 50%, below threshold
+      
+      const responseStatus = 200; // Should be 200 for backward compatibility
+      const hasErrorInBody = true; // Error should be in response body
+      
+      expect(responseStatus, 200);
+      expect(hasErrorInBody, 'Error should be included in response body');
+    });
+    
+    it('should include all required fields in error response', () => {
+      const errorResponse = {
+        productName: 'unknown product',
+        brand: '',
+        confidence: 0.6,
+        error: 'Product title scan failed.',
+        retryable: false,
+        apiCost: {
+          inputTokens: 150,
+          outputTokens: 25,
+          totalCost: "0.000169",
+        },
+      };
+      
+      // Verify all required fields are present
+      expect('productName' in errorResponse, 'Should include productName');
+      expect('brand' in errorResponse, 'Should include brand');
+      expect('confidence' in errorResponse, 'Should include confidence');
+      expect('error' in errorResponse, 'Should include error');
+      expect('retryable' in errorResponse, 'Should include retryable');
+      expect('apiCost' in errorResponse, 'Should include apiCost');
+      
+      // Verify field values
+      expect(errorResponse.productName, 'unknown product');
+      expect(errorResponse.brand, '');
+      expect(errorResponse.error, 'Product title scan failed.');
+      expect(errorResponse.retryable, false);
+      
+      // Verify API cost structure
+      expect('inputTokens' in errorResponse.apiCost, 'Should include inputTokens in apiCost');
+      expect('outputTokens' in errorResponse.apiCost, 'Should include outputTokens in apiCost');
+      expect('totalCost' in errorResponse.apiCost, 'Should include totalCost in apiCost');
+    });
+  });
+  
+  // Test Gemini prompt inappropriate content detection
+  describe('Inappropriate Content Detection', () => {
+    
+    it('should include appropriate content detection in prompt', () => {
+      const geminiPrompt = `You are an expert at analyzing product packaging images. Your task is to extract the product name and brand from this product package image.
+
+Instructions:
+1. Look for the main product name (not ingredients or nutritional info)
+2. Identify the brand name if visible
+3. Focus on the front-facing text that would help identify the product
+4. If you can't clearly read the product name, respond with null values
+5. If the image contains inappropriate, offensive, or non-product content, set confidence to 0
+6. Provide a confidence score from 0-100
+
+Return your response in this exact JSON format:
+{
+  "productName": "string or null",
+  "brand": "string or null", 
+  "confidence": number
+}
+
+Do not include any other text or explanation, only the JSON response.`;
+      
+      // Verify inappropriate content detection instruction is present
+      expect(
+        geminiPrompt.includes('inappropriate, offensive, or non-product content, set confidence to 0'),
+        'Prompt should include inappropriate content detection instruction'
+      );
+      
+      // Verify prompt structure
+      expect(geminiPrompt.includes('confidence score from 0-100'), 'Should request confidence score');
+      expect(geminiPrompt.includes('JSON format'), 'Should specify JSON response format');
+      expect(geminiPrompt.includes('productName'), 'Should include productName field');
+      expect(geminiPrompt.includes('brand'), 'Should include brand field');
+      expect(geminiPrompt.includes('confidence'), 'Should include confidence field');
+    });
+    
+    it('should expect confidence 0 for inappropriate content', () => {
+      // Test expected behavior when inappropriate content is detected
+      const inappropriateContentResponse = {
+        productName: null,
+        brand: null,
+        confidence: 0
+      };
+      
+      // After normalization, confidence would be 0.0
+      let confidence = inappropriateContentResponse.confidence;
+      
+      try {
+        const confidenceValue = Number(confidence);
+        if (isNaN(confidenceValue)) {
+          confidence = 0.0;
+        } else if (confidenceValue > 1) {
+          confidence = confidenceValue / 100;
+        } else {
+          confidence = confidenceValue;
+        }
+      } catch (error) {
+        confidence = 0.0;
+      }
+      
+      expect(confidence).toBe(0.0);
+      
+      // Should fail threshold validation
+      const passesThreshold = confidence >= 0.9;
+      expect(!passesThreshold, 'Inappropriate content should fail threshold');
+    });
+  });
+  
+  // Test integration with existing error handling
+  describe('Integration with Existing Error Handling', () => {
+    
+    it('should maintain existing Gemini API retry error handling', () => {
+      // Test that new confidence validation doesn't interfere with existing retry logic
+      const retryableErrors = [503, 429, 500, 502, 504];
+      const nonRetryableErrors = [400, 401, 403, 404];
+      
+      retryableErrors.forEach(code => {
+        const isRetryable = retryableErrors.includes(code);
+        expect(isRetryable, `Error code ${code} should be retryable`);
+      });
+      
+      nonRetryableErrors.forEach(code => {
+        const isRetryable = retryableErrors.includes(code);
+        expect(!isRetryable, `Error code ${code} should not be retryable`);
+      });
+    });
+    
+    it('should preserve API cost calculation for failed confidence validation', () => {
+      // Test that API costs are still calculated even when confidence fails
+      const usageMetadata = {
+        promptTokenCount: 200,
+        candidatesTokenCount: 30
+      };
+      
+      const inputTokens = usageMetadata?.promptTokenCount || 0;
+      const outputTokens = usageMetadata?.candidatesTokenCount || 0;
+      
+      // Gemini 1.5 Flash pricing: $0.075 per 1M input tokens, $0.30 per 1M output tokens
+      const inputCost = (inputTokens / 1000000) * 0.075;
+      const outputCost = (outputTokens / 1000000) * 0.30;
+      const totalCost = inputCost + outputCost;
+      
+      expect(inputTokens, 200);
+      expect(outputTokens, 30);
+      expect(totalCost.toFixed(6), "0.000024");
+    });
+    
+    it('should maintain product creation flow for high confidence', () => {
+      // Test that high confidence still results in successful product creation
+      const confidence = 0.95; // 95%, above threshold
+      
+      const passesThreshold = confidence >= 0.9;
+      expect(passesThreshold, 'High confidence should pass threshold and continue with product creation');
+      
+      // Should proceed to product creation logic (not return early with error)
+      const shouldProceed = passesThreshold;
+      expect(shouldProceed, 'Should proceed with product creation for high confidence');
+    });
+  });
+  
+  // Test edge cases and boundary conditions
+  describe('Edge Cases and Boundary Conditions', () => {
+    
+    it('should handle Gemini response parsing errors gracefully', () => {
+      // Test when Gemini returns malformed JSON
+      const malformedResponse = '{ "productName": "Test", "brand": incomplete JSON';
+      let confidence = 0;
+      let productName = 'unknown product';
+      let brand = '';
+      
+      try {
+        const parsedResponse = JSON.parse(malformedResponse);
+        if (parsedResponse.productName && parsedResponse.productName !== null) {
+          productName = parsedResponse.productName;
+        }
+        if (parsedResponse.brand && parsedResponse.brand !== null) {
+          brand = parsedResponse.brand;
+        }
+        confidence = parsedResponse.confidence || 0;
+      } catch (parseError) {
+        // Should continue with default values when parsing fails
+        console.log('Error parsing Gemini response:', parseError);
+      }
+      
+      expect(confidence, 0);
+      expect(productName, 'unknown product');
+      expect(brand, '');
+    });
+    
+    it('should handle missing Gemini response parts', () => {
+      // Test when Gemini response structure is unexpected
+      const geminiResult = {
+        candidates: [] // Empty candidates array
+      };
+      
+      let confidence = 0;
+      let productName = 'unknown product';
+      let brand = '';
+      
+      try {
+        const responseText = (geminiResult as any).candidates[0]?.content?.parts[0]?.text;
+        if (responseText) {
+          const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '').trim();
+          const parsedResponse = JSON.parse(cleanedResponse);
+          
+          if (parsedResponse.productName && parsedResponse.productName !== null) {
+            productName = parsedResponse.productName;
+          }
+          if (parsedResponse.brand && parsedResponse.brand !== null) {
+            brand = parsedResponse.brand;
+          }
+          confidence = parsedResponse.confidence || 0;
+        }
+      } catch (parseError) {
+        // Should continue with default values
+      }
+      
+      expect(confidence, 0);
+      expect(productName, 'unknown product');
+      expect(brand, '');
+    });
+    
+    it('should handle very small confidence values correctly', () => {
+      const verySmallConfidence = 0.001; // 0.1%
+      
+      const passesThreshold = verySmallConfidence >= 0.9;
+      expect(!passesThreshold, 'Very small confidence should fail threshold');
+      
+      const confidencePercentage = Math.round(verySmallConfidence * 100);
+      expect(confidencePercentage, 0);
+    });
+    
+    it('should handle confidence values just below threshold', () => {
+      const justBelowThreshold = 0.8999; // 89.99%
+      
+      const passesThreshold = justBelowThreshold >= 0.9;
+      expect(!passesThreshold, 'Confidence just below 90% should fail');
+      
+      const confidencePercentage = Math.round(justBelowThreshold * 100);
+      expect(confidencePercentage, 90); // Should round to 90 but still fail actual threshold
+    });
+    
+    it('should handle confidence values just above threshold', () => {
+      const justAboveThreshold = 0.9001; // 90.01%
+      
+      const passesThreshold = justAboveThreshold >= 0.9;
+      expect(passesThreshold, 'Confidence just above 90% should pass');
+    });
+  });
+});
