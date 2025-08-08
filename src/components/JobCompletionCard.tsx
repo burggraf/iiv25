@@ -158,32 +158,25 @@ export default function JobCompletionCard({
 							)}
 						</View>
 
-						{/* Center: Product Info with status inline */}
+						{/* Center: Product Info */}
 						<View style={styles.centerSection}>
 							{product ? (
 								<>
-									{/* Top line: Product name + small status indicator */}
-									<View style={styles.topLine}>
-										<Text style={styles.productName} numberOfLines={1}>
-											{product.name}
-										</Text>
-										{type !== 'error' && (
-											<View
-												style={[
-													styles.statusBadgeSmall,
-													{ backgroundColor: getStatusColor(product.veganStatus) },
-												]}>
-												{getStatusIcon(product.veganStatus)}
-												<Text style={styles.statusTextSmall}>
-													{getStatusText(product.veganStatus)}
-												</Text>
-											</View>
-										)}
-									</View>
-									{/* Bottom line: Full message with more space */}
+									{/* Product name */}
+									<Text style={styles.productName} numberOfLines={1}>
+										{product.name}
+									</Text>
+									{/* Message */}
 									<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 2}>
 										{message}
 									</Text>
+									{/* Warning text below message with proper spacing */}
+									{product.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && type !== 'error' && (
+										<View style={styles.warningRow}>
+											<Text style={styles.warningIcon}>⚠️</Text>
+											<Text style={styles.warningText}>see product detail</Text>
+										</View>
+									)}
 								</>
 							) : (
 								<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 2}>
@@ -192,11 +185,19 @@ export default function JobCompletionCard({
 							)}
 						</View>
 							
-						{/* Show warning if there are issues (not for error notifications) */}
-						{product?.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && type !== 'error' && (
-							<View style={styles.warningRow}>
-								<Text style={styles.warningIcon}>⚠️</Text>
-								<Text style={styles.warningText}>see product detail</Text>
+						{/* Right: Status badge (far right) */}
+						{product && type !== 'error' && (
+							<View style={styles.rightSection}>
+								<View
+									style={[
+										styles.statusBadge,
+										{ backgroundColor: getStatusColor(product.veganStatus) },
+									]}>
+									{getStatusIcon(product.veganStatus)}
+									<Text style={styles.statusText}>
+										{getStatusText(product.veganStatus)}
+									</Text>
+								</View>
 							</View>
 						)}
 					</View>
@@ -264,12 +265,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		marginRight: 12,
 	},
-	topLine: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		marginBottom: 4,
-	},
 	jobMessage: {
 		fontSize: 12,
 		fontWeight: '600',
@@ -316,28 +311,15 @@ const styles = StyleSheet.create({
 		fontSize: 10,
 		fontWeight: 'bold',
 	},
-	statusBadgeSmall: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 10,
-		minWidth: 50,
-		justifyContent: 'center',
-	},
-	statusTextSmall: {
-		color: 'white',
-		fontSize: 8,
-		fontWeight: 'bold',
-	},
 	warningRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		marginTop: 4,
+		marginTop: 8,
 		backgroundColor: '#fff3cd',
-		paddingVertical: 2,
-		paddingHorizontal: 6,
+		paddingVertical: 4,
+		paddingHorizontal: 8,
 		borderRadius: 6,
+		alignSelf: 'flex-start',
 	},
 	warningIcon: {
 		fontSize: 8,
