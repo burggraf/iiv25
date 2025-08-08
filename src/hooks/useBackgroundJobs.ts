@@ -257,10 +257,10 @@ export const useBackgroundJobs = () => {
           console.log(`🎣 [useBackgroundJobs] *** JOB COMPLETED: ${job.jobType} ***`);
           console.log(`🎣 [useBackgroundJobs] Job result:`, job.resultData);
           
-          // CRITICAL FIX: Skip individual job processing for workflow jobs
-          // Workflow jobs should only be processed by NotificationContext workflow logic
+          // CRITICAL FIX: Skip individual job processing for ALL workflow jobs
+          // Workflow jobs are handled exclusively by NotificationContext to prevent duplicate history updates
           if (job.workflowId && job.workflowType) {
-            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is part of workflow ${job.workflowId.slice(-6)} - skipping individual job processing`);
+            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is part of workflow ${job.workflowId.slice(-6)} (${job.workflowType}) - skipping history processing (handled by NotificationContext)`);
           } else {
             console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is an individual job - processing for history updates`);
             // Handle different job types that should mark items as new

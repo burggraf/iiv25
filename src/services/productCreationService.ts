@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { ProductImageUploadService } from './productImageUploadService';
 import { backgroundQueueService } from './backgroundQueueService';
+import { PhotoWorkflowType } from '../types/photoWorkflow';
 
 export interface CreateProductResponse {
   product?: any;
@@ -24,7 +25,7 @@ export class ProductCreationService {
     imageUri?: string,
     workflowContext?: {
       workflowId?: string;
-      workflowType?: 'add_new_product' | 'individual_action';
+      workflowType?: PhotoWorkflowType | 'individual_action';
     }
   ): Promise<CreateProductResponse> {
     try {

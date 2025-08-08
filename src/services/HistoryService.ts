@@ -63,6 +63,10 @@ class HistoryService implements CacheEventListener {
   public async addToHistory(product: Product, isNew: boolean = false, fromBackgroundJob: boolean = false): Promise<void> {
     await this.ensureInitialized();
     
+    console.log(`📚 [HistoryService] *** ADD TO HISTORY CALLED ***`);
+    console.log(`📚 [HistoryService] Product: ${product.barcode}, isNew: ${isNew}, fromBackgroundJob: ${fromBackgroundJob}`);
+    console.log(`📚 [HistoryService] Call stack:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    
     const now = new Date();
     const productWithTimestamp = { ...product, lastScanned: now };
     
@@ -269,6 +273,9 @@ class HistoryService implements CacheEventListener {
    * Clear all history
    */
   public async clearHistory(): Promise<void> {
+    console.log(`📚 [HistoryService] *** CLEAR HISTORY CALLED ***`);
+    console.log(`📚 [HistoryService] Call stack:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    
     this.historyItems = [];
     
     try {
@@ -370,17 +377,34 @@ class HistoryService implements CacheEventListener {
   };
   
   public onCacheInvalidated = async (barcode: string, reason: string): Promise<void> => {
-    // Remove from history when cache is invalidated
+    console.log(`📚 [HistoryService] *** CACHE INVALIDATED ***`);
+    console.log(`📚 [HistoryService] Barcode: ${barcode}, reason: ${reason}`);
+    console.log(`📚 [HistoryService] Call stack:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    
+    // CRITICAL FIX: Don't remove history items during optimized cache invalidation
+    // This happens during background job processing and shouldn't affect history
+    if (reason.includes('optimized cache invalidation')) {
+      console.log(`📚 [HistoryService] Ignoring cache invalidation during background job processing - preserving history`);
+      return;
+    }
+    
+    // Remove from history when cache is invalidated (only for genuine invalidation)
     const itemIndex = this.historyItems.findIndex(item => item.barcode === barcode);
     if (itemIndex !== -1) {
+      console.log(`📚 [HistoryService] Removing ${barcode} from history (was at index ${itemIndex})`);
       this.historyItems.splice(itemIndex, 1);
       await this.persistHistory();
       this.notifyListeners('onHistoryUpdated', this.historyItems);
       console.log(`📚 Removed ${barcode} from history due to cache invalidation: ${reason}`);
+    } else {
+      console.log(`📚 [HistoryService] ${barcode} not found in history, nothing to remove`);
     }
   };
   
   public onCacheCleared = async (): Promise<void> => {
+    console.log(`📚 [HistoryService] *** CACHE CLEARED ***`);
+    console.log(`📚 [HistoryService] Call stack:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    
     // Clear history when entire cache is cleared
     await this.clearHistory();
   };

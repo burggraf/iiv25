@@ -472,7 +472,7 @@ export default function ScannerScreen() {
 		hideOverlay()
 		
 		if (currentBarcode) {
-			router.push(`/product-creation/${currentBarcode}`)
+			router.push(`/product-creation/${currentBarcode}?workflowType=add_new_product`)
 		} else {
 			Alert.alert('Error', 'No barcode found')
 		}

@@ -1,29 +1,10 @@
 import React from 'react'
 import { render, fireEvent, waitFor } from '@testing-library/react-native'
 import JobCompletionCard from '../JobCompletionCard'
-import { JobNotification } from '../../context/NotificationContext'
+import { JobNotification } from '../../context/NotificationContext.refactored'
 import { VeganStatus } from '../../types'
 
-// Mock Animated
-jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper')
-const mockAnimatedValue = {
-	setValue: jest.fn(),
-}
-jest.mock('react-native', () => ({
-	...jest.requireActual('react-native'),
-	Animated: {
-		Value: jest.fn(() => mockAnimatedValue),
-		spring: jest.fn(() => ({ start: jest.fn() })),
-		timing: jest.fn(() => ({ start: jest.fn() })),
-	},
-}))
-
-// Mock SafeAreaInsets
-jest.mock('react-native-safe-area-context', () => ({
-	useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
-}))
-
-// Mock LogoWhite component
+// Mock LogoWhite component  
 jest.mock('../LogoWhite', () => {
 	return function LogoWhite() {
 		return null

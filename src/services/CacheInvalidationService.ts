@@ -120,7 +120,7 @@ class CacheInvalidationService {
       }
     } catch (error) {
       console.error(`❌ [CacheInvalidation] Error handling ${event} for job ${job?.id}:`, error);
-      console.error(`❌ [CacheInvalidation] Error stack:`, error.stack);
+      console.error(`❌ [CacheInvalidation] Error stack:`, (error instanceof Error) ? error.stack : 'No stack trace available');
     }
   }
 
@@ -360,7 +360,6 @@ class CacheInvalidationService {
       
       console.log(`📸 [CacheInvalidation] Step 2: Fresh product lookup result:`, {
         found: !!freshProductResult.product,
-        source: freshProductResult.source,
         imageUrl: freshProductResult.product?.imageUrl,
         barcode: freshProductResult.product?.barcode
       });
@@ -388,7 +387,7 @@ class CacheInvalidationService {
       }
     } catch (error) {
       console.error(`❌ [CacheInvalidation] Error refreshing cache with image for ${upc}:`, error);
-      console.error(`❌ [CacheInvalidation] Error stack:`, error.stack);
+      console.error(`❌ [CacheInvalidation] Error stack:`, (error instanceof Error) ? error.stack : 'No stack trace available');
       console.log(`❌ [CacheInvalidation] Cache refresh FAILED - not falling back to invalidation to preserve history`);
     }
   }

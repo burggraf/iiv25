@@ -9,7 +9,7 @@ import {
 	View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { JobNotification } from '../context/NotificationContext'
+import { JobNotification } from '../context/NotificationContext.refactored'
 import { VeganStatus } from '../types'
 import { ProductImageUrlService } from '../services/productImageUrlService'
 import LogoWhite from './LogoWhite'
@@ -44,8 +44,8 @@ export default function JobCompletionCard({
 			friction: 8,
 		}).start()
 
-		// Auto dismiss after 5 seconds for success, 7 seconds for error
-		const duration = type === 'success' ? 5000 : 7000
+		// Auto dismiss after 8 seconds for success, 10 seconds for error (longer to allow stacking)
+		const duration = type === 'success' ? 8000 : 10000
 		dismissTimeoutRef.current = setTimeout(() => {
 			handleDismiss()
 		}, duration) as any
@@ -158,45 +158,39 @@ export default function JobCompletionCard({
 							)}
 						</View>
 
-						{/* Center: Product Info */}
+						{/* Center: Product Info with status inline */}
 						<View style={styles.centerSection}>
 							{product ? (
 								<>
-									<Text style={styles.productName} numberOfLines={1}>
-										{product.name}
-									</Text>
-									<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 1}>
+									{/* Top line: Product name + small status indicator */}
+									<View style={styles.topLine}>
+										<Text style={styles.productName} numberOfLines={1}>
+											{product.name}
+										</Text>
+										{type !== 'error' && (
+											<View
+												style={[
+													styles.statusBadgeSmall,
+													{ backgroundColor: getStatusColor(product.veganStatus) },
+												]}>
+												{getStatusIcon(product.veganStatus)}
+												<Text style={styles.statusTextSmall}>
+													{getStatusText(product.veganStatus)}
+												</Text>
+											</View>
+										)}
+									</View>
+									{/* Bottom line: Full message with more space */}
+									<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 2}>
 										{message}
 									</Text>
 								</>
 							) : (
-								<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 1}>
+								<Text style={[styles.jobMessage, type === 'error' && styles.errorMessage]} numberOfLines={type === 'error' ? 3 : 2}>
 									{message}
 								</Text>
 							)}
 						</View>
-
-						{/* Right: Status Badge - hidden for errors to show more text */}
-						{type !== 'error' && (
-							<View style={styles.rightSection}>
-								{product ? (
-									<View
-										style={[
-											styles.statusBadge,
-											{ backgroundColor: getStatusColor(product.veganStatus) },
-										]}>
-										{getStatusIcon(product.veganStatus)}
-										<Text style={styles.statusText}>
-											{getStatusText(product.veganStatus)}
-										</Text>
-									</View>
-								) : (
-									<View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
-										<Text style={styles.statusIcon}>✅</Text>
-									</View>
-								)}
-							</View>
-						)}
 							
 						{/* Show warning if there are issues (not for error notifications) */}
 						{product?.veganStatus === VeganStatus.VEGAN && product.issues && product.issues.trim() !== '' && type !== 'error' && (
@@ -270,6 +264,12 @@ const styles = StyleSheet.create({
 		flex: 1,
 		marginRight: 12,
 	},
+	topLine: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		marginBottom: 4,
+	},
 	jobMessage: {
 		fontSize: 12,
 		fontWeight: '600',
@@ -314,6 +314,20 @@ const styles = StyleSheet.create({
 	statusText: {
 		color: 'white',
 		fontSize: 10,
+		fontWeight: 'bold',
+	},
+	statusBadgeSmall: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 10,
+		minWidth: 50,
+		justifyContent: 'center',
+	},
+	statusTextSmall: {
+		color: 'white',
+		fontSize: 8,
 		fontWeight: 'bold',
 	},
 	warningRow: {

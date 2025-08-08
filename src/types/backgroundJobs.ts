@@ -1,3 +1,5 @@
+import { PhotoWorkflowType } from './photoWorkflow';
+
 export type JobType = 'product_creation' | 'ingredient_parsing' | 'product_photo_upload';
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -14,7 +16,7 @@ export interface BackgroundJob {
   
   // Workflow context for grouping related jobs
   workflowId?: string; // Unique ID for grouping related jobs
-  workflowType?: 'add_new_product' | 'individual_action'; // Workflow classification
+  workflowType?: PhotoWorkflowType | 'individual_action'; // Workflow classification
   workflowSteps?: { total: number; current: number }; // Progress tracking
   
   // Input data

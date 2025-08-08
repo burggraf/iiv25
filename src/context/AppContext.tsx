@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Product } from '../types';
 import deviceIdService from '../services/deviceIdService';
 import { historyService, HistoryItem, HistoryEventListener } from '../services/HistoryService';
-import { cacheInvalidationService } from '../services/CacheInvalidationService';
+import { optimizedCacheInvalidationService } from '../services/CacheInvalidationService.optimized';
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs';
 import { cacheService } from '../services/CacheService';
 
@@ -88,22 +88,18 @@ export function AppProvider({ children }: AppProviderProps) {
       await historyService.initialize();
       console.log('🚀 [AppContext] History service initialized');
       
-      // Initialize cache invalidation service
-      console.log('🚀 [AppContext] Step 3: Initializing cache invalidation service...');
+      // Initialize optimized cache invalidation service
+      console.log('🚀 [AppContext] Step 3: Initializing optimized cache invalidation service...');
       console.log('🚀 [AppContext] This service should subscribe to background job events');
-      await cacheInvalidationService.initialize();
-      console.log('🚀 [AppContext] Cache invalidation service initialized');
+      await optimizedCacheInvalidationService.initialize();
+      console.log('🚀 [AppContext] Optimized cache invalidation service initialized');
       
       // Verify the service status
-      const cacheServiceStatus = cacheInvalidationService.getStatus();
-      console.log('🚀 [AppContext] Cache invalidation service status:', cacheServiceStatus);
+      const cacheServiceStatus = optimizedCacheInvalidationService.getStats();
+      console.log('🚀 [AppContext] Optimized cache invalidation service status:', cacheServiceStatus);
       
       if (!cacheServiceStatus.isInitialized) {
-        console.error('❌ [AppContext] Cache invalidation service failed to initialize!');
-      }
-      
-      if (!cacheServiceStatus.isListeningToJobs) {
-        console.error('❌ [AppContext] Cache invalidation service is not listening to job events!');
+        console.error('❌ [AppContext] Optimized cache invalidation service failed to initialize!');
       }
       
       // Load initial history from service
@@ -149,6 +145,13 @@ export function AppProvider({ children }: AppProviderProps) {
   const markAsViewed = useCallback(async (barcode: string) => {
     // Delegate to HistoryService to clear isNew flag
     await historyService.markAsViewed(barcode);
+  }, []);
+
+  // Cleanup services on unmount
+  useEffect(() => {
+    return () => {
+      optimizedCacheInvalidationService.cleanup();
+    };
   }, []);
 
   const value = {

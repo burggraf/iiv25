@@ -16,6 +16,12 @@ jest.mock('../CacheService', () => ({
 jest.mock('../backgroundQueueService', () => ({
   backgroundQueueService: {
     subscribeToJobUpdates: jest.fn(),
+    getQueueStats: jest.fn().mockReturnValue({
+      active: 0,
+      waiting: 0,
+      completed: 0,
+      failed: 0,
+    }),
   }
 }));
 
@@ -375,7 +381,7 @@ describe('CacheInvalidationService', () => {
       
       mockCacheService.setProduct.mockResolvedValue();
       
-      await cacheInvalidationService.refreshProductCache('12345', updatedProduct, 'manual refresh');
+      await cacheInvalidationService.refreshProductCacheWithData('12345', updatedProduct, 'manual refresh');
       
       expect(mockCacheService.setProduct).toHaveBeenCalledWith('12345', updatedProduct);
     });

@@ -25,22 +25,6 @@ export default function HomeScreen() {
 		router.push(`/(tabs)/${tabName}` as any)
 	}
 
-	// Load subscription status
-	useEffect(() => {
-		if (user && deviceId) {
-			loadSubscriptionStatus()
-		}
-	}, [user, deviceId, loadSubscriptionStatus])
-
-	// Auto-open UserAccountModal when openSubscription parameter is present
-	useEffect(() => {
-		if (openSubscription === 'true') {
-			setShowUserModal(true)
-			// Clear the parameter after opening the modal
-			router.setParams({ openSubscription: undefined })
-		}
-	}, [openSubscription])
-
 	const loadSubscriptionStatus = useCallback(async () => {
 		try {
 			if (!deviceId || !user) {
@@ -59,6 +43,22 @@ export default function HomeScreen() {
 			})
 		}
 	}, [deviceId, user])
+
+	// Load subscription status
+	useEffect(() => {
+		if (user && deviceId) {
+			loadSubscriptionStatus()
+		}
+	}, [user, deviceId, loadSubscriptionStatus])
+
+	// Auto-open UserAccountModal when openSubscription parameter is present
+	useEffect(() => {
+		if (openSubscription === 'true') {
+			setShowUserModal(true)
+			// Clear the parameter after opening the modal
+			router.setParams({ openSubscription: undefined })
+		}
+	}, [openSubscription])
 
 	const handleUserModalClose = () => {
 		setShowUserModal(false)

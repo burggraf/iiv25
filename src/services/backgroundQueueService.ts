@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackgroundJob, JobType, JobStatus } from '../types/backgroundJobs';
+import { PhotoWorkflowType } from '../types/photoWorkflow';
 import deviceIdService from './deviceIdService';
 import * as FileSystem from 'expo-file-system';
 import { EventEmitter } from 'eventemitter3';
@@ -43,7 +44,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
     existingProductData?: any;
     priority?: number;
     workflowId?: string;
-    workflowType?: 'add_new_product' | 'individual_action';
+    workflowType?: PhotoWorkflowType | 'individual_action';
     workflowSteps?: { total: number; current: number };
   }): Promise<BackgroundJob> {
     await this.initialize();

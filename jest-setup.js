@@ -19,34 +19,56 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 // Mock React Native modules
-jest.mock('react-native', () => ({
-  Alert: {
-    alert: jest.fn(),
-  },
-  Platform: {
-    OS: 'ios',
-    select: jest.fn(),
-  },
-  Dimensions: {
-    get: jest.fn(() => ({ width: 375, height: 812 })),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-  },
-  NativeModules: {
-    RNIapAmazonModule: {},
-    RNIapModule: {},
-    RNIapIosModule: {},
-  },
-  StyleSheet: {
-    create: jest.fn((styles) => styles),
-    flatten: jest.fn(),
-  },
-  View: 'View',
-  Text: 'Text',
-  TouchableOpacity: 'TouchableOpacity',
-  ScrollView: 'ScrollView',
-  SafeAreaView: 'SafeAreaView',
-}));
+jest.mock('react-native', () => {
+  const mockAnimatedValue = {
+    setValue: jest.fn(),
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    removeAllListeners: jest.fn(),
+  };
+  
+  return {
+    Alert: {
+      alert: jest.fn(),
+    },
+    Platform: {
+      OS: 'ios',
+      select: jest.fn(),
+    },
+    Dimensions: {
+      get: jest.fn(() => ({ width: 375, height: 812 })),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    },
+    NativeModules: {
+      RNIapAmazonModule: {},
+      RNIapModule: {},
+      RNIapIosModule: {},
+    },
+    StyleSheet: {
+      create: jest.fn((styles) => styles),
+      flatten: jest.fn(),
+    },
+    Animated: {
+      Value: jest.fn(() => mockAnimatedValue),
+      spring: jest.fn(() => ({ start: jest.fn() })),
+      timing: jest.fn(() => ({ start: jest.fn() })),
+      View: jest.fn().mockImplementation(({ children }) => children),
+      Text: jest.fn().mockImplementation(({ children }) => children),
+    },
+    AppState: {
+      currentState: 'active',
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    },
+    View: 'View',
+    Text: 'Text',
+    Image: 'Image',
+    TouchableOpacity: 'TouchableOpacity',
+    ScrollView: 'ScrollView',
+    SafeAreaView: 'SafeAreaView',
+  };
+});
 
 // Mock the services - Note: Individual test files should mock services as needed
 // jest.mock('./src/services/productLookupService', () => ({
@@ -203,6 +225,71 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true }),
   MediaTypeOptions: {
     Images: 'Images',
+  },
+}));
+
+// Mock Expo Router
+jest.mock('expo-router', () => ({
+  useRouter: jest.fn(() => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    canGoBack: jest.fn(() => true),
+  })),
+  useLocalSearchParams: jest.fn(() => ({})),
+  useSegments: jest.fn(() => []),
+  useRootNavigationState: jest.fn(() => ({ key: 'root', routeNames: [] })),
+  Redirect: ({ href }: any) => `Redirect to ${href}`,
+  Link: ({ href, children }: any) => `Link to ${href}: ${children}`,
+  Stack: {
+    Screen: ({ name, options }: any) => `Stack.Screen ${name}`,
+  },
+  Tabs: {
+    Screen: ({ name, options }: any) => `Tabs.Screen ${name}`,
+  },
+  Slot: 'Slot',
+  router: {
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    canGoBack: jest.fn(() => true),
+  },
+}));
+
+// Mock expo-linking
+jest.mock('expo-linking', () => ({
+  createURL: jest.fn((path) => `exp://127.0.0.1:19000/${path}`),
+  parse: jest.fn((url) => ({ path: url.split('/').pop() })),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+}));
+
+// Mock expo-font
+jest.mock('expo-font', () => ({
+  loadAsync: jest.fn(),
+  isLoaded: jest.fn(() => true),
+  isLoading: jest.fn(() => false),
+}));
+
+// Mock expo-file-system
+jest.mock('expo-file-system', () => ({
+  DocumentDirectoryPath: '/mock/documents/',
+  CacheDirectoryPath: '/mock/cache/',
+  readAsStringAsync: jest.fn(() => Promise.resolve('mock-base64-content')),
+  writeAsStringAsync: jest.fn(() => Promise.resolve()),
+  deleteAsync: jest.fn(() => Promise.resolve()),
+  getInfoAsync: jest.fn(() => Promise.resolve({
+    exists: true,
+    isDirectory: false,
+    size: 1024,
+    modificationTime: 1620000000000,
+  })),
+  makeDirectoryAsync: jest.fn(() => Promise.resolve()),
+  copyAsync: jest.fn(() => Promise.resolve()),
+  moveAsync: jest.fn(() => Promise.resolve()),
+  EncodingType: {
+    UTF8: 'utf8',
+    Base64: 'base64',
   },
 }));
 

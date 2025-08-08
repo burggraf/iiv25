@@ -210,18 +210,18 @@ export default function ProductResult({
 	}
 
 	const handleTakePhoto = () => {
-		router.push(`/report-issue/${currentProduct.barcode}/product`)
+		router.push(`/report-issue/${currentProduct.barcode}/product?workflowType=report_product_issue`)
 	}
 
 	const showReportIssueAlert = () => {
 		Alert.alert('Report an issue', 'What would you like to update?', [
 			{
 				text: 'Take photo of product',
-				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/product`),
+				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/product?workflowType=report_product_issue`),
 			},
 			{
 				text: 'Take photo of ingredients',
-				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/ingredients`),
+				onPress: () => router.push(`/report-issue/${currentProduct.barcode}/ingredients?workflowType=report_ingredients_issue`),
 			},
 			{
 				text: 'Cancel',
@@ -525,7 +525,7 @@ export default function ProductResult({
 				)}
 
 				{/* Ingredients */}
-				{currentProduct.ingredients.length > 0 && (
+				{currentProduct.ingredients && currentProduct.ingredients.length > 0 && (
 					<View style={styles.ingredientsSection}>
 						<Text style={styles.sectionTitle}>All Ingredients:</Text>
 						<View style={styles.ingredientsList}>

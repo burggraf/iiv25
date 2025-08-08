@@ -83,7 +83,7 @@ class CacheService {
   public async setProduct(barcode: string, product: Product): Promise<void> {
     console.log(`💾 [CacheService] *** SETTING PRODUCT IN CACHE ***`);
     console.log(`💾 [CacheService] Barcode: ${barcode}`);
-    console.log(`💾 [CacheService] Product name: ${product.product_name}`);
+    console.log(`💾 [CacheService] Product name: ${product.name}`);
     console.log(`💾 [CacheService] Product image URL: ${product.imageUrl}`);
     console.log(`💾 [CacheService] Timestamp: ${new Date().toISOString()}`);
     
@@ -399,7 +399,7 @@ class CacheService {
           console.log(`✅ [CacheService] Listener ${i + 1} successfully notified`);
         } catch (error) {
           console.error(`❌ [CacheService] Error in cache event listener ${i + 1}:`, error);
-          console.error(`❌ [CacheService] Error stack:`, error.stack);
+          console.error(`❌ [CacheService] Error stack:`, (error instanceof Error) ? error.stack : 'No stack trace available');
         }
       } else {
         console.log(`⚠️ [CacheService] Listener ${i + 1} has no handler for event: ${String(event)}`);

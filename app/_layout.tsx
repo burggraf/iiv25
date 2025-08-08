@@ -13,7 +13,7 @@ import { View } from 'react-native';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { AppProvider } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
-import { NotificationProvider } from '../src/context/NotificationContext';
+import { NotificationProvider } from '../src/context/NotificationContext.refactored';
 import EnvironmentBanner from '../src/components/EnvironmentBanner';
 
 // Keep the splash screen visible while we fetch resources
