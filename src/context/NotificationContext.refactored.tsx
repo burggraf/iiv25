@@ -122,17 +122,40 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             console.log(`📚 [NotificationContext] Skipping history update for ${job.jobType} job in add_new_product workflow`);
           }
         } else if (job.workflowType === 'report_product_issue' || job.workflowType === 'report_ingredients_issue') {
-          // Update existing history entry with fresh data from report issue workflows
-          const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
-          if (existingHistoryItem) {
-            // Preserve isNew flag for existing items
-            const preserveIsNew = existingHistoryItem.isNew || false;
-            await handleHistoryUpdate(product, preserveIsNew);
-            console.log(`📚 [NotificationContext] Updated history with fresh data from ${job.workflowType} - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+          if (job.jobType === 'product_creation') {
+            // Update existing history entry with fresh data
+            const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
+            if (existingHistoryItem) {
+              // Preserve isNew flag for existing items
+              const preserveIsNew = existingHistoryItem.isNew || false;
+              await handleHistoryUpdate(product, preserveIsNew);
+              console.log(`📚 [NotificationContext] Updated history with fresh data from ${job.workflowType} - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+            } else {
+              // If product not in history, add it as non-new (since user is reporting an issue on existing product)
+              await handleHistoryUpdate(product, false);
+              console.log(`📚 [NotificationContext] Added product to history from ${job.workflowType} - isNew: false (job: ${job.jobType})`);
+            }
+            
+            // Skip notification ONLY for SUCCESS cases - still show errors
+            if (!hasJobError(job)) {
+              console.log(`📚 [NotificationContext] Skipping successful product_creation notification for ${job.workflowType} to reduce user confusion`);
+              return;
+            }
+            console.log(`📚 [NotificationContext] Showing error notification for failed product_creation in ${job.workflowType}`);
+            // Continue to create error notification below
           } else {
-            // If product not in history, add it as non-new (since user is reporting an issue on existing product)
-            await handleHistoryUpdate(product, false);
-            console.log(`📚 [NotificationContext] Added product to history from ${job.workflowType} - isNew: false (job: ${job.jobType})`);
+            // Update existing history entry with fresh data from report issue workflows for non-product_creation jobs
+            const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
+            if (existingHistoryItem) {
+              // Preserve isNew flag for existing items
+              const preserveIsNew = existingHistoryItem.isNew || false;
+              await handleHistoryUpdate(product, preserveIsNew);
+              console.log(`📚 [NotificationContext] Updated history with fresh data from ${job.workflowType} - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+            } else {
+              // If product not in history, add it as non-new (since user is reporting an issue on existing product)
+              await handleHistoryUpdate(product, false);
+              console.log(`📚 [NotificationContext] Added product to history from ${job.workflowType} - isNew: false (job: ${job.jobType})`);
+            }
           }
         } else {
           console.log(`📚 [NotificationContext] Unknown workflow type: ${job.workflowType}, skipping history update`);
@@ -176,8 +199,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
    */
   const getProductFromJob = async (job: BackgroundJob): Promise<Product | null> => {
     try {
-      // Always use fresh lookup to ensure proper data transformation
-      console.log(`🔔 [NotificationContext] Looking up product ${job.upc} for consistent data format`);
+      // First try to use job result data (fresher, includes updated photos)
+      const { transformJobResultToProduct } = require('../utils/jobResultTransform');
+      const productFromJobResult = await transformJobResultToProduct(job);
+      
+      if (productFromJobResult) {
+        console.log(`🔔 [NotificationContext] Using fresh product data from job result for ${job.upc}`);
+        return productFromJobResult;
+      }
+      
+      // Fallback to fresh lookup if job result transformation fails
+      console.log(`🔔 [NotificationContext] Job result transformation failed, doing fresh lookup for ${job.upc}`);
       const { ProductLookupService } = require('../services/productLookupService');
       const result = await ProductLookupService.lookupProductByBarcode(job.upc, { 
         context: 'NotificationContext' 
@@ -193,6 +225,20 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
    * Creates appropriate message for job completion (without redundant product name)
    */
   const getJobCompletionMessage = (job: BackgroundJob, product: Product | null): string => {
+    // Check if job has errors first
+    if (hasJobError(job)) {
+      // Return error messages for failed jobs in report workflows
+      if (job.workflowType === 'report_product_issue' && job.jobType === 'product_creation') {
+        return `Invalid product photo - please try again`;
+      }
+      if (job.workflowType === 'report_ingredients_issue' && job.jobType === 'product_creation') {
+        return `Invalid ingredients photo - please try again`;
+      }
+      // Default error message for other failed jobs
+      return `❌ Job failed - please try again`;
+    }
+    
+    // Success messages for completed jobs
     switch (job.jobType) {
       case 'product_creation':
         return `✅ Product created successfully!`;

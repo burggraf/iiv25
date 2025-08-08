@@ -121,10 +121,19 @@ export const transformJobResultToProduct = async (job: BackgroundJob): Promise<P
       }
     };
 
-    // Resolve image URL using the same logic as ProductLookupService
-    const resolveImageUrl = async (imageUrl: string | null | undefined, upc: string): Promise<string | undefined> => {
+    // Resolve image URL using the same logic as ProductLookupService, with cache busting for fresh uploads
+    const resolveImageUrl = async (imageUrl: string | null | undefined, upc: string, isFreshUpload = false): Promise<string | undefined> => {
       const { ProductImageUrlService } = await import('../services/productImageUrlService');
-      return ProductImageUrlService.resolveImageUrl(imageUrl, upc) || undefined;
+      let resolvedUrl = ProductImageUrlService.resolveImageUrl(imageUrl, upc);
+      
+      // Add cache busting for fresh photo uploads to ensure new image is displayed
+      if (resolvedUrl && isFreshUpload && !resolvedUrl.includes('?')) {
+        const timestamp = Date.now();
+        resolvedUrl = `${resolvedUrl}?t=${timestamp}`;
+        console.log(`🔄 [transformJobResultToProduct] Added cache busting for fresh upload: ${resolvedUrl}`);
+      }
+      
+      return resolvedUrl || undefined;
     };
 
     // Transform to Product interface
@@ -137,7 +146,7 @@ export const transformJobResultToProduct = async (job: BackgroundJob): Promise<P
         ? productData.ingredients.split(',').map((i: string) => i.trim())
         : [],
       veganStatus: getVeganStatus(classification),
-      imageUrl: await resolveImageUrl(productData.imageurl, job.upc),
+      imageUrl: await resolveImageUrl(productData.imageurl, job.upc, job.jobType === 'product_photo_upload'),
       issues: productData.issues || undefined,
       lastScanned: new Date(),
       classificationMethod: 'structured' // Since this came from our classification system
