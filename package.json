@@ -1,7 +1,7 @@
 {
   "name": "isitvegan",
   "main": "expo-router/entry",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "scripts": {
     "start": "expo start",
     "tunnel": "expo start --tunnel",
