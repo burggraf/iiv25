@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import ProductResult from './ProductResult';
 import ManualIcon from './icons/ManualIcon';
@@ -28,24 +28,25 @@ export default function ProductDisplayContainer({
   const { markAsViewed } = useApp();
   const containerStyle = useAbsolutePositioning ? styles.overlayContainer : styles.fullScreenContainer;
 
-  // Mark as viewed when product is displayed
-  useEffect(() => {
+  // Handle back button press - mark as viewed when user dismisses the product view
+  const handleBackPress = () => {
     if (product?.barcode) {
       markAsViewed(product.barcode);
-      console.log(`📱 Marked product ${product.barcode} as viewed`);
+      console.log(`📱 Marked product ${product.barcode} as viewed when dismissing`);
     }
-  }, [product?.barcode, markAsViewed]);
+    onBack();
+  };
   
   return (
     <View style={containerStyle}>
       <ProductResult 
         product={product} 
-        onBack={onBack} 
+        onBack={handleBackPress} 
         hideHeaderBackButton={true}
         onProductUpdated={onProductUpdated} 
       />
       <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={onBack} style={styles.backButtonContainer}>
+        <TouchableOpacity onPress={handleBackPress} style={styles.backButtonContainer}>
           <View style={styles.backButtonContent}>
             {iconType === 'scanner' && <BarcodeIcon size={18} color="#666" />}
             {iconType === 'history' && <HistoryIcon size={18} color="#666" />}

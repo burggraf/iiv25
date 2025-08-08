@@ -85,11 +85,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
    * Processes completed jobs
    */
   const handleJobCompleted = useCallback(async (job: BackgroundJob) => {
-    console.log(`🔔 [NotificationContext] Job completed: ${job.id.slice(-6)} (${job.jobType})`);
+    console.log(`🔔 [NotificationContext.refactored] *** JOB COMPLETION EVENT RECEIVED ***`);
+    console.log(`🔔 [NotificationContext.refactored] Job: ${job.id.slice(-6)}, Type: ${job.jobType}, WorkflowType: ${job.workflowType || 'none'}`);
     
     // Skip if already processed
     if (workflowHandler.hasProcessedJob(job.id)) {
-      console.log(`🔔 [NotificationContext] Job ${job.id.slice(-6)} already processed, skipping`);
+      console.log(`🔔 [NotificationContext.refactored] Job ${job.id.slice(-6)} already processed, skipping`);
       return;
     }
     
@@ -145,16 +146,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             // Continue to create error notification below
           } else {
             // Update existing history entry with fresh data from report issue workflows for non-product_creation jobs
-            const existingHistoryItem = historyService.getHistory().find(item => item.barcode === product.barcode);
-            if (existingHistoryItem) {
-              // Preserve isNew flag for existing items
-              const preserveIsNew = existingHistoryItem.isNew || false;
-              await handleHistoryUpdate(product, preserveIsNew);
-              console.log(`📚 [NotificationContext] Updated history with fresh data from ${job.workflowType} - preserving isNew: ${preserveIsNew} (job: ${job.jobType})`);
+            // For photo uploads and ingredient parsing, mark as NEW to show badge/star indicators
+            const isPhotoOrIngredientUpdate = job.jobType === 'product_photo_upload' || job.jobType === 'ingredient_parsing';
+            const markAsNew = isPhotoOrIngredientUpdate;
+            
+            await handleHistoryUpdate(product, markAsNew);
+            
+            if (isPhotoOrIngredientUpdate) {
+              console.log(`📚 [NotificationContext] ✅ MARKED AS NEW: Updated history after ${job.jobType} - isNew: ${markAsNew} (will show badge/star)`);
             } else {
-              // If product not in history, add it as non-new (since user is reporting an issue on existing product)
-              await handleHistoryUpdate(product, false);
-              console.log(`📚 [NotificationContext] Added product to history from ${job.workflowType} - isNew: false (job: ${job.jobType})`);
+              console.log(`📚 [NotificationContext] Updated history from ${job.workflowType} - isNew: ${markAsNew} (job: ${job.jobType})`);
             }
           }
         } else {

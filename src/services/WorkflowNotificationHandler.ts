@@ -21,7 +21,7 @@ export interface JobNotification {
 }
 
 interface WorkflowState {
-  type: 'add_new_product' | 'individual_action';
+  type: 'add_new_product' | 'individual_action' | 'report_product_issue';
   completedJobs: Set<string>;
   failedJobs: Set<string>;
   errorTypes: Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>;
@@ -229,18 +229,35 @@ export class WorkflowNotificationHandler {
         onNotificationCreated(notification);
       }
       
-      // Handle history updates for successful product creation workflows
-      const productCreationSucceeded = !current.errorTypes.has('product_creation');
-      
-      if (productCreationSucceeded && current.latestProduct && current.type === 'add_new_product' && onHistoryUpdate) {
-        const statusMessage = hasErrors ? 'with some errors' : 'successfully';
-        console.log(`🔔 [WorkflowNotification] Updating history: Workflow completed ${statusMessage}`);
+      // Handle history updates for workflows
+      if (current.latestProduct && onHistoryUpdate) {
+        const productCreationSucceeded = !current.errorTypes.has('product_creation');
         
-        try {
-          await onHistoryUpdate(current.latestProduct, true);
-          console.log(`✅ [WorkflowNotification] Successfully updated history for workflow`);
-        } catch (error) {
-          console.error(`❌ [WorkflowNotification] Error updating history:`, error);
+        // For add_new_product workflows, only add to history if product creation succeeded
+        // For individual_action and report_product_issue workflows, add to history if workflow completed (regardless of minor errors)
+        const shouldAddToHistory = current.type === 'add_new_product' 
+          ? productCreationSucceeded 
+          : true; // individual_action and report_product_issue workflows should always update history when they have a product
+          
+        if (shouldAddToHistory) {
+          const statusMessage = hasErrors ? 'with some errors' : 'successfully';
+          console.log(`🔔 [WorkflowNotification] Updating history: ${current.type} workflow completed ${statusMessage}`);
+          
+          try {
+            await onHistoryUpdate(current.latestProduct, true);
+            console.log(`✅ [WorkflowNotification] Successfully updated history for ${current.type} workflow: ${current.latestProduct.barcode}`);
+          } catch (error) {
+            console.error(`❌ [WorkflowNotification] Error updating history for ${current.type} workflow:`, error);
+          }
+        } else {
+          console.log(`🔔 [WorkflowNotification] ❌ NOT ADDING TO HISTORY for ${current.type} workflow: product creation failed`);
+        }
+      } else {
+        if (!current.latestProduct) {
+          console.log(`🔔 [WorkflowNotification] ❌ NOT ADDING TO HISTORY: No latestProduct available`);
+        }
+        if (!onHistoryUpdate) {
+          console.log(`🔔 [WorkflowNotification] ❌ NOT ADDING TO HISTORY: No onHistoryUpdate callback provided`);
         }
       }
       
