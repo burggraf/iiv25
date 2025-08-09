@@ -40,7 +40,7 @@ import { SoundUtils } from '../utils/soundUtils'
 import { BackgroundJobsIndicator } from '../components/BackgroundJobsIndicator'
 import { JobStatusModal } from '../components/JobStatusModal'
 // Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext
-import { backgroundQueueService } from '../services/backgroundQueueService'
+import { jobEventManager } from '../services/JobEventManager'
 import { transformJobResultToProduct } from '../utils/jobResultTransform'
 import { BackgroundJob } from '../types/backgroundJobs'
 import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
@@ -113,21 +113,21 @@ export default function ScannerScreen() {
 
 	// Listen to job completion events to avoid redundant ProductLookupService calls
 	useEffect(() => {
-		console.log(`🎯 [ScannerScreen] Setting up job completion listener`)
+		if (__DEV__) console.log(`🎯 [ScannerScreen] Setting up job completion listener`)
 		
-		const unsubscribe = backgroundQueueService.subscribeToJobUpdates(async (event, job) => {
+		const unsubscribe = jobEventManager.subscribe('ScannerScreen', async (event, job) => {
 			if (event === 'job_completed' && job && job.upc === currentBarcode) {
-				console.log(`🎯 [ScannerScreen] Job completed for current barcode: ${job.jobType}`)
+				if (__DEV__) console.log(`🎯 [ScannerScreen] Job completed for current barcode: ${job.jobType}`)
 				
 				// Check if we have a callback waiting for this job
 				const callback = pendingJobCallbacks.get(job.id)
 				if (callback) {
-					console.log(`🎯 [ScannerScreen] Found pending callback for job ${job.id.slice(-6)}`)
+					if (__DEV__) console.log(`🎯 [ScannerScreen] Found pending callback for job ${job.id.slice(-6)}`)
 					
 					// Try to get product data from job result instead of fresh lookup
 					const productFromJob = await transformJobResultToProduct(job)
 					if (productFromJob) {
-						console.log(`🎯 [ScannerScreen] Using product data from job result - avoiding ProductLookupService call`)
+						if (__DEV__) console.log(`🎯 [ScannerScreen] Using product data from job result - avoiding ProductLookupService call`)
 						callback(productFromJob)
 						
 						// Remove the callback

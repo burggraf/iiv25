@@ -4,34 +4,45 @@ import { PhotoWorkflowType } from '../types/photoWorkflow';
 import deviceIdService from './deviceIdService';
 import * as FileSystem from 'expo-file-system';
 import { EventEmitter } from 'eventemitter3';
+import { AppState } from 'react-native';
 
 const STORAGE_KEY_JOBS = 'background_jobs';
 const STORAGE_KEY_COMPLETED_JOBS = 'completed_background_jobs';
-const MAX_COMPLETED_JOBS = 20; // Keep last 20 completed jobs (reduced from 50)
-const MAX_ACTIVE_JOBS = 10; // Maximum active jobs allowed
+const MAX_COMPLETED_JOBS = 15; // Keep last 15 completed jobs (reduced from 20)
+const MAX_ACTIVE_JOBS = 8; // Maximum active jobs allowed (reduced from 10)
+const MAX_PROCESSING_JOBS = 2; // Maximum concurrent processing jobs
 
 class BackgroundQueueServiceClass extends EventEmitter {
   private jobs: BackgroundJob[] = [];
   private processingJobs = new Set<string>();
   private initialized = false;
+  private processingBackoff = 1000; // Start with 1 second
+  private maxBackoff = 30000; // Max 30 seconds
+  private processingTimeoutId?: any;
 
   async initialize(): Promise<void> {
     if (this.initialized) {
-      console.log(`🔧 [BackgroundQueue] Already initialized`);
+      if (__DEV__) console.log(`🔧 [BackgroundQueue] Already initialized`);
       return;
     }
     
-    console.log(`🚀 [BackgroundQueue] Initializing background queue service`);
+    if (__DEV__) console.log(`🚀 [BackgroundQueue] Initializing background queue service`);
     await this.loadJobsFromStorage();
     this.initialized = true;
     
-    console.log(`📋 [BackgroundQueue] Loaded ${this.jobs.length} jobs from storage`);
+    if (__DEV__) console.log(`📋 [BackgroundQueue] Loaded ${this.jobs.length} jobs from storage`);
     
     // Clean up any stuck jobs first
     await this.cleanupStuckJobs();
     
     // Resume any processing jobs that were interrupted
     await this.resumeInterruptedJobs();
+    
+    // Set up app state listener for smart processing
+    this.resumeProcessingOnAppActive();
+    
+    // Set up automatic garbage collection
+    this.startPeriodicCleanup();
   }
 
   /**
@@ -49,15 +60,17 @@ class BackgroundQueueServiceClass extends EventEmitter {
   }): Promise<BackgroundJob> {
     await this.initialize();
     
-    // CRITICAL: Prevent duplicate jobs
+    // CRITICAL: Enhanced duplicate prevention with workflow awareness
     const existingJob = this.jobs.find(job => 
       job.jobType === params.jobType && 
       job.upc === params.upc && 
-      (job.status === 'queued' || job.status === 'processing')
+      (job.status === 'queued' || job.status === 'processing') &&
+      // Allow workflow jobs if they have different workflow IDs
+      (!params.workflowId || !job.workflowId || job.workflowId === params.workflowId)
     );
     
     if (existingJob) {
-      console.log(`⚠️ [BackgroundQueue] Duplicate job prevented: ${existingJob.id.slice(-6)} already ${existingJob.status} for ${params.jobType}/${params.upc}`);
+      if (__DEV__) console.log(`⚠️ [BackgroundQueue] Duplicate job prevented: ${existingJob.id.slice(-6)} already ${existingJob.status} for ${params.jobType}/${params.upc}`);
       return existingJob;
     }
 
@@ -78,7 +91,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
     const randomPart = Math.random().toString(36).substr(2, 12);
     const jobId = `job_${timestamp}_${microseconds.slice(-6)}_${randomPart}`;
     
-    console.log(`🚀 [BackgroundQueue] Queueing job ${jobId}: ${params.jobType} for UPC ${params.upc}`);
+    if (__DEV__) console.log(`🚀 [BackgroundQueue] Queueing job ${jobId}: ${params.jobType} for UPC ${params.upc}`);
     
     // Get image metadata
     const imageInfo = await FileSystem.getInfoAsync(params.imageUri);
@@ -108,8 +121,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
     this.jobs.push(job);
     await this.saveJobsToStorage();
     
-    console.log(`📋 [BackgroundQueue] Queue now has ${this.jobs.length} jobs. Current queue:`, 
-      this.jobs.map(j => `${j.id.slice(-6)} (${j.jobType}, ${j.status}, pri:${j.priority}, upc:${j.upc})`));
+    if (__DEV__) console.log(`📋 [BackgroundQueue] Queue now has ${this.jobs.length} jobs`);
     
     this.emit('job_added', job);
     
@@ -233,22 +245,51 @@ class BackgroundQueueServiceClass extends EventEmitter {
   private async processNextJob(): Promise<void> {
     // Find the highest priority queued job
     const queuedJobs = this.jobs.filter(job => job.status === 'queued');
-    const nextJob = queuedJobs
-      .sort((a, b) => b.priority - a.priority || a.createdAt.getTime() - b.createdAt.getTime())[0];
     
-    console.log(`🔍 [BackgroundQueue] Looking for next job. Queued: ${queuedJobs.length}, Processing: ${this.processingJobs.size}`);
+    // Limit concurrent processing to prevent resource exhaustion
+    if (this.processingJobs.size >= MAX_PROCESSING_JOBS) {
+      if (__DEV__) console.log(`⏸️ [BackgroundQueue] Max processing jobs (${MAX_PROCESSING_JOBS}) reached, waiting`);
+      return;
+    }
+    
+    const nextJob = queuedJobs
+      .sort((a, b) => {
+        // First, sort by priority (higher priority first)
+        if (a.priority !== b.priority) {
+          return b.priority - a.priority;
+        }
+        
+        // Then, prioritize certain job types for better user experience
+        const jobTypePriority = {
+          'product_photo_upload': 3,    // Highest - quick visual feedback
+          'ingredient_parsing': 2,       // Medium - analysis feedback
+          'product_creation': 1,         // Lower - comprehensive but slower
+        };
+        
+        const aPriority = jobTypePriority[a.jobType] || 0;
+        const bPriority = jobTypePriority[b.jobType] || 0;
+        
+        if (aPriority !== bPriority) {
+          return bPriority - aPriority;
+        }
+        
+        // Finally, sort by creation time (oldest first)
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      })[0];
+    
+    if (__DEV__) console.log(`🔍 [BackgroundQueue] Looking for next job. Queued: ${queuedJobs.length}, Processing: ${this.processingJobs.size}/${MAX_PROCESSING_JOBS}`);
     
     if (!nextJob) {
-      console.log(`✅ [BackgroundQueue] No jobs to process. Queue is empty.`);
+      if (__DEV__) console.log(`✅ [BackgroundQueue] No jobs to process. Queue is empty.`);
       return;
     }
     
     if (this.processingJobs.has(nextJob.id)) {
-      console.log(`⏭️ [BackgroundQueue] Job ${nextJob.id.slice(-6)} already processing, skipping`);
+      if (__DEV__) console.log(`⏭️ [BackgroundQueue] Job ${nextJob.id.slice(-6)} already processing, skipping`);
       return;
     }
     
-    console.log(`▶️ [BackgroundQueue] Starting job ${nextJob.id.slice(-6)}: ${nextJob.jobType} for UPC ${nextJob.upc}`);
+    if (__DEV__) console.log(`▶️ [BackgroundQueue] Starting job ${nextJob.id.slice(-6)}: ${nextJob.jobType} for UPC ${nextJob.upc}`);
     this.processingJobs.add(nextJob.id);
     
     try {
@@ -257,10 +298,111 @@ class BackgroundQueueServiceClass extends EventEmitter {
       console.error(`❌ [BackgroundQueue] Error processing job ${nextJob.id.slice(-6)}:`, error);
     } finally {
       this.processingJobs.delete(nextJob.id);
-      console.log(`🏁 [BackgroundQueue] Finished processing job ${nextJob.id.slice(-6)}`);
+      if (__DEV__) console.log(`🏁 [BackgroundQueue] Finished processing job ${nextJob.id.slice(-6)}`);
       
-      // Process next job
-      setTimeout(() => this.processNextJob(), 1000);
+      // Schedule next job with exponential backoff and app state awareness
+      this.scheduleNextJobProcessing();
+    }
+  }
+
+  /**
+   * Schedule next job processing with exponential backoff and app state awareness
+   */
+  private scheduleNextJobProcessing(): void {
+    // Clear any existing timeout
+    if (this.processingTimeoutId) {
+      clearTimeout(this.processingTimeoutId);
+    }
+
+    // Don't schedule processing if app is backgrounded to save battery
+    if (AppState.currentState !== 'active') {
+      if (__DEV__) console.log(`⏸️ [BackgroundQueue] App backgrounded, pausing job processing`);
+      return;
+    }
+
+    // Check if there are any jobs to process
+    const queuedJobs = this.jobs.filter(job => job.status === 'queued');
+    
+    if (queuedJobs.length === 0) {
+      // No jobs to process, reset backoff
+      this.processingBackoff = 1000;
+      if (__DEV__) console.log(`✅ [BackgroundQueue] No jobs to process, standing by`);
+      return;
+    }
+
+    // Use exponential backoff if processing is struggling
+    const delay = this.processingBackoff;
+    
+    if (__DEV__) console.log(`⏰ [BackgroundQueue] Scheduling next job processing in ${delay}ms (${queuedJobs.length} queued)`);
+    
+    this.processingTimeoutId = setTimeout(() => {
+      this.processNextJob();
+    }, delay);
+  }
+
+  /**
+   * Resume processing when app becomes active
+   */
+  private resumeProcessingOnAppActive(): void {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        if (__DEV__) console.log(`▶️ [BackgroundQueue] App became active, resuming job processing`);
+        // Reset backoff when app becomes active
+        this.processingBackoff = 1000;
+        this.scheduleNextJobProcessing();
+      }
+    };
+
+    AppState.addEventListener('change', handleAppStateChange);
+  }
+
+  /**
+   * Start periodic cleanup to prevent memory leaks
+   */
+  private startPeriodicCleanup(): void {
+    // Run cleanup every 15 minutes
+    setInterval(() => {
+      this.performPeriodicCleanup();
+    }, 15 * 60 * 1000);
+  }
+
+  /**
+   * Perform periodic cleanup of old data
+   */
+  private async performPeriodicCleanup(): Promise<void> {
+    try {
+      if (__DEV__) console.log('🧹 [BackgroundQueue] Starting periodic cleanup');
+      
+      // Clean up stuck jobs
+      const stuckJobsCleared = await this.cleanupStuckJobs();
+      
+      // Trim completed jobs if too many
+      const completedJobs = await this.getCompletedJobs();
+      if (completedJobs.length > MAX_COMPLETED_JOBS) {
+        const trimmedJobs = completedJobs.slice(0, MAX_COMPLETED_JOBS);
+        await AsyncStorage.setItem(STORAGE_KEY_COMPLETED_JOBS, JSON.stringify(trimmedJobs));
+        if (__DEV__) console.log(`🧹 [BackgroundQueue] Trimmed completed jobs: ${completedJobs.length} → ${trimmedJobs.length}`);
+      }
+      
+      // Clean up processing set of any orphaned job IDs
+      const activeJobIds = new Set(this.jobs.map(job => job.id));
+      let orphanedProcessingJobs = 0;
+      
+      this.processingJobs.forEach(jobId => {
+        if (!activeJobIds.has(jobId)) {
+          this.processingJobs.delete(jobId);
+          orphanedProcessingJobs++;
+        }
+      });
+      
+      if (orphanedProcessingJobs > 0 && __DEV__) {
+        console.log(`🧹 [BackgroundQueue] Removed ${orphanedProcessingJobs} orphaned processing job IDs`);
+      }
+      
+      if (__DEV__) console.log(`✅ [BackgroundQueue] Periodic cleanup completed`);
+      
+    } catch (error) {
+      console.error('❌ [BackgroundQueue] Error during periodic cleanup:', error);
     }
   }
 
@@ -271,7 +413,7 @@ class BackgroundQueueServiceClass extends EventEmitter {
     const timeoutMs = 60000; // 60 second timeout
     
     try {
-      console.log(`🔄 [BackgroundQueue] Processing ${job.id.slice(-6)}: ${job.jobType} for UPC ${job.upc}`);
+      if (__DEV__) console.log(`🔄 [BackgroundQueue] Processing ${job.id.slice(-6)}: ${job.jobType} for UPC ${job.upc}`);
       
       // Update job status
       job.status = 'processing';
@@ -308,16 +450,18 @@ class BackgroundQueueServiceClass extends EventEmitter {
       // Race between processing and timeout
       const result = await Promise.race([processingPromise, timeoutPromise]);
       
-      console.log(`✅ [BackgroundQueue] Job ${job.id.slice(-6)} completed successfully. Result type: ${typeof result}, has error: ${result?.error ? 'yes' : 'no'}`);
+      if (__DEV__) console.log(`✅ [BackgroundQueue] Job ${job.id.slice(-6)} completed successfully`);
       
-      // Job completed successfully
+      // Job completed successfully - reset backoff
+      this.processingBackoff = 1000;
+      
       job.status = 'completed';
       job.completedAt = new Date();
       job.resultData = result;
       
       try {
         await this.moveJobToCompleted(job);
-        console.log(`📦 [BackgroundQueue] Job ${job.id.slice(-6)} moved to completed storage`);
+        if (__DEV__) console.log(`📦 [BackgroundQueue] Job ${job.id.slice(-6)} moved to completed storage`);
       } catch (error) {
         console.error(`📦 [BackgroundQueue] Error moving job ${job.id.slice(-6)} to completed:`, error);
         // Continue anyway - we don't want to lose the job
@@ -325,24 +469,23 @@ class BackgroundQueueServiceClass extends EventEmitter {
       
       // Always remove from active queue, even if moveJobToCompleted failed
       this.removeJobFromQueue(job.id);
-      console.log(`📋 [BackgroundQueue] Job ${job.id.slice(-6)} removed from active queue. Active queue now has ${this.jobs.length} jobs`);
+      if (__DEV__) console.log(`📋 [BackgroundQueue] Job ${job.id.slice(-6)} removed from active queue. Active queue now has ${this.jobs.length} jobs`);
       
       // CRITICAL: Save the updated active jobs to storage IMMEDIATELY after removal
       await this.saveJobsToStorage();
-      console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} completion`);
+      if (__DEV__) console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} completion`);
       
-      console.log(`🎉 [BackgroundQueue] *** EMITTING JOB_COMPLETED EVENT ***`);
-      console.log(`🎉 [BackgroundQueue] Event details:`, {
-        jobId: job.id?.slice(-8) || 'NO_ID',
-        jobType: job.jobType,
-        upc: job.upc,
-        status: job.status,
-        timestamp: new Date().toISOString(),
-        hasResultData: !!job.resultData,
-        resultDataKeys: job.resultData ? Object.keys(job.resultData) : [],
-        resultSuccess: job.resultData?.success,
-        resultImageUrl: job.resultData?.imageUrl
-      });
+      if (__DEV__) {
+        console.log(`🎉 [BackgroundQueue] *** EMITTING JOB_COMPLETED EVENT ***`);
+        console.log(`🎉 [BackgroundQueue] Event details:`, {
+          jobId: job.id?.slice(-8) || 'NO_ID',
+          jobType: job.jobType,
+          upc: job.upc,
+          status: job.status,
+          hasResultData: !!job.resultData,
+          resultSuccess: job.resultData?.success
+        });
+      }
       
       this.emit('job_completed', job);
       console.log(`📡 [BackgroundQueue] job_completed event emitted for job ${job.id.slice(-6)}`);
@@ -355,18 +498,21 @@ class BackgroundQueueServiceClass extends EventEmitter {
     } catch (error) {
       console.error(`❌ [BackgroundQueue] Job ${job.id.slice(-6)} failed:`, error);
       
+      // Increase processing backoff on error to avoid rapid failures
+      this.processingBackoff = Math.min(this.processingBackoff * 2, this.maxBackoff);
+      
       // Handle retry logic
       if (job.retryCount < job.maxRetries) {
-        console.log(`🔄 [BackgroundQueue] Retrying job ${job.id.slice(-6)} (attempt ${job.retryCount + 1}/${job.maxRetries})`);
+        if (__DEV__) console.log(`🔄 [BackgroundQueue] Retrying job ${job.id.slice(-6)} (attempt ${job.retryCount + 1}/${job.maxRetries})`);
         
         job.status = 'queued';
         job.retryCount++;
         job.errorMessage = (error as Error).message;
         
-        // Exponential backoff: schedule retry
+        // Exponential backoff: schedule retry with increased delay
         const delay = Math.pow(2, job.retryCount) * 1000; // 2s, 4s, 8s
-        console.log(`⏰ [BackgroundQueue] Scheduling retry for job ${job.id.slice(-6)} in ${delay}ms`);
-        setTimeout(() => this.processNextJob(), delay);
+        if (__DEV__) console.log(`⏰ [BackgroundQueue] Scheduling retry for job ${job.id.slice(-6)} in ${delay}ms`);
+        setTimeout(() => this.scheduleNextJobProcessing(), delay);
         
       } else {
         console.log(`💀 [BackgroundQueue] Job ${job.id.slice(-6)} failed permanently after ${job.maxRetries} retries`);

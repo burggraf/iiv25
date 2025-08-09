@@ -15,6 +15,7 @@ import { AppProvider } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
 import { NotificationProvider } from '../src/context/NotificationContext.refactored';
 import EnvironmentBanner from '../src/components/EnvironmentBanner';
+import { jobEventManager } from '../src/services/JobEventManager';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -26,6 +27,9 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Initialize the central job event manager
+    jobEventManager.initialize();
+
     if (loaded) {
       SplashScreen.hideAsync();
     } else {

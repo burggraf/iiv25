@@ -5,6 +5,7 @@ import { historyService } from '../services/HistoryService';
 import { cacheService } from '../services/CacheService';
 import { Product } from '../types';
 import { transformJobResultToProduct } from '../utils/jobResultTransform';
+import { jobEventManager } from '../services/JobEventManager';
 
 export const useBackgroundJobs = () => {
   const [activeJobs, setActiveJobs] = useState<BackgroundJob[]>([]);
@@ -238,57 +239,32 @@ export const useBackgroundJobs = () => {
     
     loadJobs();
 
-    // Subscribe to job updates
-    console.log(`🎣 [useBackgroundJobs] *** SETTING UP JOB EVENT SUBSCRIPTION ***`);
-    console.log(`🎣 [useBackgroundJobs] Subscription timestamp:`, new Date().toISOString());
-    
-    const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
-      console.log(`🎣 [useBackgroundJobs] *** RECEIVED JOB EVENT: ${event} ***`);
-      console.log(`🎣 [useBackgroundJobs] Event timestamp:`, new Date().toISOString());
+    // Subscribe to job updates via central manager
+    const unsubscribe = jobEventManager.subscribe('useBackgroundJobs', (event, job) => {
+      if (__DEV__) {
+        console.log(`🎣 [useBackgroundJobs] EVENT: ${event} | Job: ${job?.id?.slice(-6) || 'none'}`);
+      }
       
       if (event === 'jobs_cleared') {
-        console.log(`🎣 [useBackgroundJobs] Event: ${event} - All jobs cleared`);
+        if (__DEV__) console.log(`🎣 [useBackgroundJobs] All jobs cleared`);
       } else if (job) {
-        console.log(`🎣 [useBackgroundJobs] Event: ${event} - Job details:`, {
-          jobId: job.id?.slice(-6) || 'NO_ID',
-          jobType: job.jobType,
-          status: job.status,
-          upc: job.upc,
-          hasResultData: !!job.resultData,
-          resultSuccess: job.resultData?.success
-        });
-        
         if (event === 'job_completed') {
-          console.log(`🎣 [useBackgroundJobs] *** JOB COMPLETED: ${job.jobType} ***`);
-          console.log(`🎣 [useBackgroundJobs] Job result:`, job.resultData);
+          if (__DEV__) console.log(`🎣 [useBackgroundJobs] JOB COMPLETED: ${job.jobType}`);
           
           // CRITICAL FIX: Skip individual job processing for ALL workflow jobs
           // Workflow jobs are handled exclusively by NotificationContext to prevent duplicate history updates
           if (job.workflowId && job.workflowType) {
-            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is part of workflow ${job.workflowId.slice(-6)} (${job.workflowType}) - skipping history processing (handled by NotificationContext)`);
+            if (__DEV__) console.log(`🎣 [useBackgroundJobs] Workflow job ${job.id?.slice(-6)} - skipping history processing`);
           } else {
-            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is an INDIVIDUAL JOB - processing for history updates`);
-            console.log(`🎣 [useBackgroundJobs] Individual job details:`, {
-              jobType: job.jobType,
-              upc: job.upc,
-              status: job.status,
-              hasResultData: !!job.resultData,
-              resultSuccess: job.resultData?.success
-            });
+            if (__DEV__) console.log(`🎣 [useBackgroundJobs] Individual job - processing for history updates`);
             // Handle different job types that should mark items as new
             handleJobCompletion(job);
           }
         }
-      } else {
-        console.log(`🎣 [useBackgroundJobs] Event: ${event} - No job data`);
       }
       
-      console.log(`🎣 [useBackgroundJobs] Calling refreshJobs() to update UI...`);
       refreshJobs(); // Refresh all jobs when any job updates
     });
-    
-    console.log(`🎣 [useBackgroundJobs] Job event subscription established`);
-    console.log(`🎣 [useBackgroundJobs] Unsubscribe function:`, typeof unsubscribe);
 
     return unsubscribe;
   }, [refreshJobs, handleJobCompletion]);
@@ -365,8 +341,8 @@ export const useBackgroundJobStats = () => {
   useEffect(() => {
     refreshStats();
 
-    // Subscribe to job updates to refresh stats
-    const unsubscribe = backgroundQueueService.subscribeToJobUpdates(() => {
+    // Subscribe to job updates to refresh stats via central manager
+    const unsubscribe = jobEventManager.subscribe('useBackgroundJobStats', () => {
       refreshStats();
     });
 

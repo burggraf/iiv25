@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { router } from 'expo-router'
-import { backgroundQueueService } from '../services/backgroundQueueService'
 import { BackgroundJob } from '../types/backgroundJobs'
 import { Product } from '../types'
 import { ProductLookupService } from '../services/productLookupService'
 import JobCompletionCard from '../components/JobCompletionCard'
 import { transformJobResultToProduct } from '../utils/jobResultTransform'
+import { jobEventManager } from '../services/JobEventManager'
 
 export interface JobNotification {
 	id: string
@@ -715,11 +715,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			}
 		}
 
-		// Subscribe to job events
-		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
-			console.log(`🔔 [NotificationContext] *** EVENT RECEIVED: ${event} ***`)
-			if (job) {
-				console.log(`🔔 [NotificationContext] Job: ${job.id?.slice(-6)}, Type: ${job.jobType}, WorkflowType: ${job.workflowType || 'none'}`)
+		// Subscribe to job events via central manager
+		const unsubscribe = jobEventManager.subscribe('NotificationContext', (event, job) => {
+			if (__DEV__) {
+				console.log(`🔔 [NotificationContext] EVENT: ${event} | Job: ${job?.id?.slice(-6) || 'none'}`)
 			}
 			
 			if (event === 'job_completed' && job) {
@@ -810,11 +809,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	useEffect(() => {
 		const cleanupInterval = setInterval(() => {
 			setProcessedJobIds(prev => {
-				// Keep only recent job IDs (last 100) to prevent memory growth
-				const recentJobIds = Array.from(prev).slice(-100)
+				// Keep only recent job IDs (last 50) to prevent memory growth - reduced from 100
+				const recentJobIds = Array.from(prev).slice(-50)
 				return new Set(recentJobIds)
 			})
-		}, 10 * 60 * 1000) // Clean up every 10 minutes
+			
+			// Also cleanup stale handledConfidenceErrors
+			setHandledConfidenceErrors(prev => {
+				const recentErrors = Array.from(prev).slice(-20) // Keep last 20
+				return new Set(recentErrors)
+			})
+		}, 5 * 60 * 1000) // Clean up every 5 minutes instead of 10
 
 		return () => clearInterval(cleanupInterval)
 	}, [])

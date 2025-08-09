@@ -1,10 +1,10 @@
 import { cacheService } from './CacheService';
-import { backgroundQueueService } from './backgroundQueueService';
 import { ProductLookupService } from './productLookupService';
 import { ProductImageUrlService } from './productImageUrlService';
 import { BackgroundJob } from '../types/backgroundJobs';
 import { transformJobResultToProduct } from '../utils/jobResultTransform';
 import { Product } from '../types';
+import { jobEventManager } from './JobEventManager';
 
 /**
  * Centralized cache invalidation service that coordinates cache updates
@@ -31,28 +31,20 @@ class CacheInvalidationService {
   public async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
-    console.log('🔄 [CacheInvalidation] Initializing CacheInvalidationService');
-    console.log('🔄 [CacheInvalidation] Current timestamp:', new Date().toISOString());
+    if (__DEV__) {
+      console.log('🔄 [CacheInvalidation] Initializing CacheInvalidationService');
+    }
 
-    // Subscribe to background job events
-    console.log('🔄 [CacheInvalidation] Subscribing to background job events...');
-    this.unsubscribeFromJobs = backgroundQueueService.subscribeToJobUpdates(
+    // Subscribe to job events via central manager
+    this.unsubscribeFromJobs = jobEventManager.subscribe(
+      'CacheInvalidationService',
       this.handleJobEvent.bind(this)
     );
 
     this.isInitialized = true;
-    console.log('✅ [CacheInvalidation] CacheInvalidationService initialized and listening for job events');
-    console.log('✅ [CacheInvalidation] Event subscription active, ready to process:', ['job_completed', 'job_failed', 'jobs_cleared']);
     
-    // Test event subscription immediately
-    console.log('🔍 [CacheInvalidation] Testing event subscription by logging this initialization');
-    
-    // Get current background queue stats for debugging
-    try {
-      const stats = await backgroundQueueService.getQueueStats();
-      console.log('📊 [CacheInvalidation] Current queue stats at initialization:', stats);
-    } catch (error) {
-      console.error('❌ [CacheInvalidation] Error getting queue stats:', error);
+    if (__DEV__) {
+      console.log('✅ [CacheInvalidation] Service initialized and listening for job events');
     }
   }
 
@@ -72,26 +64,13 @@ class CacheInvalidationService {
    * Handle background job events and coordinate cache invalidation
    */
   private async handleJobEvent(event: string, job?: BackgroundJob): Promise<void> {
-    console.log(`🎯 [CacheInvalidation] *** RECEIVED EVENT: ${event} ***`);
-    console.log(`🎯 [CacheInvalidation] Event timestamp:`, new Date().toISOString());
-    console.log(`🎯 [CacheInvalidation] Service initialized:`, this.isInitialized);
+    if (__DEV__) {
+      console.log(`🎯 [CacheInvalidation] EVENT: ${event} | Job: ${job?.id?.slice(-6) || 'none'}`);
+    }
     
     if (!job && event !== 'jobs_cleared') {
-      console.log(`⚠️ [CacheInvalidation] No job data received for event: ${event}`);
+      if (__DEV__) console.log(`⚠️ [CacheInvalidation] No job data for event: ${event}`);
       return;
-    }
-
-    if (job) {
-      console.log(`🔄 [CacheInvalidation] Job event details:`, {
-        event,
-        jobId: job.id?.slice(-8) || 'NO_ID',
-        jobType: job.jobType,
-        upc: job.upc,
-        status: job.status,
-        completedAt: job.completedAt?.toISOString(),
-        resultData: job.resultData ? 'YES' : 'NO',
-        hasError: job.resultData?.error ? 'YES' : 'NO'
-      });
     }
 
     try {
