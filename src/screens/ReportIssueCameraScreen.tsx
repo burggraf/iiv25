@@ -102,25 +102,34 @@ export default function ReportIssueCameraScreen() {
 		if (!capturedPhoto || !barcode || !type) return
 
 		try {
+			// Generate workflow ID for tracking
+			const workflowId = `report_${type}_${barcode}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			
 			if (type === 'product') {
 				// Queue the photo upload job for existing product photo update
-				console.log(`🎯 [ReportIssue] Queuing product_photo_upload job for barcode ${barcode}`)
+				console.log(`🎯 [ReportIssue] Queuing product_photo_upload job for barcode ${barcode} with workflow ${workflowId}`)
 				await queueJob({
 					jobType: 'product_photo_upload',
 					imageUri: capturedPhoto,
 					upc: barcode,
 					priority: 2,
+					workflowType: 'report_product_issue',
+					workflowId: workflowId,
+					workflowSteps: { total: 1, current: 1 },
 				})
 				console.log(`✅ [ReportIssue] Successfully queued product_photo_upload job for ${barcode}`)
 			} else if (type === 'ingredients') {
 				// Queue the ingredients parsing job
-				console.log(`🎯 [ReportIssue] Queuing ingredient_parsing job for barcode ${barcode}`)
+				console.log(`🎯 [ReportIssue] Queuing ingredient_parsing job for barcode ${barcode} with workflow ${workflowId}`)
 				await queueJob({
 					jobType: 'ingredient_parsing',
 					imageUri: capturedPhoto,
 					upc: barcode,
 					existingProductData: null,
 					priority: 2,
+					workflowType: 'report_ingredients_issue',
+					workflowId: workflowId,
+					workflowSteps: { total: 1, current: 1 },
 				})
 				console.log(`✅ [ReportIssue] Successfully queued ingredient_parsing job for ${barcode}`)
 			}

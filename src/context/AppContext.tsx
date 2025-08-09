@@ -23,6 +23,14 @@ interface AppContextType {
   queueJob: (params: any) => Promise<any>;
   clearAllJobs: () => Promise<void>;
   activeJobs: any[];
+  completedJobs: any[];
+  loading: boolean;
+  cancelJob: (jobId: string) => Promise<boolean>;
+  retryJob: (jobId: string) => Promise<boolean>;
+  clearCompletedJobs: () => Promise<void>;
+  // Global jobs modal callback
+  showJobsModalCallback?: () => void;
+  setShowJobsModalCallback: (callback?: () => void) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,10 +47,24 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [newItemsCount, setNewItemsCount] = useState<number>(0);
+  const [showJobsModalCallback, setShowJobsModalCallback] = useState<(() => void) | undefined>(undefined);
 
   // Centralized background job processing to prevent memory leaks from multiple subscriptions
   // This is critical - without this, job completion won't be processed when components unmount
   const backgroundJobsHook = useBackgroundJobs();
+  
+  // DEBUGGING: Log what the backgroundJobsHook is returning
+  useEffect(() => {
+    console.log(`🚨 [DEBUG] AppContext backgroundJobsHook.activeJobs:`, {
+      length: backgroundJobsHook.activeJobs?.length || 0,
+      jobs: backgroundJobsHook.activeJobs?.map(job => ({
+        id: job.id?.slice(-6),
+        jobType: job.jobType,
+        workflowType: job.workflowType,
+        status: job.status
+      })) || []
+    });
+  }, [backgroundJobsHook.activeJobs]);
 
   // Initialize device ID and load history on app start
   useEffect(() => {
@@ -153,6 +175,7 @@ export function AppProvider({ children }: AppProviderProps) {
     await historyService.markAsViewed(barcode);
   }, []);
 
+
   // Cleanup services on unmount
   useEffect(() => {
     return () => {
@@ -175,6 +198,14 @@ export function AppProvider({ children }: AppProviderProps) {
     queueJob: backgroundJobsHook.queueJob,
     clearAllJobs: backgroundJobsHook.clearAllJobs,
     activeJobs: backgroundJobsHook.activeJobs,
+    completedJobs: backgroundJobsHook.completedJobs,
+    loading: backgroundJobsHook.loading,
+    cancelJob: backgroundJobsHook.cancelJob,
+    retryJob: backgroundJobsHook.retryJob,
+    clearCompletedJobs: backgroundJobsHook.clearCompletedJobs,
+    // Global jobs modal callback
+    showJobsModalCallback,
+    setShowJobsModalCallback,
   };
 
   return (

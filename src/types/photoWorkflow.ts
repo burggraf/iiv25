@@ -93,7 +93,7 @@ export const PHOTO_STEP_CONFIGS: Record<PhotoWorkflowType, Record<string, Omit<P
       title: 'Product Photo',
       instruction: 'Take a clear photo of the front of the product, making sure the name and brand information is visible.',
       cameraMode: 'product-photo',
-      jobType: 'product_creation',
+      jobType: 'product_photo_upload',
       jobPriority: 2,
       workflowSteps: { total: 1, current: 1 },
     },

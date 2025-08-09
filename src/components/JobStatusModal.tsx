@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BackgroundJob } from '../types/backgroundJobs';
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs';
+import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { colors } from '../utils/colors';
 
 interface JobStatusModalProps {
@@ -21,8 +22,29 @@ interface JobStatusModalProps {
 }
 
 const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) => {
-  const { activeJobs, completedJobs, loading, cancelJob, retryJob, clearCompletedJobs, clearAllJobs } = useBackgroundJobs();
+  // Use global jobs for display, but keep background jobs hook for actions
+  const { activeJobs: globalActiveJobs, completedJobs: globalCompletedJobs } = useGlobalJobs();
+  const { loading, cancelJob, retryJob, clearCompletedJobs, clearAllJobs } = useBackgroundJobs();
+  
+  // Use global jobs for display
+  const activeJobs = globalActiveJobs;
+  const completedJobs = globalCompletedJobs;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // DEBUGGING: Log the modal visibility and jobs state
+  React.useEffect(() => {
+    if (isVisible) {
+      console.log(`🚨 [DEBUG] MODAL OPENED - activeJobs from AppContext:`, {
+        activeJobsLength: activeJobs?.length || 0,
+        activeJobsData: activeJobs?.map(job => ({
+          id: job.id?.slice(-6),
+          jobType: job.jobType,
+          workflowType: job.workflowType,
+          status: job.status
+        })) || []
+      });
+    }
+  }, [isVisible, activeJobs]);
 
   const handleCancelJob = async (jobId: string) => {
     setActionLoading(jobId);
@@ -226,6 +248,19 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
   };
 
   const renderActiveJobs = (): React.ReactNode => {
+    // DEBUGGING: Log what activeJobs we're receiving in the modal
+    console.log(`🚨 [DEBUG] JobStatusModal activeJobs:`, {
+      hasActiveJobs: !!activeJobs,
+      isArray: Array.isArray(activeJobs),
+      length: activeJobs?.length || 0,
+      jobs: activeJobs?.map(job => ({
+        id: job.id?.slice(-6),
+        jobType: job.jobType,
+        workflowType: job.workflowType,
+        status: job.status
+      }))
+    });
+    
     if (!activeJobs || !Array.isArray(activeJobs) || activeJobs.length === 0) return null;
     
     return (

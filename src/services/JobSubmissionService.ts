@@ -32,7 +32,7 @@ interface IngredientParsingJobParams extends BaseJobParams {
 
 interface ProductPhotoUploadJobParams extends BaseJobParams {
   jobType: 'product_photo_upload';
-  workflowType?: 'report_product_issue' | 'individual_action';
+  workflowType?: PhotoWorkflowType | 'individual_action';
 }
 
 type JobSubmissionParams = ProductCreationJobParams | IngredientParsingJobParams | ProductPhotoUploadJobParams;
@@ -91,6 +91,9 @@ export class JobSubmissionService {
       case 'ingredient_parsing':
         if (params.workflowType === 'add_new_product' && !params.workflowId) {
           errors.push('Workflow ID is required for add_new_product ingredient parsing');
+        }
+        if (params.workflowType === 'report_ingredients_issue' && !params.workflowId) {
+          warnings.push('Workflow ID recommended for report_ingredients_issue jobs');
         }
         break;
 

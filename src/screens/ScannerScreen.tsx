@@ -49,7 +49,7 @@ import { CameraErrorBoundary } from '../components/CameraErrorBoundary'
 export default function ScannerScreen() {
 	const isFocused = useIsFocused()
 	const router = useRouter()
-	const { addToHistory, deviceId, queueJob, clearAllJobs, activeJobs } = useApp()
+	const { addToHistory, deviceId, queueJob, clearAllJobs, activeJobs, setShowJobsModalCallback } = useApp()
 	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
 	const cameraService = UnifiedCameraService.getInstance()
 
@@ -92,11 +92,11 @@ export default function ScannerScreen() {
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [showCacheHitMessage, setShowCacheHitMessage] = useState(false)
-	const [showJobsModal, setShowJobsModal] = useState(false)
 	const [productCreationMode, setProductCreationMode] = useState<'off' | 'front-photo' | 'ingredients-photo'>('off')
 	const [frontPhotoTaken, setFrontPhotoTaken] = useState(false)
 	// Generate unique workflow ID for add_new_product workflow
 	const [workflowId] = useState(() => `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+	const [showJobsModal, setShowJobsModal] = useState(false)
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
@@ -110,6 +110,19 @@ export default function ScannerScreen() {
 				activeJobs.map(j => `${j.id.slice(-6)} (${j.jobType}, ${j.status}, created: ${j.createdAt})`));
 		}
 	}, [activeJobs])
+
+	// Register modal callback for global JobStatusIndicator
+	useEffect(() => {
+		if (isFocused) {
+			setShowJobsModalCallback(() => () => setShowJobsModal(true))
+		} else {
+			setShowJobsModalCallback(undefined)
+		}
+		
+		return () => {
+			setShowJobsModalCallback(undefined)
+		}
+	}, [isFocused, setShowJobsModalCallback])
 
 	// Listen to job completion events to avoid redundant ProductLookupService calls
 	useEffect(() => {

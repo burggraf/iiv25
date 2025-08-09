@@ -199,7 +199,7 @@ export function usePhotoCaptureWorkflow(config: PhotoCaptureHookConfig): PhotoCa
             upc: config.workflow.barcode,
             priority: currentStepConfig.jobPriority,
             workflowId: config.workflow.workflowId,
-            workflowType: config.workflow.type as 'add_new_product',
+            workflowType: config.workflow.type,
             workflowSteps: currentStepConfig.workflowSteps,
           });
           break;
@@ -236,6 +236,17 @@ export function usePhotoCaptureWorkflow(config: PhotoCaptureHookConfig): PhotoCa
       const description = JobSubmissionService.getJobDescription(jobParams);
       
       console.log(`📷 Submitting job: ${description}`, standardizedParams);
+
+      // DEBUGGING: Special logging for report issue workflows
+      if (config.workflow.type === 'report_product_issue' || config.workflow.type === 'report_ingredients_issue') {
+        console.log(`🚨 [DEBUG] REPORT ISSUE JOB SUBMISSION:`, {
+          workflowType: config.workflow.type,
+          jobType: currentStepConfig.jobType,
+          barcode: config.workflow.barcode,
+          workflowId: config.workflow.workflowId,
+          standardizedParams
+        });
+      }
 
       await queueJob(standardizedParams as any);
 

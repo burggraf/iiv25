@@ -145,7 +145,7 @@ class JobEventManager {
     // Distribute event to all subscribers
     this.subscriptions.forEach((subscription, subscriberId) => {
       try {
-        subscription.callback(event, job);
+        subscription.callback(event as JobEventType, job);
       } catch (error) {
         console.error(`❌ [JobEventManager] Error in subscriber ${subscriberId}:`, error);
         // Don't let one subscriber's error affect others

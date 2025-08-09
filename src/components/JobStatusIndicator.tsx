@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SpinnerIcon from './icons/SpinnerIcon';
 import { backgroundQueueService } from '../services/backgroundQueueService';
@@ -7,9 +7,10 @@ import { jobEventManager } from '../services/JobEventManager';
 
 interface JobStatusIndicatorProps {
   style?: any;
+  onPress?: () => void;
 }
 
-const JobStatusIndicator: React.FC<JobStatusIndicatorProps> = ({ style }) => {
+const JobStatusIndicator: React.FC<JobStatusIndicatorProps> = ({ style, onPress }) => {
   const insets = useSafeAreaInsets();
   const [activeJobCount, setActiveJobCount] = useState(0);
 
@@ -37,7 +38,7 @@ const JobStatusIndicator: React.FC<JobStatusIndicatorProps> = ({ style }) => {
   }
 
   return (
-    <View 
+    <TouchableOpacity 
       style={[
         styles.container, 
         { 
@@ -46,12 +47,14 @@ const JobStatusIndicator: React.FC<JobStatusIndicatorProps> = ({ style }) => {
         }, 
         style
       ]}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
       <SpinnerIcon size={24} color="#14A44A" />
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{activeJobCount}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

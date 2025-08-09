@@ -11,7 +11,7 @@ import { View } from 'react-native';
 // import 'react-native-reanimated'; // Temporarily disabled due to crashes
 
 import { useColorScheme } from '../hooks/useColorScheme';
-import { AppProvider } from '../src/context/AppContext';
+import { AppProvider, useApp } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
 import { NotificationProvider } from '../src/context/NotificationContext.refactored';
 import EnvironmentBanner from '../src/components/EnvironmentBanner';
@@ -20,6 +20,12 @@ import { jobEventManager } from '../src/services/JobEventManager';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
+
+// Component that can use AppContext to handle JobStatusIndicator click
+function JobStatusIndicatorWrapper() {
+  const { showJobsModalCallback } = useApp();
+  return <JobStatusIndicator onPress={() => showJobsModalCallback?.()} />;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -51,7 +57,7 @@ export default function RootLayout() {
             {/* <GestureHandlerRootView style={{ flex: 1 }}> */}
               <View style={{ flex: 1 }}>
                 <EnvironmentBanner style={{ position: 'absolute', top: 50, left: 10, right: 10, zIndex: 1000 }} />
-                <JobStatusIndicator />
+                <JobStatusIndicatorWrapper />
                 <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
                   <Stack>
                     <Stack.Screen name="index" options={{ headerShown: false }} />

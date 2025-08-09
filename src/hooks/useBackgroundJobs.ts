@@ -6,6 +6,8 @@ import { cacheService } from '../services/CacheService';
 import { Product } from '../types';
 import { transformJobResultToProduct } from '../utils/jobResultTransform';
 import { jobEventManager } from '../services/JobEventManager';
+import { PhotoWorkflowType } from '../types/photoWorkflow';
+import { globalJobsState } from '../services/GlobalJobsState';
 
 export const useBackgroundJobs = () => {
   const [activeJobs, setActiveJobs] = useState<BackgroundJob[]>([]);
@@ -194,6 +196,22 @@ export const useBackgroundJobs = () => {
           // Keep only the first occurrence of each job ID
           array.findIndex(j => j.id === job.id) === index
         );
+        
+      // DEBUGGING: Special logging for report issue jobs
+      const reportIssueJobs = validActiveJobs.filter(job => 
+        job.workflowType === 'report_product_issue' || job.workflowType === 'report_ingredients_issue'
+      );
+      if (reportIssueJobs.length > 0) {
+        console.log(`🚨 [DEBUG] FOUND ${reportIssueJobs.length} REPORT ISSUE JOBS IN ACTIVE LIST:`, 
+          reportIssueJobs.map(job => ({
+            id: job.id?.slice(-6),
+            workflowType: job.workflowType,
+            jobType: job.jobType,
+            status: job.status,
+            upc: job.upc
+          }))
+        );
+      }
       
       const validCompletedJobs = (completed || [])
         .filter(job => job && job.id && job.status)
@@ -206,6 +224,10 @@ export const useBackgroundJobs = () => {
       
       setActiveJobs(validActiveJobs);
       setCompletedJobs(validCompletedJobs);
+      
+      // CRITICAL FIX: Update global state so all components see the same jobs
+      globalJobsState.setActiveJobs(validActiveJobs);
+      globalJobsState.setCompletedJobs(validCompletedJobs);
     } catch (error) {
       console.error('Error refreshing jobs:', error);
       // Set empty arrays on error to prevent crashes
@@ -277,10 +299,31 @@ export const useBackgroundJobs = () => {
     priority?: number;
     // Workflow fields
     workflowId?: string;
-    workflowType?: 'add_new_product' | 'individual_action';
+    workflowType?: PhotoWorkflowType | 'individual_action';
     workflowSteps?: { total: number; current: number };
   }) => {
+    // DEBUGGING: Special logging for report issue jobs
+    if (params.workflowType === 'report_product_issue' || params.workflowType === 'report_ingredients_issue') {
+      console.log(`🚨 [DEBUG] QUEUING REPORT ISSUE JOB:`, {
+        workflowType: params.workflowType,
+        jobType: params.jobType,
+        upc: params.upc,
+        workflowId: params.workflowId
+      });
+    }
+    
     const job = await backgroundQueueService.queueJob(params);
+    
+    // DEBUGGING: Log the returned job for report issues
+    if (params.workflowType === 'report_product_issue' || params.workflowType === 'report_ingredients_issue') {
+      console.log(`🚨 [DEBUG] REPORT ISSUE JOB QUEUED:`, {
+        id: job?.id?.slice(-6),
+        status: job?.status,
+        jobType: job?.jobType,
+        workflowType: job?.workflowType
+      });
+    }
+    
     // Don't call refreshJobs() here - the 'job_added' event will trigger it automatically
     return job;
   }, []);
