@@ -79,7 +79,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	
 	// Interface for WorkflowState
 	interface WorkflowState {
-		type: 'add_new_product' | 'individual_action';
+		type: 'add_new_product' | 'individual_action' | 'report_product_issue';
 		completedJobs: Set<string>;
 		failedJobs: Set<string>;
 		errorTypes: Set<'photo_upload' | 'ingredient_scan' | 'product_creation'>;
@@ -93,9 +93,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	
 	// Helper function to handle workflow job completion
 	const handleWorkflowJobCompleted = async (job: BackgroundJob) => {
-		if (!job.workflowId || !job.workflowType || !job.workflowSteps) return
+		console.log(`🔔 [Notification] *** WORKFLOW JOB COMPLETION EVENT RECEIVED ***`)
+		console.log(`🔔 [Notification] Job details: ${job.id?.slice(-6)}, type: ${job.jobType}, workflowType: ${job.workflowType}`)
 		
-		console.log(`🔔 [Notification] Workflow job completed: ${job.workflowId.slice(-6)} - ${job.jobType} (${job.workflowSteps.current}/${job.workflowSteps.total})`)
+		if (!job.workflowId || !job.workflowType || !job.workflowSteps) {
+			console.log(`🔔 [Notification] ❌ Missing workflow metadata - skipping workflow processing`)
+			console.log(`🔔 [Notification] workflowId: ${!!job.workflowId}, workflowType: ${!!job.workflowType}, workflowSteps: ${!!job.workflowSteps}`)
+			return
+		}
+		
+		console.log(`🔔 [Notification] ✅ Valid workflow job - processing: ${job.workflowId.slice(-6)} - ${job.jobType} (${job.workflowSteps.current}/${job.workflowSteps.total})`)
 		
 		// Update workflow state
 		setWorkflowStates(prev => {
@@ -227,28 +234,30 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					console.log(`  - hasErrors: ${hasErrors}`)
 					console.log(`  - errorTypes: [${Array.from(current.errorTypes).join(', ')}]`)
 					
-					if (productCreationSucceeded && current.latestProduct && current.type === 'add_new_product') {
-						const statusMessage = hasErrors ? 'with some errors' : 'successfully'
-						console.log(`🔔 [Notification] ✅ ADDING TO HISTORY: Workflow ${job.workflowId!.slice(-6)} completed ${statusMessage} - product was created, updating history with product ${current.latestProduct.barcode}`)
-						try {
-							// Import historyService dynamically to avoid circular dependencies
-							const { historyService } = await import('../services/HistoryService')
-							await historyService.addToHistory(current.latestProduct, true, true)
-							console.log(`✅ [Notification] Successfully updated history for product creation workflow: ${current.latestProduct.barcode}`)
-						} catch (error) {
-							console.error(`❌ [Notification] Error updating history for product creation workflow:`, error)
+					// Update history for all workflow types
+					if (current.latestProduct) {
+						// For add_new_product workflows, only add to history if product creation succeeded
+						// For individual_action and report_product_issue workflows, add to history if the workflow completed (regardless of minor errors)
+						const shouldAddToHistory = current.type === 'add_new_product' 
+							? productCreationSucceeded 
+							: true; // individual_action and report_product_issue workflows should always update history when they have a product
+						
+						if (shouldAddToHistory) {
+							const statusMessage = hasErrors ? 'with some errors' : 'successfully'
+							console.log(`🔔 [Notification] ✅ ADDING TO HISTORY: ${current.type} workflow ${job.workflowId!.slice(-6)} completed ${statusMessage} - updating history with product ${current.latestProduct.barcode}`)
+							try {
+								// Import historyService dynamically to avoid circular dependencies
+								const { historyService } = await import('../services/HistoryService')
+								await historyService.addToHistory(current.latestProduct, true, true)
+								console.log(`✅ [Notification] Successfully updated history for ${current.type} workflow: ${current.latestProduct.barcode}`)
+							} catch (error) {
+								console.error(`❌ [Notification] Error updating history for ${current.type} workflow:`, error)
+							}
+						} else {
+							console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY for ${current.type} workflow: product creation failed`)
 						}
 					} else {
-						console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY:`)
-						if (!productCreationSucceeded) {
-							console.log(`  - Product creation failed`)
-						}
-						if (!current.latestProduct) {
-							console.log(`  - No latestProduct available`)
-						}
-						if (current.type !== 'add_new_product') {
-							console.log(`  - Wrong workflow type: ${current.type}`)
-						}
+						console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY: No latestProduct available`)
 					}
 					
 					// Clean up completed workflow
@@ -688,6 +697,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
 		// Subscribe to job events
 		const unsubscribe = backgroundQueueService.subscribeToJobUpdates((event, job) => {
+			console.log(`🔔 [NotificationContext] *** EVENT RECEIVED: ${event} ***`)
+			if (job) {
+				console.log(`🔔 [NotificationContext] Job: ${job.id?.slice(-6)}, Type: ${job.jobType}, WorkflowType: ${job.workflowType || 'none'}`)
+			}
+			
 			if (event === 'job_completed' && job) {
 				handleJobCompleted(job)
 			} else if (event === 'job_failed' && job) {

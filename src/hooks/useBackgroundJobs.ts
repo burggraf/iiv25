@@ -13,6 +13,9 @@ export const useBackgroundJobs = () => {
 
   // Handle job completion to set isNew flag
   const handleJobCompletion = useCallback(async (job: BackgroundJob) => {
+    console.log(`🎣 [useBackgroundJobs] *** HANDLING INDIVIDUAL JOB COMPLETION ***`);
+    console.log(`🎣 [useBackgroundJobs] Job: ${job.id?.slice(-6)}, Type: ${job.jobType}, UPC: ${job.upc}`);
+    
     try {
       // Check if job was successful based on job type
       const isJobSuccessful = () => {
@@ -75,9 +78,10 @@ export const useBackgroundJobs = () => {
         console.log(`🎣 [useBackgroundJobs] Photo upload completed - updating product in history`);
         
         // Add to history with isNew flag set to true - let HistoryService decide based on recent viewing
+        console.log(`🎣 [useBackgroundJobs] Adding product ${job.upc} to history with isNew=true after photo upload`);
         await historyService.addToHistory(productToUse, true, true);
         
-        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated image`);
+        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated image and isNew flag`);
         
       } else if (job.jobType === 'ingredient_parsing') {
         // Try to use job result data to avoid redundant lookup
@@ -112,9 +116,10 @@ export const useBackgroundJobs = () => {
         console.log(`🎣 [useBackgroundJobs] Ingredient parsing completed - updating product in history`);
         
         // Add to history with isNew flag set to true - let HistoryService decide based on recent viewing
+        console.log(`🎣 [useBackgroundJobs] Adding product ${job.upc} to history with isNew=true after ingredient parsing`);
         await historyService.addToHistory(productToUse, true, true);
         
-        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated ingredients`);
+        console.log(`✅ [useBackgroundJobs] Successfully updated ${job.upc} in history with updated ingredients and isNew flag`);
         
       } else {
         // For other job types, get the updated product from cache
@@ -262,7 +267,14 @@ export const useBackgroundJobs = () => {
           if (job.workflowId && job.workflowType) {
             console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is part of workflow ${job.workflowId.slice(-6)} (${job.workflowType}) - skipping history processing (handled by NotificationContext)`);
           } else {
-            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is an individual job - processing for history updates`);
+            console.log(`🎣 [useBackgroundJobs] Job ${job.id?.slice(-6)} is an INDIVIDUAL JOB - processing for history updates`);
+            console.log(`🎣 [useBackgroundJobs] Individual job details:`, {
+              jobType: job.jobType,
+              upc: job.upc,
+              status: job.status,
+              hasResultData: !!job.resultData,
+              resultSuccess: job.resultData?.success
+            });
             // Handle different job types that should mark items as new
             handleJobCompletion(job);
           }
