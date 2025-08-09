@@ -15,6 +15,7 @@ import { AppProvider } from '../src/context/AppContext';
 import { AuthProvider } from '../src/context/AuthContext';
 import { NotificationProvider } from '../src/context/NotificationContext.refactored';
 import EnvironmentBanner from '../src/components/EnvironmentBanner';
+import JobStatusIndicator from '../src/components/JobStatusIndicator';
 import { jobEventManager } from '../src/services/JobEventManager';
 
 // Keep the splash screen visible while we fetch resources
@@ -50,6 +51,7 @@ export default function RootLayout() {
             {/* <GestureHandlerRootView style={{ flex: 1 }}> */}
               <View style={{ flex: 1 }}>
                 <EnvironmentBanner style={{ position: 'absolute', top: 50, left: 10, right: 10, zIndex: 1000 }} />
+                <JobStatusIndicator />
                 <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
                   <Stack>
                     <Stack.Screen name="index" options={{ headerShown: false }} />

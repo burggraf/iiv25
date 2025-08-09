@@ -158,7 +158,17 @@ class BackgroundQueueServiceClass extends EventEmitter {
    */
   async getActiveJobs(): Promise<BackgroundJob[]> {
     await this.initialize();
-    return this.jobs.filter(job => job.status === 'queued' || job.status === 'processing');
+    const activeJobs = this.jobs.filter(job => {
+      const isActive = job.status === 'queued' || job.status === 'processing';
+      if (__DEV__) {
+        console.log(`[BackgroundQueue] getActiveJobs - Job ${job.id?.slice(-6)}: status=${job.status}, isActive=${isActive}`);
+      }
+      return isActive;
+    });
+    if (__DEV__) {
+      console.log(`[BackgroundQueue] getActiveJobs - Found ${activeJobs.length} active jobs out of ${this.jobs.length} total jobs`);
+    }
+    return activeJobs;
   }
 
   /**
