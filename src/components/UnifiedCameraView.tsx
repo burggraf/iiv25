@@ -10,8 +10,8 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions } from 'react-native';
+import { CameraView, Camera, BarcodeScanningResult, AutoFocus } from 'expo-camera';
 import UnifiedCameraService, { CameraMode, CameraState } from '../services/UnifiedCameraService';
 import { CameraErrorBoundary } from './CameraErrorBoundary';
 
@@ -72,6 +72,12 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
     const [cameraState, setCameraState] = useState<CameraState>(cameraService.getState());
     const [lastScannedBarcode, setLastScannedBarcode] = useState<string>('');
     const barcodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    // Touch-to-focus state
+    const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+    const [autoFocusKey, setAutoFocusKey] = useState<string>('on');
+    const focusAnimation = useRef(new Animated.Value(0)).current;
+    const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Set up mount tracking for safe cleanup
     useEffect(() => {
@@ -182,6 +188,56 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
       [cameraService, lastScannedBarcode, onBarcodeScanned]
     );
 
+    // Handle touch-to-focus
+    const handleCameraTap = useCallback(
+      (event: { nativeEvent: { locationX: number; locationY: number } }) => {
+        if (!isMountedRef.current || !cameraState.config.enableTouchFocus) {
+          return;
+        }
+
+        const { locationX, locationY } = event.nativeEvent;
+        console.log('🎥 UnifiedCameraView: Touch-to-focus at:', locationX, locationY);
+        
+        // Set focus point for visual indicator
+        setFocusPoint({ x: locationX, y: locationY });
+        
+        // Reset autofocus by toggling the key (workaround for Expo Camera)
+        setAutoFocusKey(prev => prev === 'on' ? 'off' : 'on');
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            setAutoFocusKey('on');
+          }
+        }, 100);
+        
+        // Animate focus indicator
+        focusAnimation.setValue(0);
+        Animated.sequence([
+          Animated.timing(focusAnimation, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(focusAnimation, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          })
+        ]).start();
+        
+        // Clear focus point after animation
+        if (focusTimeoutRef.current) {
+          clearTimeout(focusTimeoutRef.current);
+        }
+        
+        focusTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setFocusPoint(null);
+          }
+        }, 1000);
+      },
+      [cameraState.config.enableTouchFocus, focusAnimation]
+    );
+
     // Set up service event listeners
     useEffect(() => {
       const handleStateUpdate = () => {
@@ -267,10 +323,14 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
 
       return () => {
         isMounted = false;
-        // Clean up barcode timeout
+        // Clean up timeouts
         if (barcodeTimeoutRef.current) {
           clearTimeout(barcodeTimeoutRef.current);
           barcodeTimeoutRef.current = null;
+        }
+        if (focusTimeoutRef.current) {
+          clearTimeout(focusTimeoutRef.current);
+          focusTimeoutRef.current = null;
         }
       };
     }, [mode, requestCameraPermissions, cameraService, cameraState.hasPermission]);
@@ -323,23 +383,55 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         onRetry={() => cameraService.switchToMode(mode, {}, owner)}
       >
         <View style={[styles.container, style]} testID={testID}>
-          <CameraView
-            ref={cameraRef}
+          <Pressable
             style={styles.camera}
-            facing={cameraState.config.facing}
-            onBarcodeScanned={
-              cameraState.config.enableBarcode
-                ? handleBarcodeScanned
-                : undefined
-            }
-            barcodeScannerSettings={
-              cameraState.config.enableBarcode
-                ? {
-                    barcodeTypes: cameraState.config.barcodeTypes as any,
-                  }
-                : undefined
-            }
-          />
+            onPress={cameraState.config.enableTouchFocus ? handleCameraTap : undefined}
+            accessible={false}
+          >
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing={cameraState.config.facing}
+              autofocus={autoFocusKey as 'on' | 'off'}
+              focusDepth={cameraState.config.focusDepth}
+              onBarcodeScanned={
+                cameraState.config.enableBarcode
+                  ? handleBarcodeScanned
+                  : undefined
+              }
+              barcodeScannerSettings={
+                cameraState.config.enableBarcode
+                  ? {
+                      barcodeTypes: cameraState.config.barcodeTypes as any,
+                    }
+                  : undefined
+              }
+            />
+          </Pressable>
+          
+          {/* Focus Point Indicator */}
+          {focusPoint && cameraState.config.enableTouchFocus && (
+            <Animated.View
+              style={[
+                styles.focusIndicator,
+                {
+                  left: focusPoint.x - 30,
+                  top: focusPoint.y - 30,
+                  opacity: focusAnimation,
+                  transform: [
+                    {
+                      scale: focusAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1.5, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.focusSquare} />
+            </Animated.View>
+          )}
           
           {/* Render custom overlay or default mode-specific overlay */}
           {renderOverlay ? (
@@ -431,6 +523,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginTop: 4,
+  },
+  focusIndicator: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  focusSquare: {
+    width: 60,
+    height: 60,
+    borderWidth: 2,
+    borderColor: 'white',
+    borderRadius: 4,
+    backgroundColor: 'transparent',
   },
 });
 
