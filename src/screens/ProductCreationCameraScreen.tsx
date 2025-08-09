@@ -11,16 +11,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 // Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext
 import { useApp } from '../context/AppContext'
-import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
-import UnifiedCameraService from '../services/UnifiedCameraService'
+import VisionCameraView, { VisionCameraViewRef } from '../components/VisionCameraView'
 
 export default function ProductCreationCameraScreen() {
 	const router = useRouter()
 	const { barcode } = useLocalSearchParams<{ barcode: string }>()
 	const { queueJob } = useApp()
-	const cameraService = UnifiedCameraService.getInstance()
 	
-	const cameraRef = useRef<CameraViewRef>(null)
+	const cameraRef = useRef<VisionCameraViewRef>(null)
 	const [currentStep, setCurrentStep] = useState<'front-photo' | 'ingredients-photo'>('front-photo')
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
@@ -28,29 +26,13 @@ export default function ProductCreationCameraScreen() {
 	// Generate unique workflow ID for this add_new_product workflow
 	const [workflowId] = useState(() => `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 
-	// Initialize unified camera service for photo mode
+	// Initialize camera for photo mode - simplified with VisionCameraView
 	useEffect(() => {
-		const initializeCamera = async () => {
-			// Switch to appropriate photo mode based on current step
-			const mode = currentStep === 'front-photo' ? 'product-photo' : 'ingredients-photo'
-			console.log(`📷 ProductCreation: Initializing ${mode} mode`)
-			
-			const success = await cameraService.switchToMode(mode, {}, 'ProductCreationScreen')
-			if (!success) {
-				console.error('📷 ProductCreation: Failed to initialize camera mode')
-				Alert.alert(
-					'Camera Error',
-					'Failed to initialize camera. Please try again.',
-					[{ text: 'OK', onPress: () => router.back() }]
-				)
-			}
-		}
-		
-		initializeCamera()
+		const mode = currentStep === 'front-photo' ? 'product-photo' : 'ingredients-photo'
+		console.log(`📷 ProductCreation: Component initialized with ${mode} mode, step: ${currentStep}`)
 		
 		return () => {
-			// Switch back to inactive mode when component unmounts
-			cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
+			console.log('📷 ProductCreation: Component unmounting - VisionCameraView handles cleanup')
 		}
 	}, [currentStep])
 
@@ -81,7 +63,7 @@ export default function ProductCreationCameraScreen() {
 	}
 
 	const handleCancel = () => {
-		cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
+		// VisionCameraView handles cleanup automatically
 		router.back()
 	}
 
@@ -124,7 +106,7 @@ export default function ProductCreationCameraScreen() {
 				})
 				
 				// Go back after queuing both photos
-				cameraService.switchToMode('inactive', {}, 'ProductCreationScreen')
+				// VisionCameraView handles cleanup automatically
 				router.back()
 			}
 		} catch (error) {
@@ -188,8 +170,8 @@ export default function ProductCreationCameraScreen() {
 	
 	return (
 		<View style={styles.container}>
-			{/* Unified Camera View */}
-			<UnifiedCameraView
+			{/* Vision Camera View - Direct usage for native performance */}
+			<VisionCameraView
 				ref={cameraRef}
 				mode={currentMode}
 				owner="ProductCreationScreen"

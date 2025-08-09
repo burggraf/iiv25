@@ -11,54 +11,25 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 // Removed: import { useBackgroundJobs } from '../hooks/useBackgroundJobs' - now centralized in AppContext
 import { useApp } from '../context/AppContext'
-import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
-import UnifiedCameraService from '../services/UnifiedCameraService'
+import VisionCameraView, { VisionCameraViewRef } from '../components/VisionCameraView'
 
 export default function ReportIssueCameraScreen() {
 	const router = useRouter()
 	const { barcode, type } = useLocalSearchParams<{ barcode: string; type: 'product' | 'ingredients' }>()
 	const { queueJob } = useApp()
-	const cameraService = UnifiedCameraService.getInstance()
 	
-	console.log(`📷 ReportIssue: Screen loaded with barcode='${barcode}', type='${type}'`)
 	
-	const cameraRef = useRef<CameraViewRef>(null)
+	const cameraRef = useRef<VisionCameraViewRef>(null)
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
 
-	// Initialize unified camera service for photo mode
+	// Initialize camera for photo mode - simplified with VisionCameraView
 	useEffect(() => {
-		const initializeCamera = async () => {
-			// Switch to appropriate photo mode based on photo type
-			const mode = type === 'product' ? 'product-photo' : 'ingredients-photo'
-			console.log(`📷 ReportIssue: Initializing ${mode} mode for type: ${type}`)
-			
-			// Debug current camera state before attempting switch
-			const currentState = cameraService.getState()
-			const currentOwner = cameraService.getCurrentOwner()
-			console.log(`📷 ReportIssue: Current camera state before switch - mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}`)
-			
-			const success = await cameraService.switchToMode(mode, {}, 'ReportIssueScreen')
-			console.log(`📷 ReportIssue: Mode switch result: ${success}`)
-			
-			if (!success) {
-				console.error('📷 ReportIssue: Failed to initialize camera mode')
-				Alert.alert(
-					'Camera Error',
-					'Failed to initialize camera. Please try again.',
-					[{ text: 'OK', onPress: () => router.back() }]
-				)
-			} else {
-				console.log(`📷 ReportIssue: Successfully initialized ${mode} mode`)
-			}
-		}
-		
-		initializeCamera()
+		const mode = type === 'product' ? 'product-photo' : 'ingredients-photo'
+		console.log(`📷 ReportIssue: Component initialized with ${mode} mode for type: ${type}`)
 		
 		return () => {
-			// Switch back to inactive mode when component unmounts
-			console.log('📷 ReportIssue: Component unmounting, switching to inactive')
-			cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+			console.log('📷 ReportIssue: Component unmounting - VisionCameraView handles cleanup')
 		}
 	}, [type])
 
@@ -89,7 +60,7 @@ export default function ReportIssueCameraScreen() {
 	}
 
 	const handleCancel = () => {
-		cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+		// VisionCameraView handles cleanup automatically
 		router.back()
 	}
 
@@ -135,7 +106,7 @@ export default function ReportIssueCameraScreen() {
 			}
 			
 			// Go back to product result screen
-			cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+			// VisionCameraView handles cleanup automatically
 			router.back()
 		} catch (error) {
 			console.error('Error processing photo:', error)
@@ -199,8 +170,8 @@ export default function ReportIssueCameraScreen() {
 	
 	return (
 		<View style={styles.container}>
-			{/* Unified Camera View */}
-			<UnifiedCameraView
+			{/* Vision Camera View - Direct usage for native performance */}
+			<VisionCameraView
 				ref={cameraRef}
 				mode={currentMode}
 				owner="ReportIssueScreen"
