@@ -453,6 +453,7 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
               facing={cameraState.config.facing}
               autofocus={autoFocusKey as 'on' | 'off'}
               focusDepth={cameraState.config.focusDepth}
+              zoom={cameraState.config.zoom}
               onBarcodeScanned={
                 cameraState.config.enableBarcode
                   ? handleBarcodeScanned
