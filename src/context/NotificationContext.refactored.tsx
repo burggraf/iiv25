@@ -229,14 +229,43 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Check if job has errors first
     if (hasJobError(job)) {
       // Return error messages for failed jobs in report workflows
-      if (job.workflowType === 'report_product_issue' && job.jobType === 'product_creation') {
-        return `Invalid product photo - please try again`;
+      if (job.workflowType === 'report_product_issue') {
+        switch (job.jobType) {
+          case 'product_creation':
+            return `Invalid product photo - please try again`;
+          case 'product_photo_upload':
+            return `❌ Product photo upload failed - please try again`;
+          case 'ingredient_parsing':
+            return `❌ Product ingredients scan failed - please try again`;
+          default:
+            return `❌ Product report failed - please try again`;
+        }
       }
-      if (job.workflowType === 'report_ingredients_issue' && job.jobType === 'product_creation') {
-        return `Invalid ingredients photo - please try again`;
+      
+      if (job.workflowType === 'report_ingredients_issue') {
+        switch (job.jobType) {
+          case 'product_creation':
+            return `Invalid ingredients photo - please try again`;
+          case 'product_photo_upload':
+            return `❌ Ingredients photo upload failed - please try again`;
+          case 'ingredient_parsing':
+            return `❌ Ingredients analysis failed - please try again`;
+          default:
+            return `❌ Ingredients report failed - please try again`;
+        }
       }
-      // Default error message for other failed jobs
-      return `❌ Job failed - please try again`;
+      
+      // Specific error messages based on job type for non-workflow jobs
+      switch (job.jobType) {
+        case 'product_creation':
+          return `❌ Photo scan failed - please try again`;
+        case 'ingredient_parsing':
+          return `❌ Ingredients scan failed - please try again`;
+        case 'product_photo_upload':
+          return `❌ Photo upload failed - please try again`;
+        default:
+          return `❌ Job failed - please try again`;
+      }
     }
     
     // Success messages for completed jobs

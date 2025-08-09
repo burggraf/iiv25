@@ -254,7 +254,7 @@ describe('NotificationErrorMessages', () => {
       expect(getByTestId('workflow-0')).toHaveTextContent('report_ingredients_issue');
     });
 
-    it('shows generic error message for non-product_creation failures in report workflows', async () => {
+    it('shows specific error message for product_photo_upload failures in report workflows', async () => {
       const { getByTestId } = render(
         <NotificationProvider>
           <TestComponent />
@@ -273,7 +273,7 @@ describe('NotificationErrorMessages', () => {
       });
 
       expect(getByTestId('notification-count')).toHaveTextContent('1');
-      expect(getByTestId('message-0')).toHaveTextContent('❌ Job failed - please try again');
+      expect(getByTestId('message-0')).toHaveTextContent('❌ Product photo upload failed - please try again');
       expect(getByTestId('type-0')).toHaveTextContent('error');
       expect(getByTestId('jobtype-0')).toHaveTextContent('product_photo_upload');
     });
