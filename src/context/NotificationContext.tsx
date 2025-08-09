@@ -45,6 +45,26 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 	
 	// Helper function to detect errors for each job type
 	const hasJobErrors = (job: BackgroundJob): { hasError: boolean; errorType: 'photo_upload' | 'ingredient_scan' | 'product_creation' | null } => {
+		// If job status is failed, this is definitely an error (handles timeouts, etc.)
+		if (job.status === 'failed') {
+			let errorType: 'photo_upload' | 'ingredient_scan' | 'product_creation';
+			switch (job.jobType) {
+				case 'product_photo_upload':
+					errorType = 'photo_upload';
+					break;
+				case 'ingredient_parsing':
+					errorType = 'ingredient_scan';
+					break;
+				case 'product_creation':
+					errorType = 'product_creation';
+					break;
+				default:
+					return { hasError: true, errorType: null };
+			}
+			return { hasError: true, errorType };
+		}
+
+		// For completed jobs, check for specific error conditions
 		switch (job.jobType) {
 			case 'product_photo_upload':
 				return { 
@@ -872,17 +892,17 @@ function getIndividualSuccessMessage(jobType: string): string {
 
 function getIndividualErrorMessage(jobType: string, job?: BackgroundJob): string {
 	if (job?.errorMessage) {
-		// Make stuck job messages more user-friendly
-		if (job.errorMessage.includes('stuck in processing state')) {
+		// Make stuck job messages and timeout messages more user-friendly
+		if (job.errorMessage.includes('stuck in processing state') || job.errorMessage.includes('timed out after')) {
 			switch (jobType) {
 				case 'product_creation':
-					return 'Product creation timed out'
+					return 'Product creation timed out - please try again'
 				case 'ingredient_parsing':
-					return 'Ingredient scan timed out'
+					return 'Ingredient scan timed out - please try again'
 				case 'product_photo_upload':
-					return 'Photo upload timed out'
+					return 'Photo upload timed out - please try again'
 				default:
-					return 'Job timed out'
+					return 'Job timed out - please try again'
 			}
 		}
 		return job.errorMessage
