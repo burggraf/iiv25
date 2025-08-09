@@ -326,12 +326,6 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 								<Text style={styles.cardLabel}>App Name:</Text>
 								<Text style={styles.cardValue}>{process.env.EXPO_PUBLIC_APP_NAME || 'Is It Vegan?'}</Text>
 							</View>
-							<View style={styles.cardRow}>
-								<Text style={styles.cardLabel}>Backend:</Text>
-								<Text style={[styles.cardValue, styles.deviceId]}>
-									{process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('https://', '') || 'Unknown'}
-								</Text>
-							</View>
 						</View>
 					</View>
 
@@ -428,7 +422,7 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: '#666',
 		fontWeight: '500',
-		width: 120,
+		width: 140,
 		flexShrink: 0,
 		marginRight: 16,
 	},
