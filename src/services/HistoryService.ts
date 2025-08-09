@@ -138,11 +138,13 @@ class HistoryService implements CacheEventListener {
       await cacheService.setProduct(product.barcode, productWithTimestamp);
     }
     
-    // Persist to storage
-    await this.persistHistory();
-    
-    // Notify listeners
+    // Notify listeners immediately for faster UI updates
     this.notifyListeners('onHistoryUpdated', this.historyItems);
+    
+    // Persist to storage asynchronously to avoid blocking UI
+    this.persistHistoryAsync().catch(error => {
+      console.error('Failed to persist history after addition:', error);
+    });
     
     console.log(`📚 Added ${product.barcode} to history (isNew: ${finalIsNew}, total items: ${this.historyItems.length})`);
   }
@@ -174,11 +176,13 @@ class HistoryService implements CacheEventListener {
       this.historyItems[itemIndex].isNew = false;
       this.historyItems[itemIndex].lastViewedAt = new Date();
       
-      // Persist changes
-      await this.persistHistory();
-      
-      // Notify listeners
+      // Notify listeners immediately for faster UI updates
       this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      // Persist changes asynchronously
+      this.persistHistoryAsync().catch(error => {
+        console.error('Failed to persist history after marking as viewed:', error);
+      });
       
       console.log(`📚 Marked ${barcode} as viewed (was new: ${wasNew}, cleared isNew flag, set lastViewedAt)`);
     }
@@ -195,11 +199,13 @@ class HistoryService implements CacheEventListener {
       console.log(`📚 Force-marking ${barcode} as new (was: ${this.historyItems[itemIndex].isNew})`);
       this.historyItems[itemIndex].isNew = true;
       
-      // Persist changes
-      await this.persistHistory();
-      
-      // Notify listeners
+      // Notify listeners immediately for faster UI updates
       this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      // Persist changes asynchronously
+      this.persistHistoryAsync().catch(error => {
+        console.error('Failed to persist history after marking as new:', error);
+      });
       
       console.log(`✅ Successfully marked ${barcode} as new in history`);
     } else {
@@ -275,12 +281,14 @@ class HistoryService implements CacheEventListener {
       }
     };
     
-    // Persist changes
-    await this.persistHistory();
-    
-    // Notify listeners
+    // Notify listeners immediately for faster UI updates
     this.notifyListeners('onHistoryUpdated', this.historyItems);
     this.notifyListeners('onProductUpdated', barcode, updatedProduct);
+    
+    // Persist changes asynchronously
+    this.persistHistoryAsync().catch(error => {
+      console.error('Failed to persist history after product update:', error);
+    });
     
     console.log(`📚 Updated product ${barcode} in history`);
   }
@@ -298,13 +306,18 @@ class HistoryService implements CacheEventListener {
     this.historyItems = this.historyItems.filter(item => item.barcode !== barcode);
     
     if (this.historyItems.length < initialLength) {
-      // Persist changes
-      await this.persistHistory();
+      // CRITICAL FIX: Invalidate cache for this product to prevent persistence after deletion
+      await cacheService.invalidateProduct(barcode, 'history item removal');
       
-      // Notify listeners
+      // Update UI immediately (optimistic update)
       this.notifyListeners('onHistoryUpdated', this.historyItems);
       
-      console.log(`📚 Removed product ${barcode} from history`);
+      // Persist changes asynchronously to avoid blocking UI
+      this.persistHistoryAsync().catch(error => {
+        console.error('Failed to persist history after removal:', error);
+      });
+      
+      console.log(`📚 Removed product ${barcode} from history and invalidated cache`);
     } else {
       console.log(`📚 Product ${barcode} not found in history`);
     }
@@ -387,8 +400,14 @@ class HistoryService implements CacheEventListener {
     }
     
     if (hasChanges) {
-      await this.persistHistory();
+      // Notify listeners immediately for faster UI updates
       this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      // Persist changes asynchronously
+      this.persistHistoryAsync().catch(error => {
+        console.error('Failed to persist history after cache refresh:', error);
+      });
+      
       console.log('📚 Refreshed history from cache');
     }
   }
@@ -434,8 +453,15 @@ class HistoryService implements CacheEventListener {
     if (itemIndex !== -1) {
       console.log(`📚 [HistoryService] Removing ${barcode} from history (was at index ${itemIndex})`);
       this.historyItems.splice(itemIndex, 1);
-      await this.persistHistory();
+      
+      // Notify listeners immediately for faster UI updates
       this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      // Persist changes asynchronously
+      this.persistHistoryAsync().catch(error => {
+        console.error('Failed to persist history after cache invalidation:', error);
+      });
+      
       console.log(`📚 Removed ${barcode} from history due to cache invalidation: ${reason}`);
     } else {
       console.log(`📚 [HistoryService] ${barcode} not found in history, nothing to remove`);
@@ -519,6 +545,25 @@ class HistoryService implements CacheEventListener {
     } catch (error) {
       console.error('Failed to persist history:', error);
     }
+  }
+
+  /**
+   * Asynchronous version of persistHistory for performance optimization
+   * Moves the persistence operation to background thread to avoid blocking UI
+   */
+  private async persistHistoryAsync(): Promise<void> {
+    // Use setTimeout to move the operation to the next tick/background
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        try {
+          await this.persistHistory();
+          resolve();
+        } catch (error) {
+          console.error('Failed to persist history asynchronously:', error);
+          resolve(); // Resolve even on error to prevent hanging promises
+        }
+      }, 0);
+    });
   }
   
   private notifyListeners(event: keyof HistoryEventListener, ...args: any[]): void {
