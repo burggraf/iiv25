@@ -48,6 +48,7 @@ export interface CameraViewRef {
   takePictureAsync: (options?: any) => Promise<{ uri: string } | null>;
   getState: () => CameraState;
   clearLastScannedBarcode: () => void;
+  logCameraHealth: () => void;
 }
 
 const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps>(
@@ -138,6 +139,31 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         if (barcodeTimeoutRef.current) {
           clearTimeout(barcodeTimeoutRef.current);
           barcodeTimeoutRef.current = null;
+        }
+      },
+      logCameraHealth: () => {
+        console.log(`🎥 UnifiedCameraView (${owner}): Camera Health Check`);
+        console.log(`   Component State:`, {
+          mode: cameraState.mode,
+          isActive: cameraState.isActive,
+          hasPermission: cameraState.hasPermission,
+          enableBarcode: cameraState.config.enableBarcode,
+          autofocus: cameraState.config.autofocus,
+          lastScannedBarcode,
+          autoFocusKey,
+          focusPoint
+        });
+        
+        // Log service-level diagnostics
+        cameraService.logHealthDiagnostics();
+        
+        // Check if scanner is properly configured for barcode scanning
+        if (cameraState.mode === 'scanner') {
+          const isOptimal = cameraState.isActive && 
+                           cameraState.config.enableBarcode && 
+                           cameraState.config.autofocus === 'on';
+          console.log(`🎥 UnifiedCameraView (${owner}): Scanner optimization status:`, 
+                     isOptimal ? '✅ Optimal' : '⚠️ Suboptimal');
         }
       },
     }));
@@ -258,6 +284,37 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         onCameraReady?.();
       };
 
+      const handleCameraReset = (resetInfo: { fromMode: string; toMode: string; reason: string }) => {
+        if (!isMountedRef.current) return;
+        console.log(`🎥 UnifiedCameraView (${owner}): Camera reset triggered:`, resetInfo);
+        
+        // Reset autofocus state for optimal barcode scanning
+        if (resetInfo.toMode === 'scanner') {
+          console.log(`🎥 UnifiedCameraView (${owner}): Resetting autofocus for scanner mode`);
+          
+          // Clear any existing focus point
+          setFocusPoint(null);
+          
+          // Reset autofocus key to ensure proper focus behavior
+          setAutoFocusKey('on');
+          
+          // Trigger a focus reset sequence after a brief delay
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              console.log(`🎥 UnifiedCameraView (${owner}): Triggering autofocus reset sequence`);
+              // Briefly toggle autofocus to reset camera focus state
+              setAutoFocusKey('off');
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setAutoFocusKey('on');
+                  console.log(`🎥 UnifiedCameraView (${owner}): Autofocus reset complete`);
+                }
+              }, 100);
+            }
+          }, 250);
+        }
+      };
+
       // Initial state sync
       handleStateUpdate();
 
@@ -268,6 +325,7 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
       cameraService.on('capturingStateChanged', handleStateUpdate);
       cameraService.on('configUpdated', handleStateUpdate);
       cameraService.on('error', handleError);
+      cameraService.on('cameraReset', handleCameraReset);
 
       return () => {
         cameraService.off('modeChanged', handleStateUpdate);
@@ -277,8 +335,9 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         cameraService.off('capturingStateChanged', handleStateUpdate);
         cameraService.off('configUpdated', handleStateUpdate);
         cameraService.off('error', handleError);
+        cameraService.off('cameraReset', handleCameraReset);
       };
-    }, [cameraService]);
+    }, [cameraService, owner]);
 
     // Initialize camera for the current mode
     useEffect(() => {
