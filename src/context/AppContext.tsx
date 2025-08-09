@@ -12,6 +12,7 @@ interface AppContextType {
   scanHistory: Product[];
   historyItems: HistoryItem[];
   addToHistory: (product: Product) => void;
+  removeFromHistory: (barcode: string) => void;
   clearHistory: () => void;
   isLoading: boolean;
   deviceId: string | null;
@@ -136,6 +137,11 @@ export function AppProvider({ children }: AppProviderProps) {
     await historyService.updateHistoryProduct(barcode, product);
   }, []);
 
+  const removeFromHistory = useCallback(async (barcode: string) => {
+    // Delegate to HistoryService - it will handle cache and state updates
+    await historyService.removeFromHistory(barcode);
+  }, []);
+
   const clearHistory = useCallback(async () => {
     // Clear both history and cache to ensure no phantom data
     await historyService.clearHistory();
@@ -158,6 +164,7 @@ export function AppProvider({ children }: AppProviderProps) {
     scanHistory,
     historyItems,
     addToHistory,
+    removeFromHistory,
     clearHistory,
     isLoading,
     deviceId,

@@ -270,6 +270,31 @@ class HistoryService implements CacheEventListener {
   }
   
   /**
+   * Remove a single item from history
+   */
+  public async removeFromHistory(barcode: string): Promise<void> {
+    await this.ensureInitialized();
+    
+    console.log(`📚 [HistoryService] *** REMOVE FROM HISTORY CALLED ***`);
+    console.log(`📚 [HistoryService] Barcode: ${barcode}`);
+    
+    const initialLength = this.historyItems.length;
+    this.historyItems = this.historyItems.filter(item => item.barcode !== barcode);
+    
+    if (this.historyItems.length < initialLength) {
+      // Persist changes
+      await this.persistHistory();
+      
+      // Notify listeners
+      this.notifyListeners('onHistoryUpdated', this.historyItems);
+      
+      console.log(`📚 Removed product ${barcode} from history`);
+    } else {
+      console.log(`📚 Product ${barcode} not found in history`);
+    }
+  }
+  
+  /**
    * Clear all history
    */
   public async clearHistory(): Promise<void> {

@@ -6,12 +6,12 @@ import { useApp } from '../context/AppContext';
 import { SupabaseService } from '../services/supabaseService';
 import { ProductImageUrlService } from '../services/productImageUrlService';
 import Logo from '../components/Logo';
-import HistoryItem from '../components/HistoryItem';
+import SwipeableHistoryItem from '../components/SwipeableHistoryItem';
 import ProductDisplayContainer from '../components/ProductDisplayContainer';
 import { Product } from '../types';
 
 export default function HistoryScreen() {
-  const { scanHistory, historyItems, clearHistory, isLoading, updateHistoryProduct } = useApp();
+  const { scanHistory, historyItems, clearHistory, removeFromHistory, isLoading, updateHistoryProduct } = useApp();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
@@ -119,6 +119,10 @@ export default function HistoryScreen() {
     // Update the selected product state to reflect changes
     setSelectedProduct(updatedProduct);
   };
+
+  const handleRemoveItem = useCallback((barcode: string) => {
+    removeFromHistory(barcode);
+  }, [removeFromHistory]);
 
   // Filter products based on search query
   const filteredProducts = useMemo(() => {
@@ -244,9 +248,10 @@ export default function HistoryScreen() {
               // Find the corresponding historyItem to get isNew flag
               const historyItem = historyItems.find(hi => hi.barcode === item.barcode);
               return (
-                <HistoryItem
+                <SwipeableHistoryItem
                   product={item}
                   onPress={() => handleProductPress(item)}
+                  onDelete={handleRemoveItem}
                   isNew={historyItem?.isNew || false}
                 />
               );
