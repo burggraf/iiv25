@@ -67,15 +67,23 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
   ) => {
     const cameraRef = useRef<CameraView>(null);
     const cameraService = UnifiedCameraService.getInstance();
+    const isMountedRef = useRef(true);
     
     const [cameraState, setCameraState] = useState<CameraState>(cameraService.getState());
     const [lastScannedBarcode, setLastScannedBarcode] = useState<string>('');
-    const [barcodeTimeout, setBarcodeTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+    const barcodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Set up mount tracking for safe cleanup
+    useEffect(() => {
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, []);
 
     // Expose methods through ref
     React.useImperativeHandle(ref, () => ({
       takePictureAsync: async (options = {}) => {
-        if (!cameraRef.current || !cameraService.isReadyFor('photo')) {
+        if (!isMountedRef.current || !cameraRef.current || !cameraService.isReadyFor('photo')) {
           console.warn('🎥 UnifiedCameraView: Camera not ready for photo capture');
           return null;
         }
@@ -88,6 +96,12 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
             ...options,
           });
 
+          // Check if component is still mounted after async operation
+          if (!isMountedRef.current) {
+            console.warn('🎥 UnifiedCameraView: Component unmounted during photo capture');
+            return null;
+          }
+
           if (result) {
             const uri = (result as any).uri;
             if (uri) {
@@ -99,21 +113,25 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
           return null;
         } catch (error) {
           console.error('🎥 UnifiedCameraView: Photo capture failed:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Photo capture failed';
-          cameraService.setError(errorMessage);
-          onError?.(errorMessage);
+          if (isMountedRef.current) {
+            const errorMessage = error instanceof Error ? error.message : 'Photo capture failed';
+            cameraService.setError(errorMessage);
+            onError?.(errorMessage);
+          }
           return null;
         } finally {
-          cameraService.setCapturingState(false);
+          if (isMountedRef.current) {
+            cameraService.setCapturingState(false);
+          }
         }
       },
       getState: () => cameraState,
       clearLastScannedBarcode: () => {
         console.log('🎥 UnifiedCameraView: Clearing last scanned barcode');
         setLastScannedBarcode('');
-        if (barcodeTimeout) {
-          clearTimeout(barcodeTimeout);
-          setBarcodeTimeout(null);
+        if (barcodeTimeoutRef.current) {
+          clearTimeout(barcodeTimeoutRef.current);
+          barcodeTimeoutRef.current = null;
         }
       },
     }));
@@ -141,7 +159,7 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
     // Handle barcode scanning
     const handleBarcodeScanned = useCallback(
       ({ data }: BarcodeScanningResult) => {
-        if (!cameraService.isReadyFor('barcode') || data === lastScannedBarcode) {
+        if (!isMountedRef.current || !cameraService.isReadyFor('barcode') || data === lastScannedBarcode) {
           return;
         }
 
@@ -150,31 +168,36 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         onBarcodeScanned?.(data);
 
         // Clear the barcode after 2 seconds to allow re-scanning
-        if (barcodeTimeout) {
-          clearTimeout(barcodeTimeout);
+        if (barcodeTimeoutRef.current) {
+          clearTimeout(barcodeTimeoutRef.current);
         }
         
-        const timeout = setTimeout(() => {
-          setLastScannedBarcode('');
+        barcodeTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setLastScannedBarcode('');
+          }
+          barcodeTimeoutRef.current = null;
         }, 2000);
-        setBarcodeTimeout(timeout);
       },
-      [cameraService, lastScannedBarcode, onBarcodeScanned, barcodeTimeout]
+      [cameraService, lastScannedBarcode, onBarcodeScanned]
     );
 
     // Set up service event listeners
     useEffect(() => {
       const handleStateUpdate = () => {
+        if (!isMountedRef.current) return;
         const newState = cameraService.getState();
         console.log('🎥 UnifiedCameraView: State updated:', newState);
         setCameraState(newState);
       };
 
       const handleError = (error: string) => {
+        if (!isMountedRef.current) return;
         onError?.(error);
       };
 
       const handleActivated = () => {
+        if (!isMountedRef.current) return;
         handleStateUpdate(); // Update full state when activated
         onCameraReady?.();
       };
@@ -183,7 +206,7 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
       handleStateUpdate();
 
       cameraService.on('modeChanged', handleStateUpdate);
-      cameraService.on('activated', handleStateUpdate);
+      cameraService.on('activated', handleActivated);
       cameraService.on('deactivated', handleStateUpdate);
       cameraService.on('permissionChanged', handleStateUpdate);
       cameraService.on('capturingStateChanged', handleStateUpdate);
@@ -192,14 +215,14 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
 
       return () => {
         cameraService.off('modeChanged', handleStateUpdate);
-        cameraService.off('activated', handleStateUpdate);
+        cameraService.off('activated', handleActivated);
         cameraService.off('deactivated', handleStateUpdate);
         cameraService.off('permissionChanged', handleStateUpdate);
         cameraService.off('capturingStateChanged', handleStateUpdate);
         cameraService.off('configUpdated', handleStateUpdate);
         cameraService.off('error', handleError);
       };
-    }, [cameraService, onError, onCameraReady]);
+    }, [cameraService]);
 
     // Initialize camera for the current mode
     useEffect(() => {
@@ -245,11 +268,12 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
       return () => {
         isMounted = false;
         // Clean up barcode timeout
-        if (barcodeTimeout) {
-          clearTimeout(barcodeTimeout);
+        if (barcodeTimeoutRef.current) {
+          clearTimeout(barcodeTimeoutRef.current);
+          barcodeTimeoutRef.current = null;
         }
       };
-    }, [mode, requestCameraPermissions, cameraService, cameraState.hasPermission, barcodeTimeout]);
+    }, [mode, requestCameraPermissions, cameraService, cameraState.hasPermission]);
 
     // Render permission request UI
     if (cameraState.hasPermission === null) {

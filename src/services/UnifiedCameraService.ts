@@ -56,6 +56,7 @@ class UnifiedCameraService {
   private modeConfigs: CameraModeConfig;
   private listeners: EventListener = {};
   private currentOwner: CameraOwnership | null = null;
+  private listenerCleanupTimers: Map<(...args: any[]) => void, ReturnType<typeof setTimeout>> = new Map();
 
   private constructor() {
     
@@ -112,23 +113,44 @@ class UnifiedCameraService {
   }
 
   /**
-   * Add event listener
+   * Add event listener with automatic cleanup tracking
    */
   on(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
     this.listeners[event].push(listener);
+    
+    // Set up automatic cleanup timer (10 minutes)
+    // This prevents memory leaks from components that forget to unregister
+    const existingTimer = this.listenerCleanupTimers.get(listener);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      console.warn(`🎥 UnifiedCameraService: Auto-cleaning stale listener for event '${event}'`);
+      this.off(event, listener);
+    }, 10 * 60 * 1000); // 10 minutes
+    
+    this.listenerCleanupTimers.set(listener, timer);
   }
 
   /**
-   * Remove event listener
+   * Remove event listener and cleanup timer
    */
   off(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners[event]) return;
     const index = this.listeners[event].indexOf(listener);
     if (index > -1) {
       this.listeners[event].splice(index, 1);
+    }
+    
+    // Clear the cleanup timer
+    const timer = this.listenerCleanupTimers.get(listener);
+    if (timer) {
+      clearTimeout(timer);
+      this.listenerCleanupTimers.delete(listener);
     }
   }
 

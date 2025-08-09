@@ -73,6 +73,19 @@ export default function ScannerScreen() {
 	const [retryableError, setRetryableError] = useState<{error: string, imageBase64: string, imageUri?: string} | null>(null)
 	const [ingredientScanError, setIngredientScanError] = useState<string | null>(null)
 	const [productCreationError, setProductCreationError] = useState<{error: string, imageBase64: string, imageUri?: string, retryable: boolean} | null>(null)
+	
+	// Clean up image references when component unmounts
+	useEffect(() => {
+		return () => {
+			// Clear any image references on unmount
+			if (productCreationError) {
+				setProductCreationError(null)
+			}
+			if (retryableError) {
+				setRetryableError(null)
+			}
+		}
+	}, [])
 	const [productPhotoError, setProductPhotoError] = useState<string | null>(null)
 	const [isCapturingPhoto, setIsCapturingPhoto] = useState(false)
 	const [showRateLimitModal, setShowRateLimitModal] = useState(false)
@@ -647,6 +660,7 @@ export default function ScannerScreen() {
 	}
 
 	const handleProductCreationCancel = () => {
+		// Clear error and release image memory
 		setProductCreationError(null);
 		hideOverlay();
 	}
@@ -688,12 +702,23 @@ export default function ScannerScreen() {
 
 			if (data.error) {
 				console.log('Product creation error:', data.error, 'Retryable:', data.retryable);
-				setProductCreationError({
-					error: data.error,
-					imageBase64,
-					imageUri,
-					retryable: data.retryable || false
-				});
+				// Only store image data if retry is possible
+				if (data.retryable) {
+					setProductCreationError({
+						error: data.error,
+						imageBase64,
+						imageUri,
+						retryable: true
+					});
+				} else {
+					// Don't hold image references if not retryable
+					setProductCreationError({
+						error: data.error,
+						imageBase64: '',
+						imageUri: undefined,
+						retryable: false
+					});
+				}
 				setIsCreatingProduct(false)
 				setShowProductCreationModal(false)
 				return
@@ -774,6 +799,7 @@ export default function ScannerScreen() {
 			*/
 		} catch (err) {
 			console.error('Error creating product:', err)
+			// Store image data for retryable error
 			setProductCreationError({
 				error: 'Failed to create product. Please try again.',
 				imageBase64,
