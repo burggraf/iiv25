@@ -136,7 +136,7 @@ const VisionCameraView = React.forwardRef<VisionCameraViewRef, VisionCameraViewP
             setLastScannedBarcode('');
           }
           barcodeTimeoutRef.current = null;
-        }, 1000);
+        }, 2000);
       },
     };
 

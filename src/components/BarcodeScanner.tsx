@@ -31,15 +31,15 @@ export default function BarcodeScanner({
     if (scanned) return;
     
     setScanned(true);
-    console.log(`🔍 [BARCODE] Raw camera scan - Type: ${type}, Data: "${data}", Length: ${data.length}`);
+    console.log(`Bar code with type ${type} and data ${data} has been scanned!`);
     
     // Call the parent callback with the barcode data
     onBarcodeScanned(data);
     
-    // Reset scanner after 1 second
+    // Reset scanner after 2 seconds
     setTimeout(() => {
       setScanned(false);
-    }, 1000);
+    }, 2000);
   };
 
   if (hasPermission === null) {

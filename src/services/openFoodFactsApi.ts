@@ -7,7 +7,6 @@ const BASE_URL = 'https://world.openfoodfacts.org/api/v0/product';
 export class OpenFoodFactsService {
   static async getProductByBarcode(barcode: string): Promise<Product | null> {
     try {
-      console.log(`🌐 [OFF] Requesting product for barcode: ${barcode}`);
       const response = await axios.get<OpenFoodFactsProduct>(`${BASE_URL}/${barcode}.json`, {
         timeout: 5000 // 5 second timeout
       });

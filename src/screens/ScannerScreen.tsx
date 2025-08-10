@@ -273,14 +273,6 @@ export default function ScannerScreen() {
 	}
 
 	const handleBarcodeScanned = async (data: string) => {
-		console.log(`🔍 [SCANNER] Received barcode from camera: "${data}", Length: ${data.length}, Type: ${typeof data}`);
-		
-		// Normalize EAN13 with leading zero to UPC format for consistent processing
-		let normalizedBarcode = data;
-		if (data.length === 13 && data.startsWith('0')) {
-			normalizedBarcode = data.substring(1); // Remove leading zero
-			console.log(`🔄 [SCANNER] Normalizing EAN13 ${data} to UPC ${normalizedBarcode}`);
-		}
 		
 		// Only process barcodes when screen is focused and no modal is shown, and not in product creation mode
 		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal || productCreationMode !== 'off') {
@@ -297,16 +289,16 @@ export default function ScannerScreen() {
 		}
 
 		// Check if this barcode is for the currently displayed product - if so, don't beep or process
-		if (scannedProduct && scannedProduct.barcode === normalizedBarcode) {
+		if (scannedProduct && scannedProduct.barcode === data) {
 			console.log(`❌ Early return - same as currently displayed product`)
 			// Update last scanned info to reset debounce timer
-			lastScannedBarcodeRef.current = normalizedBarcode
+			lastScannedBarcodeRef.current = data
 			lastScannedTimeRef.current = currentTime
 			return
 		}
 
 		// Debounce same barcode scans - ignore if same barcode scanned within last 3 seconds
-		if (lastScannedBarcodeRef.current === normalizedBarcode && currentTime - lastScannedTimeRef.current < 3000) {
+		if (lastScannedBarcodeRef.current === data && currentTime - lastScannedTimeRef.current < 3000) {
 			console.log(`❌ Early return - debounced (last scanned ${currentTime - lastScannedTimeRef.current}ms ago)`)
 			return
 		}
@@ -318,28 +310,28 @@ export default function ScannerScreen() {
 		}
 
 		// Clear any existing error state when scanning a new barcode
-		if (error && lastScannedBarcodeRef.current !== normalizedBarcode) {
+		if (error && lastScannedBarcodeRef.current !== data) {
 			setError(null)
 			hideOverlay()
 		}
 
 		// Update last scanned info
-		lastScannedBarcodeRef.current = normalizedBarcode
+		lastScannedBarcodeRef.current = data
 		lastScannedTimeRef.current = currentTime
-		setCurrentBarcode(normalizedBarcode)
+		setCurrentBarcode(data)
 
 		// Check if we have this UPC in our unified cache
-		const cachedProduct = await cacheService.getProduct(normalizedBarcode)
+		const cachedProduct = await cacheService.getProduct(data)
 		if (cachedProduct) {
 			// If cached product has no ingredients but status is UNKNOWN, check database for updates
 			const hasNoIngredients = !cachedProduct.ingredients || cachedProduct.ingredients.length === 0
 			const isUnknownStatus = cachedProduct.veganStatus === VeganStatus.UNKNOWN
 			
 			if (hasNoIngredients && isUnknownStatus) {
-				console.log(`🔍 Cached product ${normalizedBarcode} has no ingredients - checking database for updates`)
+				console.log(`🔍 Cached product ${data} has no ingredients - checking database for updates`)
 				// Don't return early - let it fall through to database lookup
 			} else {
-				console.log(`💾 Using cached result for ${normalizedBarcode}`)
+				console.log(`💾 Using cached result for ${data}`)
 				setScannedProduct(cachedProduct)
 				await addToHistory(cachedProduct)
 				showOverlay()
@@ -360,12 +352,12 @@ export default function ScannerScreen() {
 		// Let server handle rate limiting - the phantom entry issue needs to be fixed server-side
 
 		// Set processing flag
-		processingBarcodeRef.current = normalizedBarcode
+		processingBarcodeRef.current = data
 		setIsLoading(true)
 		setError(null)
 
 		try {
-			const result = await ProductLookupService.lookupProductByBarcode(normalizedBarcode, { context: 'Scanner' })
+			const result = await ProductLookupService.lookupProductByBarcode(data, { context: 'Scanner' })
 
 			if (result.isRateLimited) {
 				setShowRateLimitModal(true)
@@ -374,7 +366,7 @@ export default function ScannerScreen() {
 
 			if (result.product) {
 				// Add to unified cache
-				await cacheService.setProduct(normalizedBarcode, result.product)
+				await cacheService.setProduct(data, result.product)
 				
 				setScannedProduct(result.product)
 				await addToHistory(result.product)
@@ -809,7 +801,7 @@ export default function ScannerScreen() {
 			console.log(`📸 Queueing photo upload job for product: ${scannedProduct.name}`)
 
 			// Queue the photo upload as a background job instead of processing directly
-			const job = await queueJob({
+			const job = await backgroundQueueService.queueJob({
 				jobType: 'product_photo_upload',
 				imageUri: imageUri,
 				upc: currentBarcode,
@@ -976,6 +968,11 @@ export default function ScannerScreen() {
 							
 							return (
 								<View style={styles.overlay} pointerEvents="box-none">
+									{/* Vision Camera Indicator - TOP */}
+									<View style={styles.visionCameraIndicator} pointerEvents="none">
+										<Text style={styles.visionCameraText}>🎥 VISION CAMERA ACTIVE</Text>
+										<Text style={styles.visionCameraSubtext}>Native autofocus • Tap to focus • MLKit barcode scanner</Text>
+									</View>
 									
 									<View style={styles.unfocusedContainer} pointerEvents="none"></View>
 									<View style={styles.middleContainer} pointerEvents="box-none">
