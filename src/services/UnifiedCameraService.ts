@@ -29,7 +29,6 @@ export interface CameraConfig {
   autofocus?: 'on' | 'off';
   focusDepth?: number;
   enableTouchFocus?: boolean;
-  zoom?: number;
 }
 
 export interface CameraModeConfig {
@@ -82,9 +81,7 @@ class UnifiedCameraService {
         barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8'],
         enablePhotoCapture: false,
         autofocus: 'on',
-        focusDepth: 0.0,
         enableTouchFocus: true,
-        zoom: 0.1,
       },
       'product-photo': {
         mode: 'product-photo',
