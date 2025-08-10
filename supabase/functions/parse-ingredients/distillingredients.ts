@@ -25,6 +25,9 @@ export function distillIngredients(ingredients: string[]): string[] {
     'toasted',
     'dehydrated',
     'fresh',
+    'extra virgin',
+    'virgin',
+    'pure',
     'puree*',
     'certified',
     'flavor*',  // matches flavor, flavored, flavoring, etc.
