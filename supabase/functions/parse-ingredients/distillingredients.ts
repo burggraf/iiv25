@@ -14,6 +14,7 @@ export function distillIngredients(ingredients: string[]): string[] {
     'dry',
     'dried',
     'organic',
+    'organically grown',
     'nongmo',
     'non gmo',
     'natural',
@@ -24,7 +25,7 @@ export function distillIngredients(ingredients: string[]): string[] {
     'toasted',
     'dehydrated',
     'fresh',
-    'puree',
+    'puree*',
     'certified',
     'flavor*',  // matches flavor, flavored, flavoring, etc.
     'flavour*'
@@ -42,7 +43,41 @@ export function distillIngredients(ingredients: string[]): string[] {
   const customWordsPattern = new RegExp(`\\b(${regexPatterns.join('|')})\\b`, 'g');
   // ======================================================================
 
-  const cleanedIngredients = ingredients.map(ingredient => {
+  // First, handle parenthetical ingredient lists early in the process
+  let expandedIngredients: string[] = [];
+
+  for (const ingredient of ingredients) {
+    // Check for parenthetical lists like "fruit juice (apple, raspberry, grape)"
+    const parenthesesMatch = ingredient.match(/^([^(]+)\s*\(([^)]+)\)(.*)$/);
+
+    if (parenthesesMatch) {
+      const baseIngredient = parenthesesMatch[1].trim();
+      const subIngredients = parenthesesMatch[2];
+      const suffix = parenthesesMatch[3].trim();
+
+      // Split the parenthetical content by common separators
+      const subIngredientList = subIngredients
+        .split(/,|&|\sand\s/)
+        .map(sub => sub.trim())
+        .filter(sub => sub.length > 0);
+
+      // Create expanded ingredients: "apple juice", "raspberry juice", "grape juice"
+      for (const sub of subIngredientList) {
+        const expandedIngredient = `${baseIngredient} ${sub} ${suffix}`.trim();
+        expandedIngredients.push(expandedIngredient);
+      }
+
+      // Also keep the base ingredient if it makes sense
+      if (baseIngredient.trim().length > 0) {
+        expandedIngredients.push(`${baseIngredient} ${suffix}`.trim());
+      }
+    } else {
+      // No parentheses, keep as-is
+      expandedIngredients.push(ingredient);
+    }
+  }
+
+  const cleanedIngredients = expandedIngredients.map(ingredient => {
     let cleaned = ingredient.toLowerCase();
 
     // Remove non-printable characters
@@ -176,8 +211,18 @@ export function distillIngredients(ingredients: string[]): string[] {
     cleaned = cleaned.replace(/\s?containing\s?/g, ' ');
     cleaned = cleaned.replace(/may contain /g, ' ');
 
+    // Protect "natural flavor*" and "natural and/& artificial flavor*" combinations before stripping individual words
+    cleaned = cleaned.replace(/\bnatural\s*(&|and)\s*artificial\s+flavor(ing|s?)?\b/g, 'naturalYartificialXflavor$2');
+    cleaned = cleaned.replace(/\bnatural\s+flavor(ing|s?)?\b/g, 'naturalXflavor$1');
+
     // Apply custom word stripping (after major processing, before final cleanup)
     cleaned = cleaned.replace(customWordsPattern, ' ');
+
+    // Restore protected "natural flavor*" combinations
+    cleaned = cleaned.replace(/naturalYartificialXflavor(ing|s)/g, 'natural & artificial flavor$1');
+    cleaned = cleaned.replace(/naturalYartificialXflavor/g, 'natural & artificial flavor');
+    cleaned = cleaned.replace(/naturalXflavor(ing|s)/g, 'natural flavor$1');
+    cleaned = cleaned.replace(/naturalXflavor/g, 'natural flavor');
 
     // Clean up multiple spaces
     cleaned = cleaned.replace(/\s+/g, ' ');
