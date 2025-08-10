@@ -288,33 +288,63 @@ const UnifiedCameraView = React.forwardRef<CameraViewRef, UnifiedCameraViewProps
         if (!isMountedRef.current) return;
         console.log(`🎥 UnifiedCameraView (${owner}): Camera reset triggered:`, resetInfo);
         
-        // Gentle camera reset for scanner mode to avoid image jumping
+        // Enhanced 3-stage hardware reset sequence for optimal barcode scanning
         if (resetInfo.toMode === 'scanner') {
-          console.log(`🎥 UnifiedCameraView (${owner}): Initiating gentle camera reset for scanner mode`);
+          console.log(`🎥 UnifiedCameraView (${owner}): Initiating comprehensive camera reset for scanner mode`);
           
-          // Clear focus point and temporarily disable autofocus
+          // Stage 1 (0ms): Clear focus state, set autofocus OFF, reset focus point
+          console.log(`🎥 UnifiedCameraView (${owner}): Stage 1 - Clearing focus state and disabling autofocus`);
           setFocusPoint(null);
           setAutoFocusKey('off');
           
-          // Update camera service with optimal scanner configuration
+          // Update camera service with reset configuration
           try {
             cameraService.updateModeConfig('scanner', {
-              focusDepth: 0.0,        // Critical for barcode scanning
-              zoom: 0.1,              // Optimal zoom level
-              enableTouchFocus: true  // Enable touch focus
+              focusDepth: undefined, // Clear current focus depth
+              zoom: undefined,       // Clear current zoom
+              enableTouchFocus: false // Temporarily disable touch focus
             });
           } catch (error) {
-            console.error(`🎥 UnifiedCameraView (${owner}): Error in camera reset:`, error);
+            console.error(`🎥 UnifiedCameraView (${owner}): Error in Stage 1 reset:`, error);
           }
           
-          // Re-enable autofocus after a brief delay
+          // Stage 2 (150ms): Restore critical scanner settings and enable autofocus
           setTimeout(() => {
             if (isMountedRef.current) {
-              console.log(`🎥 UnifiedCameraView (${owner}): Re-enabling autofocus`);
+              console.log(`🎥 UnifiedCameraView (${owner}): Stage 2 - Restoring scanner settings and enabling autofocus`);
+              
+              // Restore optimal scanner configuration
+              try {
+                cameraService.updateModeConfig('scanner', {
+                  focusDepth: 0.0,        // Critical for barcode scanning
+                  zoom: 0.1,              // Optimal zoom level
+                  enableTouchFocus: true  // Re-enable touch focus
+                });
+              } catch (error) {
+                console.error(`🎥 UnifiedCameraView (${owner}): Error in Stage 2 reset:`, error);
+              }
+              
+              // Enable autofocus
               setAutoFocusKey('on');
-              console.log(`🎥 UnifiedCameraView (${owner}): Gentle camera reset complete`);
             }
-          }, 200);
+          }, 150);
+          
+          // Stage 3 (350ms): Final autofocus verification cycle
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              console.log(`🎥 UnifiedCameraView (${owner}): Stage 3 - Final autofocus verification cycle`);
+              
+              // Final autofocus reset cycle to ensure hardware focus is properly engaged
+              setAutoFocusKey('off');
+              
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setAutoFocusKey('on');
+                  console.log(`🎥 UnifiedCameraView (${owner}): 3-stage camera reset sequence complete - optimal focus restored`);
+                }
+              }, 50);
+            }
+          }, 350);
         }
       };
 
