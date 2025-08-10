@@ -9,7 +9,7 @@
  * Replaces ProductCreationCameraScreen and ReportIssueCameraScreen
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { usePhotoCaptureWorkflow } from '../hooks/PhotoCaptureHook';
 import { PhotoWorkflowConfigService } from '../services/PhotoWorkflowConfig';
-import CameraViewSwitcher, { CameraConfig } from '../components/CameraViewSwitcher';
+import UnifiedCameraView from '../components/UnifiedCameraView';
 import {
   PhotoWorkflowType,
   PhotoWorkflowConfig,
@@ -34,13 +34,6 @@ interface PhotoWorkflowScreenParams {
 }
 
 export default function UnifiedPhotoWorkflowScreen() {
-  // Enable Vision Camera in development for testing
-  useEffect(() => {
-    if (__DEV__) {
-      CameraConfig.enableVisionCamera()
-      console.log('🎥 UnifiedPhotoWorkflow: Vision Camera enabled for development testing')
-    }
-  }, [])
   const rawParams = useLocalSearchParams();
   const params: PhotoWorkflowScreenParams = {
     barcode: String(rawParams.barcode || ''),
@@ -156,7 +149,7 @@ export default function UnifiedPhotoWorkflowScreen() {
   // Camera Mode - Show camera with overlay
   return (
     <View style={styles.container}>
-      <CameraViewSwitcher
+      <UnifiedCameraView
         ref={cameraRef}
         mode={currentStepConfig.cameraMode}
         owner={`PhotoWorkflow_${workflowType}`}

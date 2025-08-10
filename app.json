@@ -90,14 +90,6 @@
           "cameraPermission": "Allow Is It Vegan to access your camera to take product photos."
         }
       ],
-      [
-        "react-native-vision-camera",
-        {
-          "cameraPermissionText": "Allow Is It Vegan to access your camera to scan product barcodes and take photos.",
-          "enableCodeScanner": true,
-          "enableFrameProcessors": false
-        }
-      ],
       "expo-apple-authentication",
       "./plugins/android-iap-config.js"
     ],

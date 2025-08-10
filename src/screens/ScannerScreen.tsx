@@ -1,9 +1,10 @@
-import { BarcodeScanningResult } from 'expo-camera'
+import { BarcodeScanningResult, Camera } from 'expo-camera'
 import { isDevice } from 'expo-device'
 import { useIsFocused } from '@react-navigation/native'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import VisionCameraView, { VisionCameraViewRef } from '../components/VisionCameraView'
+import UnifiedCameraService from '../services/UnifiedCameraService'
+import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
 import {
 	ActivityIndicator,
 	Alert,
@@ -50,10 +51,10 @@ export default function ScannerScreen() {
 	const router = useRouter()
 	const { addToHistory, deviceId, queueJob, clearAllJobs, activeJobs, setShowJobsModalCallback } = useApp()
 	const [pendingJobCallbacks, setPendingJobCallbacks] = useState<Map<string, (product: Product) => void>>(new Map())
-	
+	const cameraService = UnifiedCameraService.getInstance()
 
 	// State declarations
-	// Removed hasPermission - CameraViewSwitcher handles permissions internally
+	const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
 	const [showProductDetail, setShowProductDetail] = useState(false)
@@ -99,7 +100,7 @@ export default function ScannerScreen() {
 	const processingBarcodeRef = useRef<string | null>(null)
 	const lastScannedBarcodeRef = useRef<string | null>(null)
 	const lastScannedTimeRef = useRef<number>(0)
-	const cameraRef = useRef<VisionCameraViewRef>(null)
+	const cameraRef = useRef<CameraViewRef>(null)
 	const [cameraMode, setCameraMode] = useState<'scanner' | 'inactive'>('inactive')
 
 	// Temporary debugging - log stuck jobs on screen load
@@ -173,6 +174,11 @@ export default function ScannerScreen() {
 	}
 
 	useEffect(() => {
+		const getCameraPermissions = async () => {
+			const { status } = await Camera.requestCameraPermissionsAsync()
+			setHasPermission(status === 'granted')
+		}
+
 		const loadSoundPreference = async () => {
 			try {
 				const savedPreference = await AsyncStorage.getItem('soundEnabled')
@@ -184,13 +190,20 @@ export default function ScannerScreen() {
 			}
 		}
 
+		getCameraPermissions()
 		loadSoundPreference()
 		SoundUtils.initializeBeepSound()
 
 		// Cleanup on unmount
 		return () => {
 			SoundUtils.cleanup()
-			// Camera cleanup is handled by CameraViewSwitcher
+			// Only cleanup camera if we own it
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Component unmount - releasing scanner mode')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+			}
 			setCameraMode('inactive')
 		}
 	}, [])
@@ -223,19 +236,57 @@ export default function ScannerScreen() {
 		}
 	}, [deviceId, loadSubscriptionData])
 
-	// Camera mode management based on screen focus - simplified for CameraViewSwitcher
+	// Camera resource management based on screen focus
 	useEffect(() => {
-		console.log(`📷 Scanner: useEffect triggered - focused: ${isFocused}, showDetail: ${showProductDetail}`)
-		const shouldActivate = isFocused && !showProductDetail
+		console.log(`📷 Scanner: useEffect triggered - focused: ${isFocused}, permission: ${hasPermission}, showDetail: ${showProductDetail}`)
+		const shouldActivate = isFocused && hasPermission && !showProductDetail
 
 		if (shouldActivate) {
-			console.log('📷 Scanner: Activating scanner mode')
-			setCameraMode('scanner')
+			// Only take control if camera is truly available (inactive mode AND no other owner)
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			console.log(`📷 Scanner: Should activate - current mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}`)
+			
+			if ((currentState.mode === 'inactive' && !currentOwner) || 
+				(currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen')) {
+				console.log('📷 Scanner: Camera available, switching to scanner mode')
+				cameraService.switchToMode('scanner', {}, 'ScannerScreen')
+				setCameraMode('scanner')
+			} else {
+				console.log(`📷 Scanner: Camera busy - mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}, not taking control`)
+				setCameraMode('inactive')
+			}
 		} else {
-			console.log('📷 Scanner: Deactivating scanner mode')
-			setCameraMode('inactive')
+			// Only switch to inactive if we currently own the camera in scanner mode
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			console.log(`📷 Scanner: Should not activate - current mode: ${currentState.mode}, owner: ${currentOwner?.owner || 'none'}`)
+			
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Releasing scanner mode (going inactive)')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+				setCameraMode('inactive')
+			} else {
+				// Camera is owned by another screen, don't interfere at all
+				console.log(`📷 Scanner: Camera owned by ${currentOwner?.owner || 'none'} in ${currentState.mode} mode, NOT INTERFERING`)
+				setCameraMode('inactive')
+			}
 		}
-	}, [isFocused, showProductDetail])
+		
+		return () => {
+			// Only cleanup if we currently own the camera (scanner mode)
+			const currentState = cameraService.getState()
+			const currentOwner = cameraService.getCurrentOwner()
+			
+			if (currentState.mode === 'scanner' && currentOwner?.owner === 'ScannerScreen') {
+				console.log('📷 Scanner: Cleanup - releasing scanner mode')
+				cameraService.switchToMode('inactive', {}, 'ScannerScreen')
+				setCameraMode('inactive')
+			} else {
+				console.log(`📷 Scanner: Cleanup - camera owned by ${currentOwner?.owner || 'none'}, not releasing`)
+			}
+		}
+	}, [isFocused, hasPermission, showProductDetail])
 
 	// Cache invalidation is now handled by CacheInvalidationService
 	// No need for individual component listeners
@@ -272,6 +323,7 @@ export default function ScannerScreen() {
 	}
 
 	const handleBarcodeScanned = async (data: string) => {
+		console.log(`🔍 handleBarcodeScanned called with: ${data}`)
 		
 		// Only process barcodes when screen is focused and no modal is shown, and not in product creation mode
 		if (!isFocused || showCreateProductModal || showIngredientScanModal || showProductCreationModal || productCreationMode !== 'off') {
@@ -302,6 +354,7 @@ export default function ScannerScreen() {
 			return
 		}
 
+		console.log(`📱 Barcode scanned: ${data}`)
 
 		// Play beep sound if enabled (only for different products)
 		if (isSoundEnabled) {
@@ -899,7 +952,25 @@ export default function ScannerScreen() {
 	}
 
 
-	// CameraViewSwitcher handles permissions internally
+	if (hasPermission === null) {
+		return (
+			<View style={styles.permissionContainer}>
+				<Text>Requesting camera permission...</Text>
+			</View>
+		)
+	}
+
+	if (hasPermission === false) {
+		return (
+			<View style={styles.permissionContainer}>
+				<Text style={styles.permissionText}>No access to camera</Text>
+				<Text style={styles.permissionSubText}>
+					Please enable camera permissions in your device settings to scan barcodes.
+				</Text>
+			</View>
+		)
+	}
+
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
 			{/* Header */}
@@ -948,7 +1019,7 @@ export default function ScannerScreen() {
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={({ data }: BarcodeScanningResult) => handleBarcodeScanned(data)} />
 				) : (
-					<VisionCameraView
+					<UnifiedCameraView
 						ref={cameraRef}
 						mode={cameraMode}
 						owner="ScannerScreen"
@@ -962,22 +1033,16 @@ export default function ScannerScreen() {
 							if (mode !== 'scanner' || !state.isActive) return null;
 							
 							return (
-								<View style={styles.overlay} pointerEvents="box-none">
-									{/* Vision Camera Indicator - TOP */}
-									<View style={styles.visionCameraIndicator} pointerEvents="none">
-										<Text style={styles.visionCameraText}>🎥 VISION CAMERA ACTIVE</Text>
-										<Text style={styles.visionCameraSubtext}>Native autofocus • Tap to focus • MLKit barcode scanner</Text>
-									</View>
-									
-									<View style={styles.unfocusedContainer} pointerEvents="none"></View>
-									<View style={styles.middleContainer} pointerEvents="box-none">
-										<View style={styles.unfocusedContainer} pointerEvents="none"></View>
-										<View style={styles.focusedContainer} pointerEvents="none">
-											<View style={styles.scanningFrame} pointerEvents="none" />
+								<View style={styles.overlay}>
+									<View style={styles.unfocusedContainer}></View>
+									<View style={styles.middleContainer}>
+										<View style={styles.unfocusedContainer}></View>
+										<View style={styles.focusedContainer}>
+											<View style={styles.scanningFrame} />
 										</View>
-										<View style={styles.unfocusedContainer} pointerEvents="none"></View>
+										<View style={styles.unfocusedContainer}></View>
 									</View>
-									<View style={styles.unfocusedContainer} pointerEvents="none"></View>
+									<View style={styles.unfocusedContainer}></View>
 								</View>
 							);
 						}}
@@ -1063,7 +1128,8 @@ export default function ScannerScreen() {
 												const timestamp = Date.now();
 												const separator = baseUrl.includes('?') ? '&' : '?';
 												const cacheBustedUrl = `${baseUrl}${separator}scanner_cache_bust=${timestamp}`;
-													return cacheBustedUrl;
+												console.log(`📱 [ScannerScreen] FRESH image URL for ${scannedProduct.barcode}:`, cacheBustedUrl);
+												return cacheBustedUrl;
 											})()
 										}} style={styles.overlayImage} />
 									) : (
@@ -2056,29 +2122,5 @@ const styles = StyleSheet.create({
 		color: 'white',
 		fontSize: 16,
 		fontWeight: '600',
-	},
-	visionCameraIndicator: {
-		position: 'absolute',
-		top: 60,
-		left: 20,
-		right: 20,
-		backgroundColor: 'rgba(0, 200, 0, 0.9)',
-		padding: 12,
-		borderRadius: 8,
-		alignItems: 'center',
-		zIndex: 1000,
-	},
-	visionCameraText: {
-		color: 'white',
-		fontSize: 16,
-		fontWeight: 'bold',
-		textAlign: 'center',
-	},
-	visionCameraSubtext: {
-		color: 'white',
-		fontSize: 12,
-		textAlign: 'center',
-		marginTop: 4,
-		opacity: 0.9,
 	},
 })
