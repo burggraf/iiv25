@@ -282,14 +282,7 @@ export class SupabaseService {
       }
       
       let searchBarcode = validatedBarcode;
-
-      // Normalize barcode format: prefer UPC (without leading zero)
-      // Convert EAN13 with leading zero to UPC format for consistent lookup
-      if (searchBarcode.length === 13 && searchBarcode.startsWith('0')) {
-        const upcFormat = searchBarcode.substring(1); // Remove leading zero
-        console.log(`🔄 Normalizing EAN13 ${searchBarcode} to UPC ${upcFormat} for database lookup`);
-        searchBarcode = upcFormat;
-      }
+      console.log(`🔍 [SUPABASE] Input barcode: ${barcode} -> validated: ${validatedBarcode}`);
 
       // Get device ID for logging
       const deviceId = await deviceIdService.getDeviceId();
