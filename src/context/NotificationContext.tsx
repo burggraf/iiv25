@@ -67,13 +67,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 		// For completed jobs, check for specific error conditions
 		switch (job.jobType) {
 			case 'product_photo_upload':
+				// Check if this is a validation error (bad photo quality)
+				const isValidationError = job.resultData?.validationError === true;
+				const hasGeneralError = !job.resultData?.success || !!job.resultData?.error;
+				
+				// Treat as error if it's any kind of failure
 				return { 
-					hasError: !job.resultData?.success || !!job.resultData?.error || job.resultData?.uploadFailed,
+					hasError: hasGeneralError,
 					errorType: 'photo_upload'
 				};
 			case 'ingredient_parsing':
 				return { 
-					hasError: job.resultData?.error && job.resultData.error.includes('photo quality too low'),
+					hasError: job.resultData?.error && (job.resultData.error.includes('photo quality too low') || job.resultData.error.includes('scan failed')),
 					errorType: 'ingredient_scan'
 				};
 			case 'product_creation':
@@ -140,18 +145,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 			
 			// Check for errors and track error types
 			const { hasError, errorType } = hasJobErrors(job)
-			console.log(`🔔 [Notification] ERROR DETECTION DEBUG for job ${job.id.slice(-6)} (${job.jobType}):`)
-			console.log(`  - job.resultData?.success: ${job.resultData?.success}`)
-			console.log(`  - job.resultData?.error: ${job.resultData?.error}`)
-			console.log(`  - hasError: ${hasError}`)
-			console.log(`  - errorType: ${errorType}`)
-			
 			if (hasError && errorType) {
 				current.errorTypes.add(errorType)
 				current.failedJobs.add(job.id)
-				console.log(`🔔 [Notification] ✅ ADDED ERROR TYPE: ${errorType} for job ${job.id.slice(-6)} in workflow ${job.workflowId!.slice(-6)}`)
-			} else {
-				console.log(`🔔 [Notification] ✅ NO ERROR: Job ${job.id.slice(-6)} (${job.jobType}) completed successfully`)
 			}
 			
 			// Get the latest product data for this workflow
@@ -246,35 +242,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 					// Add to history if product was successfully created, even if other steps failed
 					const productCreationSucceeded = !current.errorTypes.has('product_creation')
 					
-					console.log(`🔔 [Notification] HISTORY UPDATE DEBUG:`)
-					console.log(`  - productCreationSucceeded: ${productCreationSucceeded}`)
-					console.log(`  - current.latestProduct exists: ${!!current.latestProduct}`)
-					console.log(`  - current.latestProduct barcode: ${current.latestProduct?.barcode || 'N/A'}`)
-					console.log(`  - current.type: ${current.type}`)
-					console.log(`  - hasErrors: ${hasErrors}`)
-					console.log(`  - errorTypes: [${Array.from(current.errorTypes).join(', ')}]`)
-					
 					// Update history for all workflow types
 					if (current.latestProduct) {
-						// For add_new_product workflows, only add to history if product creation succeeded
-						// For individual_action and report_product_issue workflows, add to history if the workflow completed (regardless of minor errors)
-						const shouldAddToHistory = current.type === 'add_new_product' 
-							? productCreationSucceeded 
-							: true; // individual_action and report_product_issue workflows should always update history when they have a product
+						// Check for validation failures (photo quality issues)
+						const hasValidationErrors = current.errorTypes.has('photo_upload') || current.errorTypes.has('ingredient_scan')
+						
+						// Determine if we should add to history and if it should be marked as new
+						const shouldAddToHistory = current.type === 'add_new_product' ? productCreationSucceeded : true
+						
+						// For validation errors, add to history but don't mark as new (no badge/star)
+						const shouldMarkAsNew = !hasValidationErrors && (current.type === 'add_new_product' ? productCreationSucceeded : true)
 						
 						if (shouldAddToHistory) {
-							const statusMessage = hasErrors ? 'with some errors' : 'successfully'
-							console.log(`🔔 [Notification] ✅ ADDING TO HISTORY: ${current.type} workflow ${job.workflowId!.slice(-6)} completed ${statusMessage} - updating history with product ${current.latestProduct.barcode}`)
 							try {
 								// Import historyService dynamically to avoid circular dependencies
 								const { historyService } = await import('../services/HistoryService')
-								await historyService.addToHistory(current.latestProduct, true, true)
-								console.log(`✅ [Notification] Successfully updated history for ${current.type} workflow: ${current.latestProduct.barcode}`)
+								await historyService.addToHistory(current.latestProduct, shouldMarkAsNew, true)
 							} catch (error) {
-								console.error(`❌ [Notification] Error updating history for ${current.type} workflow:`, error)
+								console.log(`❌ [Notification] Error updating history for ${current.type} workflow:`, error)
 							}
-						} else {
-							console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY for ${current.type} workflow: product creation failed`)
 						}
 					} else {
 						console.log(`🔔 [Notification] ❌ NOT ADDING TO HISTORY: No latestProduct available`)

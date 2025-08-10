@@ -28,7 +28,8 @@ export const useBackgroundJobs = () => {
         
         switch (job.jobType) {
           case 'product_photo_upload':
-            return job.resultData.success === true;
+            // For photo uploads, success means no error field (validation passed)
+            return job.resultData.success === true && !job.resultData.error;
           case 'ingredient_parsing':
             return job.resultData.isValidIngredientsList === true;
           case 'product_creation':
