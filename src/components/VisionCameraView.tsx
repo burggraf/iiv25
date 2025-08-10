@@ -432,7 +432,7 @@ const VisionCameraView = React.forwardRef<VisionCameraViewRef, VisionCameraViewP
               style={styles.camera}
               device={device}
               format={format}
-              isActive={cameraState.isActive && mode !== 'inactive'}
+              isActive={cameraState.isActive}
               photo={cameraState.config.enablePhotoCapture}
               codeScanner={cameraState.config.enableBarcode ? barcodeScanner : undefined}
               zoom={device?.neutralZoom || 1.0}

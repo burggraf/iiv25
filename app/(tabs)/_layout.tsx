@@ -22,7 +22,6 @@ export default function TabLayout() {
         tabBarInactiveTintColor: GRAY_COLOR,
         tabBarActiveBackgroundColor: GREEN_COLOR,
         headerShown: false,
-        lazy: true, // Add lazy loading to prevent all tabs from mounting immediately
         tabBarStyle: Platform.select({
           ios: {
             backgroundColor: 'white',
