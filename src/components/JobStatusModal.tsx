@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,6 +16,10 @@ import { BackgroundJob } from '../types/backgroundJobs';
 import { useBackgroundJobs } from '../hooks/useBackgroundJobs';
 import { useGlobalJobs } from '../hooks/useGlobalJobs';
 import { colors } from '../utils/colors';
+import ProductDisplayContainer from './ProductDisplayContainer';
+import { Product } from '../types';
+import { ProductImageUrlService } from '../services/productImageUrlService';
+import TakePhotoButton from './TakePhotoButton';
 
 interface JobStatusModalProps {
   isVisible: boolean;
@@ -30,6 +35,8 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
   const activeJobs = globalActiveJobs;
   const completedJobs = globalCompletedJobs;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showProductDetail, setShowProductDetail] = useState(false);
 
   // DEBUGGING: Log the modal visibility and jobs state
   React.useEffect(() => {
@@ -91,16 +98,16 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
 
   const handleClearAll = () => {
     Alert.alert(
-      'Debug Options',
-      'Choose a debug action to help resolve stuck jobs.',
+      'Fix Uploads',
+      'Choose an option to fix any stuck uploads.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Cleanup Stuck Jobs', 
+          text: 'Cleanup Stuck Uploads', 
           onPress: async () => {
             const { backgroundQueueService } = await import('../services/backgroundQueueService');
             const cleaned = await backgroundQueueService.cleanupStuckJobs();
-            Alert.alert('Cleanup Complete', `Cleaned up ${cleaned} stuck jobs.`);
+            Alert.alert('Cleanup Complete', `Cleaned up ${cleaned} stuck uploads.`);
           }
         },
         { 
@@ -117,9 +124,9 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
       case 'product_creation':
         return 'Product Creation';
       case 'ingredient_parsing':
-        return 'Ingredient Parsing';
+        return 'Ingredients Photo';
       case 'product_photo_upload':
-        return 'Photo Upload';
+        return 'Product Photo';
       default:
         return jobType.replace('_', ' ');
     }
@@ -167,84 +174,195 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
     }
   };
 
-  const renderJobCard = (job: BackgroundJob): React.ReactNode => {
-    if (!job || !job.id) return null;
+  const JobCard: React.FC<{ job: BackgroundJob }> = ({ job }) => {
+    const [productData, setProductData] = useState<Product | null>(null);
+    const [loadingProduct, setLoadingProduct] = useState(false);
     
-    const startedTime = job.startedAt ? job.startedAt.toLocaleString() : '';
-    const completedTime = job.completedAt ? job.completedAt.toISOString().replace('T', ' ').slice(0, 19) : '';
+    // Load product data on mount
+    React.useEffect(() => {
+      const loadProduct = async () => {
+        if (job.upc && !productData && !loadingProduct) {
+          setLoadingProduct(true);
+          try {
+            const { ProductLookupService } = await import('../services/productLookupService');
+            const result = await ProductLookupService.lookupProductByBarcode(job.upc, { context: 'JobModal' });
+            if (result.product) {
+              setProductData(result.product);
+            }
+          } catch (error) {
+            console.error('Error fetching product for job card:', error);
+          } finally {
+            setLoadingProduct(false);
+          }
+        }
+      };
+      
+      loadProduct();
+    }, [job.upc, productData, loadingProduct]);
+    
+    // Try to get product info from various sources
+    const getProductInfo = () => {
+      // First try the fetched product data
+      if (productData) {
+        return {
+          name: productData.name || `Product ${job.upc}`,
+          brand: productData.brand,
+          imageUrl: productData.imageUrl
+        };
+      }
+      
+      // Check if job has product data embedded
+      if (job.resultData?.productData) {
+        return {
+          name: job.resultData.productData.name || `Product ${job.upc}`,
+          brand: job.resultData.productData.brand,
+          imageUrl: job.resultData.productData.imageUrl
+        };
+      }
+      // Check if job has existing product data
+      if (job.existingProductData) {
+        return {
+          name: job.existingProductData.name || `Product ${job.upc}`,
+          brand: job.existingProductData.brand,
+          imageUrl: job.existingProductData.imageUrl
+        };
+      }
+      return {
+        name: `Product ${job.upc || 'Unknown'}`,
+        brand: null,
+        imageUrl: null
+      };
+    };
+    
+    const productInfo = getProductInfo();
+    
+    const handleJobCardPress = () => {
+      if (productData) {
+        setSelectedProduct(productData);
+        setShowProductDetail(true);
+      }
+    };
+
+    const getStatusTextColor = (status: string) => {
+      switch (status.toLowerCase()) {
+        case 'completed':
+          return colors.success;
+        case 'failed':
+          return colors.error;
+        case 'processing':
+          return colors.primary;
+        case 'queued':
+          return colors.secondary;
+        case 'cancelled':
+          return colors.secondary;
+        default:
+          return colors.secondary;
+      }
+    };
+
+    const formatStatusWithType = (status: string, jobType: string) => {
+      const typeText = formatJobType(jobType);
+      const statusText = status.charAt(0).toUpperCase() + status.slice(1);
+      return { text: `${typeText} - ${statusText}`, color: getStatusTextColor(status) };
+    };
     
     return (
-      <View key={`job-card-${job.id}`} style={styles.jobCard}>
-        <View style={styles.jobHeader}>
-          <View style={styles.jobInfo}>
-            {getStatusIcon(job.status || 'unknown')}
-            <View style={styles.jobText}>
-              <Text style={styles.jobTitle}>{formatJobType(job.jobType || 'unknown')}</Text>
-              <Text style={styles.jobUpc}>UPC: {job.upc || 'Unknown'}</Text>
-            </View>
+      <TouchableOpacity 
+        key={`job-card-${job.id}`} 
+        style={styles.jobCard}
+        onPress={handleJobCardPress}
+        activeOpacity={0.7}
+      >
+        <View style={styles.jobCardContent}>
+          {/* Left side - Product image */}
+          <View style={styles.jobImageContainer}>
+            {productInfo.imageUrl ? (
+              <Image 
+                source={{ 
+                  uri: (() => {
+                    const baseUrl = ProductImageUrlService.resolveImageUrl(productInfo.imageUrl, job.upc || '');
+                    if (!baseUrl) return undefined;
+                    const timestamp = Date.now();
+                    const separator = baseUrl.includes('?') ? '&' : '?';
+                    const cacheBustedUrl = `${baseUrl}${separator}job_cache_bust=${timestamp}`;
+                    return cacheBustedUrl;
+                  })()
+                }} 
+                style={styles.jobImage} 
+              />
+            ) : (
+              <View style={styles.jobImagePlaceholder}>
+                {loadingProduct ? (
+                  <ActivityIndicator size="small" color={colors.secondary} />
+                ) : (
+                  <MaterialIcons name="image" size={24} color={colors.secondary} />
+                )}
+              </View>
+            )}
           </View>
-          <Text style={[styles.jobStatus, { color: getStatusColor(job.status || 'unknown') }]}>
-            {(job.status || 'unknown').toUpperCase()}
-          </Text>
+          
+          {/* Center - Product info */}
+          <View style={styles.jobCenter}>
+            <Text style={styles.jobProductName} numberOfLines={1}>
+              {productInfo.name}
+            </Text>
+            <Text style={styles.jobUpc} numberOfLines={1}>
+              UPC: {job.upc || 'Unknown'}
+            </Text>
+            {(() => {
+              const statusInfo = formatStatusWithType(job.status || 'unknown', job.jobType || 'unknown');
+              return (
+                <Text style={[styles.jobTypeAndStatus, { color: statusInfo.color }]} numberOfLines={1}>
+                  {statusInfo.text}
+                </Text>
+              );
+            })()}
+          </View>
+          
+          {/* Right side - Actions */}
+          <View style={styles.jobActions}>
+            {job.status === 'queued' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleCancelJob(job.id);
+                }}
+                disabled={actionLoading === job.id}
+              >
+                {actionLoading === job.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                )}
+              </TouchableOpacity>
+            )}
+            
+            {job.status === 'failed' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.retryButton]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleRetryJob(job.id);
+                }}
+                disabled={actionLoading === job.id}
+              >
+                {actionLoading === job.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-
-        <View style={styles.jobDetails}>
-          {job.completedAt && (
-            <Text style={[styles.jobTime, styles.alignedWithUpc]}>
-              {completedTime}{job.startedAt && job.completedAt ? ` (${Math.floor((job.completedAt.getTime() - job.startedAt.getTime()) / 1000)}s)` : ''}
-            </Text>
-          )}
-          
-          {job.status === 'processing' && job.startedAt && (
-            <Text style={styles.jobTime}>
-              Running for: {formatElapsedTime(job.startedAt)}
-            </Text>
-          )}
-          
-          {job.retryCount > 0 && (
-            <Text style={styles.retryText}>
-              Retries: {job.retryCount}/{job.maxRetries}
-            </Text>
-          )}
-          
-          {job.errorMessage && (
-            <Text style={styles.errorText}>
-              Error: {job.errorMessage}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.jobActions}>
-          {job.status === 'queued' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={() => handleCancelJob(job.id)}
-              disabled={actionLoading === job.id}
-            >
-              {actionLoading === job.id ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              )}
-            </TouchableOpacity>
-          )}
-          
-          {job.status === 'failed' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.retryButton]}
-              onPress={() => handleRetryJob(job.id)}
-              disabled={actionLoading === job.id}
-            >
-              {actionLoading === job.id ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.retryButtonText}>Retry</Text>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      </TouchableOpacity>
     );
+  };
+
+  const renderJobCard = (job: BackgroundJob): React.ReactNode => {
+    if (!job || !job.id) return null;
+    return <JobCard key={job.id} job={job} />;
   };
 
   const renderActiveJobs = (): React.ReactNode => {
@@ -265,7 +383,7 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
     
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Active Jobs ({activeJobs.length})</Text>
+        <Text style={styles.sectionTitle}>Active Uploads ({activeJobs.length})</Text>
         {activeJobs.filter(job => job && job.id).map((job, index) => (
           <View key={`active-${job.id}-${index}`}>
             {renderJobCard(job)}
@@ -281,7 +399,7 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Jobs ({completedJobs.length})</Text>
+          <Text style={styles.sectionTitle}>Recent Uploads ({completedJobs.length})</Text>
           <TouchableOpacity onPress={handleClearCompleted} style={styles.clearButton}>
             <Text style={styles.clearButtonText}>Clear All</Text>
           </TouchableOpacity>
@@ -304,9 +422,9 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
     return (
       <View style={styles.emptyContainer}>
         <MaterialIcons name="work-off" size={48} color={colors.secondary} />
-        <Text style={styles.emptyText}>No background jobs</Text>
+        <Text style={styles.emptyText}>No uploads</Text>
         <Text style={styles.emptySubtext}>
-          Jobs will appear here when you take photos for processing
+          Uploads will appear here when you take photos for processing
         </Text>
       </View>
     );
@@ -317,9 +435,9 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClearAll} style={styles.debugButton}>
-            <Text style={styles.debugButtonText}>🧹 Debug</Text>
+            <MaterialIcons name="warning" size={28} color="#999" />
           </TouchableOpacity>
-          <Text style={styles.title}>Background Jobs</Text>
+          <Text style={styles.title}>Uploads</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <MaterialIcons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -338,6 +456,19 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
           </ScrollView>
         )}
       </SafeAreaView>
+      
+      {/* Product Detail Overlay */}
+      {showProductDetail && selectedProduct && (
+        <ProductDisplayContainer
+          product={selectedProduct}
+          onBack={() => setShowProductDetail(false)}
+          backButtonText="← Back to Uploads"
+          onProductUpdated={(updatedProduct) => {
+            setSelectedProduct(updatedProduct);
+          }}
+          iconType="scanner"
+        />
+      )}
     </Modal>
   );
 };
@@ -365,10 +496,6 @@ const styles = StyleSheet.create({
   },
   debugButton: {
     padding: 4,
-  },
-  debugButtonText: {
-    fontSize: 12,
-    color: colors.error,
   },
   closeButton: {
     padding: 4,
@@ -420,59 +547,63 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  jobHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  jobInfo: {
+  jobCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  jobText: {
-    marginLeft: 12,
-    flex: 1,
+  jobImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
   },
-  jobTitle: {
+  jobImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  jobImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  jobCenter: {
+    flex: 1,
+    marginRight: 12,
+  },
+  jobProductName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 4,
+  },
+  jobProductBrand: {
+    fontSize: 14,
+    color: colors.secondary,
+    marginBottom: 2,
   },
   jobUpc: {
     fontSize: 14,
     color: colors.secondary,
-    marginTop: 2,
-  },
-  alignedWithUpc: {
-    marginLeft: 36, // Align with UPC text (icon width + margin)
-  },
-  jobStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  jobDetails: {
-    marginBottom: 12,
-  },
-  jobTime: {
-    fontSize: 13,
-    color: colors.secondary,
     marginBottom: 2,
   },
-  retryText: {
+  jobTypeAndStatus: {
     fontSize: 13,
-    color: colors.warning,
-    marginTop: 4,
-  },
-  errorText: {
-    fontSize: 13,
-    color: colors.error,
-    marginTop: 4,
+    color: colors.secondary,
+    fontWeight: '500',
   },
   jobActions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 8,
+    alignItems: 'flex-end',
   },
   actionButton: {
     paddingHorizontal: 16,
