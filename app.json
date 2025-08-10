@@ -12,11 +12,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "net.isitvegan.free",
-      "buildNumber": "52",
+      "buildNumber": "53",
       "appleTeamId": "WP9H848GC5",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes for vegan analysis.",
         "NSMicrophoneUsageDescription": "This app does not use the microphone.",
+        "NSLocationWhenInUseUsageDescription": "This app does not actively use location services. Some included libraries may reference location APIs for enhanced functionality.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "splash": {
