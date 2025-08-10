@@ -26,9 +26,6 @@ export interface CameraConfig {
   enablePhotoCapture: boolean;
   quality?: number;
   flashMode?: 'on' | 'off' | 'auto';
-  autofocus?: 'on' | 'off';
-  focusDepth?: number;
-  enableTouchFocus?: boolean;
 }
 
 export interface CameraModeConfig {
@@ -71,8 +68,6 @@ class UnifiedCameraService {
         enableBarcode: true,
         barcodeTypes: ['upc_a', 'upc_e', 'ean13', 'ean8'],
         enablePhotoCapture: false,
-        autofocus: 'on',
-        enableTouchFocus: true,
       },
       'product-photo': {
         mode: 'product-photo',
@@ -81,8 +76,6 @@ class UnifiedCameraService {
         barcodeTypes: [],
         enablePhotoCapture: true,
         quality: 0.8,
-        autofocus: 'on',
-        enableTouchFocus: true,
       },
       'ingredients-photo': {
         mode: 'ingredients-photo',
@@ -91,8 +84,6 @@ class UnifiedCameraService {
         barcodeTypes: [],
         enablePhotoCapture: true,
         quality: 0.8,
-        autofocus: 'on',
-        enableTouchFocus: true,
       },
       inactive: {
         mode: 'inactive',
@@ -100,8 +91,6 @@ class UnifiedCameraService {
         enableBarcode: false,
         barcodeTypes: [],
         enablePhotoCapture: false,
-        autofocus: 'off',
-        enableTouchFocus: false,
       },
     };
 
