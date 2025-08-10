@@ -340,7 +340,7 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
             
             {job.status === 'failed' && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.retryButton]}
+                style={styles.retryIconButton}
                 onPress={(e) => {
                   e.stopPropagation();
                   handleRetryJob(job.id);
@@ -348,9 +348,9 @@ const JobStatusModal: React.FC<JobStatusModalProps> = ({ isVisible, onClose }) =
                 disabled={actionLoading === job.id}
               >
                 {actionLoading === job.id ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <Text style={styles.retryButtonText}>Retry</Text>
+                  <MaterialIcons name="refresh" size={24} color={colors.primary} />
                 )}
               </TouchableOpacity>
             )}
@@ -551,6 +551,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    position: 'relative',
+    paddingRight: 40, // Make room for the retry icon
   },
   jobImageContainer: {
     width: 60,
@@ -601,9 +603,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   jobActions: {
-    flexDirection: 'column',
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
     gap: 8,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   actionButton: {
     paddingHorizontal: 16,
@@ -627,6 +632,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
+  },
+  retryIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: colors.cardBackground,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 40,
+    height: 40,
   },
   emptyContainer: {
     flex: 1,
