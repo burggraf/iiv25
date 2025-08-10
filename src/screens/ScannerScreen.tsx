@@ -226,16 +226,17 @@ export default function ScannerScreen() {
 	// Camera mode management based on screen focus - simplified for CameraViewSwitcher
 	useEffect(() => {
 		console.log(`📷 Scanner: useEffect triggered - focused: ${isFocused}, showDetail: ${showProductDetail}`)
+		console.log(`📷 Scanner: Navigation state debug - route name: ${router.canGoBack() ? 'has back' : 'no back'}`)
 		const shouldActivate = isFocused && !showProductDetail
 
 		if (shouldActivate) {
 			console.log('📷 Scanner: Activating scanner mode')
 			setCameraMode('scanner')
 		} else {
-			console.log('📷 Scanner: Deactivating scanner mode')
+			console.log('📷 Scanner: Deactivating scanner mode - reason:', !isFocused ? 'not focused' : 'showing product detail')
 			setCameraMode('inactive')
 		}
-	}, [isFocused, showProductDetail])
+	}, [isFocused, showProductDetail, router])
 
 	// Cache invalidation is now handled by CacheInvalidationService
 	// No need for individual component listeners
@@ -947,6 +948,10 @@ export default function ScannerScreen() {
 			<View style={styles.cameraContainer}>
 				{!isDevice || Platform.OS === 'web' ? (
 					<SimulatorBarcodeTester onBarcodeScanned={({ data }: BarcodeScanningResult) => handleBarcodeScanned(data)} />
+				) : cameraMode === 'inactive' ? (
+					<View style={styles.inactiveCamera}>
+						<Text style={styles.inactiveCameraText}>Camera inactive</Text>
+					</View>
 				) : (
 					<VisionCameraView
 						ref={cameraRef}
