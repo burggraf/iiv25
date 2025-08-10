@@ -29,13 +29,7 @@
     "migrate:dev": "npm run supabase:dev && supabase db push",
     "migrate:prod": "npm run supabase:prod && supabase db push",
     "functions:deploy:dev": "supabase functions deploy --project-ref wpjqtgkfgvheisgcxhxu",
-    "functions:deploy:prod": "supabase functions deploy --project-ref wlatnzsnrlwykkriovwd",
-    "off-process": "tsx off-db-utility/process-ingredients.ts",
-    "off-process:full": "tsx off-db-utility/process-ingredients.ts --full",
-    "off-parallel": "tsx off-db-utility/off-process-parallel.ts",
-    "off-parallel:test": "tsx off-db-utility/off-process-parallel.ts --test",
-    "off-monitor": "tsx off-db-utility/off-monitor.ts",
-    "off-migrate": "tsx off-db-utility/migrate-parallel-queue.ts"
+    "functions:deploy:prod": "supabase functions deploy --project-ref wlatnzsnrlwykkriovwd"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",

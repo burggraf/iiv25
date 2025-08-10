@@ -28,6 +28,7 @@ npm run web         # Run on web browser
 ### Building & Deployment
 
 #### Production Builds
+
 ```bash
 npm run build:android     # Build Android APK (production)
 npm run build:ios        # Build iOS TestFlight (production)
@@ -36,6 +37,7 @@ npm run submit:ios       # Submit to App Store
 ```
 
 #### Development Builds
+
 ```bash
 npm run build:dev-android    # Build Android APK (development environment)
 npm run build:dev-ios       # Build iOS (development environment)
@@ -45,9 +47,11 @@ npm run build:testflight-dev # Build iOS TestFlight (development environment)
 ### Testing & Quality
 
 ```bash
-npm run test        # Run all tests
-npm run lint        # Run ESLint (flat config format)
-npm run type-check  # Run TypeScript compiler check
+npm run test           # Run all tests
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Run tests with coverage report
+npm run lint          # Run ESLint (flat config format)
+npm run type-check    # Run TypeScript compiler check
 ```
 
 ## Environment Management
@@ -63,7 +67,7 @@ The app uses **two separate Supabase projects** for complete environment isolati
 
 ```bash
 npm run supabase:dev      # Switch to DEVELOPMENT environment
-npm run supabase:prod     # Switch to PRODUCTION environment  
+npm run supabase:prod     # Switch to PRODUCTION environment
 npm run supabase:status   # Show current linked environment
 ```
 
@@ -97,7 +101,7 @@ npm run supabase:prod      # Ensure linked to prod first
 # Deploy to development
 npm run functions:deploy:dev   # Deploy all functions to development
 
-# Deploy to production  
+# Deploy to production
 npm run functions:deploy:prod  # Deploy all functions to production
 ```
 
@@ -107,6 +111,8 @@ npm run functions:deploy:prod  # Deploy all functions to production
 - **Run tests before committing** to ensure code quality and functionality
 - Use `npm run test` to verify all tests pass before making commits
 - Tests should cover both happy path and edge cases for new functionality
+- Test configuration: Jest with jsdom environment, path aliases (@/\*), coverage threshold 70%
+- Test files: `**/__tests__/**/*.(ts|tsx|js)` or `**/*.(test|spec).(ts|tsx|js)`
 
 ## Architecture Overview
 
@@ -183,7 +189,7 @@ src/
 - **iOS**: Published on App Store, TestFlight builds via EAS
 - **Android**: APK builds ready for Google Play Store
 - **Database**: 411K+ products in Supabase with UPC/EAN13 indexing
-- **Images**: CDN optimized through Open Food Facts
+- **Images**: CDN optimized through Open Food Facts AND Supabase Storage
 - **Auth**: Production-ready with multiple OAuth providers
 
 ## Critical Files to Understand
@@ -197,8 +203,17 @@ src/
 ## Available Claude Agents
 
 - **react-native-specialist**: Mobile development, barcode scanning, cross-platform features
-- **api-integration-specialist**: Supabase, Open Food Facts API, payment integrations  
+- **api-integration-specialist**: Supabase, Open Food Facts API, payment integrations
 - **testing-specialist**: Jest testing and quality assurance
 - **deployment-specialist**: EAS builds and app store submissions
+- **security-auditor**: Authentication flows, API security, vulnerability assessments
 
 Usage: `> Use [agent-name] to [describe task]`
+
+## Utility Scripts & Tools
+
+```bash
+# Database schema management
+./scripts/dump-schema.sh      # Export database schema
+./scripts/generate-types.sh   # Generate TypeScript types from DB
+```
