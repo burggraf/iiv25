@@ -1,11 +1,14 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from './supabaseClient';
 import { ProductImageUrlService } from './productImageUrlService';
+import { PhotoValidationService } from './PhotoValidationService';
 
 export interface ImageUploadResult {
   success: boolean;
   imageUrl?: string;
   error?: string;
+  validationError?: boolean; // Indicates if error is due to photo quality/validation
+  retryable?: boolean; // Indicates if error is retryable
 }
 
 export class ProductImageUploadService {
@@ -21,6 +24,23 @@ export class ProductImageUploadService {
   static async uploadProductImage(imageUri: string, upc: string): Promise<ImageUploadResult> {
     try {
       console.log(`Starting image upload for UPC: ${upc}`);
+
+      // Step 0: Validate photo quality before processing
+      console.log('Validating photo quality before upload...');
+      const validationResult = await PhotoValidationService.validatePhoto(imageUri);
+      
+      if (!validationResult.isValid) {
+        console.log('❌ Photo validation failed:', validationResult.error);
+        const formattedError = PhotoValidationService.formatValidationError(validationResult);
+        return {
+          success: false,
+          error: formattedError.message,
+          validationError: true,
+          retryable: true // User can retake photo
+        };
+      }
+      
+      console.log(`✅ Photo validation passed (confidence: ${validationResult.confidence?.toFixed(2)})`);
 
       // Step 1: Resize the image to max height of 400px
       const resizedImage = await this.resizeImage(imageUri);
@@ -139,9 +159,19 @@ export class ProductImageUploadService {
 
       if (uploadError) {
         console.error('Error uploading to Supabase:', uploadError);
+        const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown error';
+        
+        // Check if this is a retryable upload error
+        const isRetryable = errorMessage.includes('network') || 
+                           errorMessage.includes('timeout') || 
+                           errorMessage.includes('service unavailable') ||
+                           errorMessage.includes('rate limit');
+        
         return {
           success: false,
-          error: `Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`
+          error: `Upload failed: ${errorMessage}`,
+          validationError: false,
+          retryable: isRetryable
         };
       }
 
@@ -166,7 +196,9 @@ export class ProductImageUploadService {
             console.error('❌ Downloaded file is empty!');
             return {
               success: false,
-              error: 'Uploaded file verification failed - file is empty'
+              error: 'Uploaded file verification failed - file is empty',
+              validationError: false,
+              retryable: true // This could be a temporary storage issue
             };
           }
         }
@@ -182,9 +214,19 @@ export class ProductImageUploadService {
 
     } catch (error) {
       console.error('Error in uploadProductImage:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if this is a retryable technical error
+      const isRetryable = errorMessage.includes('network') || 
+                         errorMessage.includes('timeout') || 
+                         errorMessage.includes('fetch') ||
+                         errorMessage.includes('connection');
+      
       return {
         success: false,
-        error: `Image upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: `Image upload failed: ${errorMessage}`,
+        validationError: false,
+        retryable: isRetryable
       };
     }
   }

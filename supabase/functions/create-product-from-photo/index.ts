@@ -4,6 +4,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 interface CreateProductRequest {
   imageBase64: string;
   upc: string;
+  validateOnly?: boolean;     // NEW: only validate photo, don't create/update product
+  updateImageOnly?: boolean;  // NEW: validate + upload image to existing product, don't extract product info
 }
 
 interface CreateProductResponse {
@@ -12,6 +14,7 @@ interface CreateProductResponse {
   brand?: string;
   confidence?: number;
   classification?: string;
+  imageUrl?: string;  // NEW: for updateImageOnly mode
   error?: string;
   retryable?: boolean; // New field to indicate if error is retryable
   apiCost?: {
@@ -196,7 +199,7 @@ Deno.serve(async (req) => {
 
     // Parse request
     const body: CreateProductRequest = await req.json();
-    const { imageBase64, upc } = body;
+    const { imageBase64, upc, validateOnly, updateImageOnly } = body;
 
     if (!imageBase64 || !upc) {
       return new Response(
@@ -206,6 +209,7 @@ Deno.serve(async (req) => {
     }
 
     console.log('Processing product creation for UPC:', upc);
+    console.log('Mode:', validateOnly ? 'validate-only' : updateImageOnly ? 'update-image-only' : 'full-create');
 
     // Call Gemini API to extract product name and brand
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
@@ -305,6 +309,24 @@ Deno.serve(async (req) => {
 
     console.log('Extracted product info:', { productName, brand, confidence });
 
+    // If validateOnly mode, return validation success without creating/updating product
+    if (validateOnly) {
+      console.log('✅ Validation-only mode: Photo passed 90% confidence threshold');
+      return new Response(JSON.stringify({
+        productName,
+        brand,
+        confidence,
+        apiCost: {
+          inputTokens,
+          outputTokens,
+          totalCost: totalCost.toFixed(6),
+        },
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Normalize UPC/EAN codes
     let normalizedUpc = upc;
     let ean13 = upc;
@@ -376,6 +398,117 @@ Deno.serve(async (req) => {
         throw insertError;
       }
       product = newProduct;
+    }
+
+    // Handle image upload for updateImageOnly mode
+    if (updateImageOnly) {
+      console.log('🖼️ Update-image-only mode: Uploading image to Supabase storage');
+      
+      try {
+        // Convert base64 to buffer for upload
+        const imageBuffer = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0));
+        const fileName = `product-images/${normalizedUpc}_${Date.now()}.jpg`;
+        
+        // Upload to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabaseService.storage
+          .from('product-images')
+          .upload(fileName, imageBuffer, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error('Error uploading image to storage:', uploadError);
+          throw new Error(`Failed to upload image: ${uploadError.message}`);
+        }
+
+        console.log('✅ Image uploaded successfully:', uploadData.path);
+
+        // Get public URL
+        const { data: urlData } = supabaseService.storage
+          .from('product-images')
+          .getPublicUrl(uploadData.path);
+
+        const imageUrl = urlData.publicUrl;
+        console.log('🔗 Generated image URL:', imageUrl);
+
+        // Update product with image URL
+        const { data: updatedProduct, error: updateError } = await supabaseService
+          .from('products')
+          .update({ 
+            imageurl: imageUrl,
+            lastupdated: new Date().toISOString()
+          })
+          .eq('ean13', product.ean13)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating product with image URL:', updateError);
+          throw new Error(`Failed to update product: ${updateError.message}`);
+        }
+
+        product = updatedProduct;
+        console.log('✅ Product updated with image URL');
+
+        // Log the action for image upload
+        try {
+          await supabaseService
+            .from('actionlog')
+            .insert({
+              userid: user.id,
+              type: 'update_product_image_validated',
+              input: normalizedUpc,
+              result: imageUrl,
+              metadata: {
+                upc: normalizedUpc,
+                productName,
+                brand,
+                confidence,
+                imageUrl,
+                apiCost: totalCost.toFixed(6)
+              },
+            });
+        } catch (logError) {
+          console.error('Failed to log image upload action:', logError);
+          // Don't fail the request if logging fails
+        }
+
+        // Return early with image URL for updateImageOnly mode
+        return new Response(JSON.stringify({
+          product,
+          productName,
+          brand,
+          confidence,
+          imageUrl,
+          apiCost: {
+            inputTokens,
+            outputTokens,
+            totalCost: totalCost.toFixed(6),
+          },
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+
+      } catch (imageError) {
+        console.error('Error in updateImageOnly mode:', imageError);
+        return new Response(JSON.stringify({
+          productName: 'unknown product',
+          brand: '',
+          confidence: confidence,
+          error: imageError instanceof Error ? imageError.message : 'Failed to upload image',
+          retryable: true, // Image upload errors are usually retryable
+          apiCost: {
+            inputTokens,
+            outputTokens,
+            totalCost: totalCost.toFixed(6),
+          },
+        }), {
+          status: 200, // Return 200 with error in body, consistent with validation errors
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Log the action

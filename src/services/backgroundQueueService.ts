@@ -5,6 +5,7 @@ import deviceIdService from './deviceIdService';
 import * as FileSystem from 'expo-file-system';
 import { EventEmitter } from 'eventemitter3';
 import { AppState } from 'react-native';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEY_JOBS = 'background_jobs';
 const STORAGE_KEY_COMPLETED_JOBS = 'completed_background_jobs';
@@ -637,73 +638,131 @@ class BackgroundQueueServiceClass extends EventEmitter {
    * Process product photo upload job
    */
   private async processProductPhotoUpload(job: BackgroundJob): Promise<any> {
-    console.log(`📸 [BackgroundQueue] *** PROCESSING PHOTO UPLOAD JOB ***`);
+    console.log(`📸 [BackgroundQueue] *** PROCESSING PHOTO UPLOAD JOB WITH VALIDATION ***`);
     console.log(`📸 [BackgroundQueue] Job ID: ${job.id.slice(-6)}`);
     console.log(`📸 [BackgroundQueue] UPC: ${job.upc}`);
     console.log(`📸 [BackgroundQueue] Image URI: ${job.imageUri}`);
     console.log(`📸 [BackgroundQueue] Processing timestamp:`, new Date().toISOString());
     
-    // Import ProductImageUploadService statically to avoid module loading issues
-    const { ProductImageUploadService } = require('./productImageUploadService');
-    
-    console.log(`📸 [BackgroundQueue] Step 1: Uploading image to storage...`);
-    
-    // Upload image and get URL
-    const uploadResult = await ProductImageUploadService.uploadProductImage(job.imageUri, job.upc);
-    
-    console.log(`📸 [BackgroundQueue] Step 2: Image upload result:`, {
-      success: uploadResult.success,
-      imageUrl: uploadResult.imageUrl,
-      error: uploadResult.error
-    });
-    
-    if (!uploadResult.success || !uploadResult.imageUrl) {
-      const errorMessage = uploadResult.error || 'Failed to upload image';
-      console.error(`❌ [BackgroundQueue] Image upload failed: ${errorMessage}`);
+    try {
+      console.log(`📸 [BackgroundQueue] Using supabase client for edge function call...`);
       
-      // Return structured error instead of throwing to enable workflow error detection
+      console.log(`📸 [BackgroundQueue] Step 1: Getting user session for authentication...`);
+      
+      // Get user session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error(`❌ [BackgroundQueue] Authentication failed:`, sessionError);
+        return {
+          success: false,
+          error: 'Authentication failed. Please sign in again.',
+          uploadFailed: true,
+          validationError: false,
+          retryable: true
+        };
+      }
+      
+      console.log(`📸 [BackgroundQueue] Step 2: Converting image to base64...`);
+      
+      // Read image file and convert to base64
+      const imageBase64 = await FileSystem.readAsStringAsync(job.imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      console.log(`📸 [BackgroundQueue] Step 3: Calling create-product-from-photo edge function with validation...`);
+      
+      // Call the modified edge function with updateImageOnly mode
+      const { data: edgeResult, error: edgeError } = await supabase.functions.invoke('create-product-from-photo', {
+        body: {
+          imageBase64,
+          upc: job.upc,
+          updateImageOnly: true // This enables validation + image upload + database update
+        }
+      });
+      
+      if (edgeError) {
+        console.error(`❌ [BackgroundQueue] Edge function error:`, edgeError);
+        return {
+          success: false,
+          error: edgeError.message || 'Failed to process photo',
+          uploadFailed: true,
+          validationError: false,
+          retryable: edgeError.details?.retryable !== false
+        };
+      }
+      
+      console.log(`📸 [BackgroundQueue] Step 4: Edge function result:`, {
+        hasProduct: !!edgeResult.product,
+        hasImageUrl: !!edgeResult.imageUrl,
+        confidence: edgeResult.confidence,
+        error: edgeResult.error
+      });
+      
+      if (edgeResult.error) {
+        // Check if it's a validation error based on confidence or error message
+        const isValidationError = edgeResult.confidence < 0.9 || 
+          edgeResult.error.includes('scan failed') || 
+          edgeResult.error.includes('quality too low');
+        
+        if (isValidationError) {
+          // Validation errors are expected and handled gracefully - use console.log
+          console.log(`📸 [BackgroundQueue] Photo validation failed: ${edgeResult.error} (confidence: ${Math.round((edgeResult.confidence || 0) * 100)}%)`);
+        } else {
+          // Unexpected errors should still use console.error
+          console.error(`❌ [BackgroundQueue] Edge function returned unexpected error: ${edgeResult.error}`);
+        }
+        
+        return {
+          success: false,
+          error: edgeResult.error,
+          uploadFailed: true,
+          validationError: isValidationError,
+          retryable: edgeResult.retryable !== false
+        };
+      }
+      
+      if (!edgeResult.product || !edgeResult.imageUrl) {
+        console.error(`❌ [BackgroundQueue] Edge function missing required data`);
+        return {
+          success: false,
+          error: 'Failed to upload image or update product',
+          uploadFailed: true,
+          validationError: false,
+          retryable: true
+        };
+      }
+      
+      const result = {
+        success: true,
+        imageUrl: edgeResult.imageUrl,
+        updatedProduct: edgeResult.product,
+        confidence: edgeResult.confidence,
+        productName: edgeResult.productName,
+        brand: edgeResult.brand,
+        apiCost: edgeResult.apiCost
+      };
+      
+      console.log(`✅ [BackgroundQueue] Photo upload with validation completed successfully:`, {
+        success: result.success,
+        imageUrl: result.imageUrl,
+        confidence: result.confidence,
+        productName: result.productName,
+        hasProduct: !!result.updatedProduct
+      });
+      console.log(`✅ [BackgroundQueue] Final result will trigger cache invalidation`);
+      
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ [BackgroundQueue] Unexpected error in processProductPhotoUpload:`, error);
       return {
         success: false,
-        error: errorMessage,
-        uploadFailed: true // Flag for workflow error detection
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        uploadFailed: true,
+        validationError: false,
+        retryable: true
       };
     }
-    
-    console.log(`📸 [BackgroundQueue] Step 3: Updating database with new image URL...`);
-    console.log(`📸 [BackgroundQueue] New image URL: ${uploadResult.imageUrl}`);
-    
-    // Update the database with the new image URL and get full response
-    const updateResult = await ProductImageUploadService.updateProductImageUrlWithResponse(job.upc, uploadResult.imageUrl);
-    
-    console.log(`📸 [BackgroundQueue] Step 4: Database update result:`, {
-      success: updateResult.success,
-      hasUpdatedProduct: !!updateResult.updatedProduct,
-      upc: job.upc,
-      imageUrl: uploadResult.imageUrl
-    });
-    
-    if (!updateResult.success) {
-      const errorMessage = updateResult.error || 'Image uploaded but failed to update product record';
-      console.error(`❌ [BackgroundQueue] Database update failed: ${errorMessage}`);
-      
-      // Return structured error instead of throwing to enable workflow error detection
-      return {
-        success: false,
-        error: errorMessage,
-        uploadFailed: true // Flag for workflow error detection
-      };
-    }
-    
-    const result = {
-      success: true,
-      imageUrl: uploadResult.imageUrl,
-      updatedProduct: updateResult.updatedProduct, // Include the full product data!
-    };
-    
-    console.log(`✅ [BackgroundQueue] Photo upload job completed successfully:`, result);
-    console.log(`✅ [BackgroundQueue] Final result will trigger cache invalidation`);
-    
-    return result;
   }
 
   /**

@@ -13,11 +13,16 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useApp } from '../context/AppContext'
 import UnifiedCameraView, { CameraViewRef } from '../components/UnifiedCameraView'
 import UnifiedCameraService from '../services/UnifiedCameraService'
+import { PhotoValidationService } from '../services/PhotoValidationService'
+import { useNotification } from '../context/NotificationContext'
+import { BackgroundJob } from '../types/backgroundJobs'
+import { PhotoErrorHandler } from '../services/PhotoErrorHandler'
 
 export default function ReportIssueCameraScreen() {
 	const router = useRouter()
 	const { barcode, type } = useLocalSearchParams<{ barcode: string; type: 'product' | 'ingredients' }>()
-	const { queueJob } = useApp()
+	const { queueJob, backgroundQueueService } = useApp()
+	const { showToast } = useNotification()
 	const cameraService = UnifiedCameraService.getInstance()
 	
 	console.log(`📷 ReportIssue: Screen loaded with barcode='${barcode}', type='${type}'`)
@@ -25,6 +30,9 @@ export default function ReportIssueCameraScreen() {
 	const cameraRef = useRef<CameraViewRef>(null)
 	const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
+	const [isValidatingPhoto, setIsValidatingPhoto] = useState(false)
+	const [isProcessingJob, setIsProcessingJob] = useState(false)
+	const [currentJob, setCurrentJob] = useState<BackgroundJob | null>(null)
 
 	// Initialize unified camera service for photo mode
 	useEffect(() => {
@@ -61,6 +69,86 @@ export default function ReportIssueCameraScreen() {
 			cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
 		}
 	}, [type])
+
+	// Monitor current job status and handle completion/errors
+	useEffect(() => {
+		if (!currentJob) return
+
+		console.log(`🔍 [ReportIssue] Monitoring job ${currentJob.id.slice(-6)} status: ${currentJob.status}`)
+
+		const handleJobUpdate = (updatedJob: BackgroundJob) => {
+			if (updatedJob.id !== currentJob.id) return
+
+			console.log(`📡 [ReportIssue] Job ${updatedJob.id.slice(-6)} updated: ${updatedJob.status}`)
+			
+			if (updatedJob.status === 'completed') {
+				console.log(`✅ [ReportIssue] Job completed successfully`)
+				setIsProcessingJob(false)
+				setCurrentJob(null)
+				
+				// Navigate back to product result screen
+				cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+				router.back()
+				
+			} else if (updatedJob.status === 'failed') {
+				console.log(`❌ [ReportIssue] Job failed:`, updatedJob.errorMessage)
+				setIsProcessingJob(false)
+				
+				// Analyze error and provide proper user feedback
+				const photoError = PhotoErrorHandler.analyzeJobError(updatedJob)
+				if (photoError) {
+					const formattedError = PhotoErrorHandler.formatPhotoError(photoError)
+					
+					showToast({
+						message: formattedError.message,
+						type: 'error',
+						duration: 5000,
+						actionable: {
+							label: 'Tips',
+							onPress: () => {
+								const suggestions = formattedError.suggestions.join('\n• ')
+								Alert.alert(
+									formattedError.title,
+									`${formattedError.message}\n\nSuggestions:\n• ${suggestions}`,
+									[
+										{ text: 'Try Again', onPress: handleRetakePhoto },
+										{ text: 'Cancel', style: 'cancel', onPress: () => {
+											setCurrentJob(null)
+											cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+											router.back()
+										}}
+									]
+								)
+							}
+						}
+					})
+				} else {
+					// Generic error handling
+					Alert.alert(
+						'Processing Failed',
+						updatedJob.errorMessage || 'Failed to process photo. Please try again.',
+						[
+							{ text: 'Try Again', onPress: handleRetakePhoto },
+							{ text: 'Cancel', style: 'cancel', onPress: () => {
+								setCurrentJob(null)
+								cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
+								router.back()
+							}}
+						]
+					)
+				}
+				
+				setCurrentJob(null)
+			}
+		}
+
+		// Listen for job updates
+		backgroundQueueService?.on('job_updated', handleJobUpdate)
+		
+		return () => {
+			backgroundQueueService?.off('job_updated', handleJobUpdate)
+		}
+	}, [currentJob, backgroundQueueService, router, cameraService, showToast])
 
 	const handleTakePhoto = async () => {
 		if (!cameraRef.current || !barcode) {
@@ -102,13 +190,55 @@ export default function ReportIssueCameraScreen() {
 		if (!capturedPhoto || !barcode || !type) return
 
 		try {
+			setIsValidatingPhoto(true)
+			
+			// Validate photo quality before processing
+			console.log(`📸 [ReportIssue] Validating photo quality for ${type} photo...`)
+			const validationResult = await PhotoValidationService.validatePhoto(capturedPhoto)
+			
+			if (!validationResult.isValid) {
+				console.log(`❌ [ReportIssue] Photo validation failed:`, validationResult.error)
+				
+				// Format error for user display
+				const formattedError = PhotoValidationService.formatValidationError(validationResult)
+				
+				// Show error toast with suggestions
+				showToast({
+					message: formattedError.message,
+					type: 'error',
+					duration: 5000,
+					actionable: {
+						label: 'Tips',
+						onPress: () => {
+							const suggestions = formattedError.suggestions.join('\n• ')
+							Alert.alert(
+								formattedError.title,
+								`${formattedError.message}\n\nSuggestions:\n• ${suggestions}`,
+								[
+									{ text: 'Try Again', onPress: handleRetakePhoto },
+									{ text: 'Cancel', style: 'cancel' }
+								]
+							)
+						}
+					}
+				})
+				
+				setIsValidatingPhoto(false)
+				return
+			}
+			
+			console.log(`✅ [ReportIssue] Photo validation passed (confidence: ${validationResult.confidence?.toFixed(2)})`)
+			
 			// Generate workflow ID for tracking
 			const workflowId = `report_${type}_${barcode}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			
+			let job: BackgroundJob;
+			setIsProcessingJob(true)
 			
 			if (type === 'product') {
 				// Queue the photo upload job for existing product photo update
 				console.log(`🎯 [ReportIssue] Queuing product_photo_upload job for barcode ${barcode} with workflow ${workflowId}`)
-				await queueJob({
+				job = await queueJob({
 					jobType: 'product_photo_upload',
 					imageUri: capturedPhoto,
 					upc: barcode,
@@ -121,7 +251,7 @@ export default function ReportIssueCameraScreen() {
 			} else if (type === 'ingredients') {
 				// Queue the ingredients parsing job
 				console.log(`🎯 [ReportIssue] Queuing ingredient_parsing job for barcode ${barcode} with workflow ${workflowId}`)
-				await queueJob({
+				job = await queueJob({
 					jobType: 'ingredient_parsing',
 					imageUri: capturedPhoto,
 					upc: barcode,
@@ -132,14 +262,19 @@ export default function ReportIssueCameraScreen() {
 					workflowSteps: { total: 1, current: 1 },
 				})
 				console.log(`✅ [ReportIssue] Successfully queued ingredient_parsing job for ${barcode}`)
+			} else {
+				throw new Error('Invalid type provided')
 			}
 			
-			// Go back to product result screen
-			cameraService.switchToMode('inactive', {}, 'ReportIssueScreen')
-			router.back()
+			// Store job for monitoring - do NOT navigate yet
+			setCurrentJob(job)
+			console.log(`🔍 [ReportIssue] Now monitoring job ${job.id.slice(-6)} for completion`)
+			
 		} catch (error) {
 			console.error('Error processing photo:', error)
 			Alert.alert('Error', 'Failed to process photo. Please try again.')
+		} finally {
+			setIsValidatingPhoto(false)
 		}
 	}
 
@@ -184,8 +319,16 @@ export default function ReportIssueCameraScreen() {
 						<TouchableOpacity style={styles.retakeButton} onPress={handleRetakePhoto}>
 							<Text style={styles.retakeButtonText}>Retake</Text>
 						</TouchableOpacity>
-						<TouchableOpacity style={styles.usePhotoButton} onPress={handleUsePhoto}>
-							<Text style={styles.usePhotoButtonText}>Use Photo</Text>
+						<TouchableOpacity 
+							style={[styles.usePhotoButton, (isValidatingPhoto || isProcessingJob) && styles.usePhotoButtonDisabled]} 
+							onPress={handleUsePhoto}
+							disabled={isValidatingPhoto || isProcessingJob}
+						>
+							<Text style={styles.usePhotoButtonText}>
+								{isValidatingPhoto ? 'Validating...' : 
+								 isProcessingJob ? 'Processing...' : 
+								 'Use Photo'}
+							</Text>
 						</TouchableOpacity>
 					</View>
 				</SafeAreaView>
@@ -435,5 +578,8 @@ const styles = StyleSheet.create({
 		color: 'black',
 		fontSize: 16,
 		fontWeight: '600',
+	},
+	usePhotoButtonDisabled: {
+		opacity: 0.6,
 	},
 })

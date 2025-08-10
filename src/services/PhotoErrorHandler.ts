@@ -93,7 +93,20 @@ export class PhotoErrorHandler {
   ): PhotoErrorType {
     const lowerMessage = errorMessage.toLowerCase();
 
-    // Confidence/quality issues
+    // Check for validation errors first (from new validation system)
+    if (resultData?.validationError === true) {
+      // This is a photo quality validation error
+      if (lowerMessage.includes('blank') || lowerMessage.includes('corrupted') || 
+          lowerMessage.includes('too small')) {
+        return 'photo_quality_too_low';
+      }
+      if (lowerMessage.includes('quality') || lowerMessage.includes('clearer')) {
+        return 'photo_quality_too_low';
+      }
+      return 'photo_quality_too_low'; // Default for validation errors
+    }
+
+    // Confidence/quality issues (legacy detection)
     if (lowerMessage.includes('photo quality too low') || 
         lowerMessage.includes('quality too low')) {
       return 'photo_quality_too_low';
