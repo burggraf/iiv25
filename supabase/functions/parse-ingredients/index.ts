@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { distillIngredients } from './distillingredients.ts';
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -251,7 +252,7 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
       if (!parsedResult.isValidIngredientsList || parsedResult.confidence < 0.9) {
         const confidencePercentage = Math.round(parsedResult.confidence * 100);
         console.log(`❌ Low confidence result: ${confidencePercentage}% (threshold: 90%)`);
-        
+
         return new Response(JSON.stringify({
           ingredients: [],
           confidence: parsedResult.confidence,
@@ -277,9 +278,11 @@ If you cannot find or read ingredients clearly, OR if you only find facility war
 
           // Prepare ingredients data
           const ingredientsCommaDelimited = parsedResult.ingredients.join(', ');
-          const analysisTildeDelimited = parsedResult.ingredients
-            .map(ingredient => ingredient.toLowerCase().replace(/[^\w\s]/g, '').trim())
-            .join('~');
+          // *** DISTILL INGREDIENTS ***
+          const distilledIngredients = distillIngredients(parsedResult.ingredients);
+          console.log(`🧪 Distilled ${parsedResult.ingredients.length} ingredients to ${distilledIngredients.length} clean ingredients`);
+
+          const analysisTildeDelimited = distilledIngredients.join('~');
 
           // Check if product exists (check both original and normalized UPC)
           const { data: existingProduct, error: lookupError } = await supabase
