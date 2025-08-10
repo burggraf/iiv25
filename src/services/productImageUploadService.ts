@@ -19,61 +19,122 @@ export class ProductImageUploadService {
    * @returns Promise with upload result
    */
   static async uploadProductImage(imageUri: string, upc: string): Promise<ImageUploadResult> {
-    let resizedImage: ImageManipulator.ImageResult | null = null;
-    let blob: Blob | null = null;
-    let arrayBuffer: ArrayBuffer | null = null;
-    
     try {
       console.log(`Starting image upload for UPC: ${upc}`);
 
-      // Step 1: Resize the image to max height of 400px (always with base64 for reliable upload)
-      resizedImage = await this.resizeImage(imageUri);
-      if (!resizedImage) {
-        throw new Error('Failed to resize image');
-      }
+      // Step 1: Resize the image to max height of 400px
+      const resizedImage = await this.resizeImage(imageUri);
       console.log(`Resized image URI: ${resizedImage.uri}`);
       
-      // Step 2: Generate filename using UPC
+      // Step 2: Convert to blob for upload
+      console.log('Converting resized image to blob...');
+      let blob: Blob;
+      
+      try {
+        // Try fetching the URI first
+        const response = await fetch(resizedImage.uri);
+        console.log(`Fetch response status: ${response.status}, content-length: ${response.headers.get('content-length')}`);
+        
+        if (!response.ok) {
+          throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+        }
+        
+        blob = await response.blob();
+        console.log(`Blob created from URI: size=${blob.size}, type=${blob.type}`);
+        
+        // Validate blob has content
+        if (blob.size === 0) {
+          throw new Error('Blob from URI is empty, trying base64 fallback');
+        }
+      } catch (fetchError) {
+        console.warn('Fetch method failed, trying base64 conversion:', fetchError);
+        
+        // Fallback to base64 conversion
+        if (!resizedImage.base64) {
+          throw new Error('No base64 data available for fallback conversion');
+        }
+        
+        // Convert base64 to blob
+        const base64Data = resizedImage.base64;
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        blob = new Blob([bytes], { type: 'image/jpeg' });
+        console.log(`Blob created from base64: size=${blob.size}, type=${blob.type}`);
+        
+        // Validate blob has content
+        if (blob.size === 0) {
+          throw new Error('Base64 converted blob is also empty (0 bytes)');
+        }
+      }
+      
+      // Step 4: Generate filename using UPC
       const fileName = `${upc}.jpg`;
       
-      // Step 3: Upload to Supabase Storage
+      // Step 5: Upload to Supabase Storage
       console.log(`Uploading image to Supabase: ${fileName}`);
+      console.log(`Blob details before upload: size=${blob.size}, type=${blob.type}`);
       
       let uploadData;
       let uploadError;
       
-      // Use base64 upload method (most reliable for React Native)
-      if (!resizedImage.base64) {
-        throw new Error('No base64 data available for upload');
-      }
-
+      // Try multiple upload methods for React Native compatibility
       try {
-        // Convert base64 to Uint8Array (most reliable method for React Native)
-        console.log('Converting base64 to Uint8Array for upload...');
-        const base64Data = resizedImage.base64;
-        const binaryString = atob(base64Data);
-        const uint8Array = new Uint8Array(binaryString.length);
+        // Method 1: Try ArrayBuffer (most reliable for React Native)
+        console.log('Trying ArrayBuffer upload...');
+        const arrayBuffer = await blob.arrayBuffer();
+        console.log(`ArrayBuffer size: ${arrayBuffer.byteLength} bytes`);
         
-        for (let i = 0; i < binaryString.length; i++) {
-          uint8Array[i] = binaryString.charCodeAt(i);
-        }
-        
-        console.log(`Base64 converted to Uint8Array: ${uint8Array.length} bytes`);
-        
-        const result = await supabase.storage
+        const result1 = await supabase.storage
           .from(this.BUCKET_NAME)
-          .upload(fileName, uint8Array, {
+          .upload(fileName, arrayBuffer, {
             contentType: 'image/jpeg',
             upsert: true
           });
           
-        uploadData = result.data;
-        uploadError = result.error;
-        console.log(`Uint8Array upload result:`, { data: uploadData, error: uploadError });
+        uploadData = result1.data;
+        uploadError = result1.error;
+        console.log(`ArrayBuffer upload result:`, { data: uploadData, error: uploadError });
         
-      } catch (uploadErr) {
-        console.error('Uint8Array upload failed:', uploadErr);
-        uploadError = uploadErr;
+      } catch (arrayBufferError) {
+        console.warn('ArrayBuffer upload failed, trying base64...', arrayBufferError);
+        
+        // Method 2: Fallback to base64 upload if we have it
+        if (resizedImage.base64) {
+          try {
+            // Convert base64 to Uint8Array
+            const base64Data = resizedImage.base64;
+            const binaryString = atob(base64Data);
+            const uint8Array = new Uint8Array(binaryString.length);
+            
+            for (let i = 0; i < binaryString.length; i++) {
+              uint8Array[i] = binaryString.charCodeAt(i);
+            }
+            
+            console.log(`Base64 converted to Uint8Array: ${uint8Array.length} bytes`);
+            
+            const result2 = await supabase.storage
+              .from(this.BUCKET_NAME)
+              .upload(fileName, uint8Array, {
+                contentType: 'image/jpeg',
+                upsert: true
+              });
+              
+            uploadData = result2.data;
+            uploadError = result2.error;
+            console.log(`Base64 upload result:`, { data: uploadData, error: uploadError });
+            
+          } catch (base64Error) {
+            console.error('Base64 upload also failed:', base64Error);
+            uploadError = base64Error;
+          }
+        } else {
+          uploadError = new Error('No base64 data available for fallback');
+        }
       }
 
       if (uploadError) {
@@ -125,58 +186,11 @@ export class ProductImageUploadService {
         success: false,
         error: `Image upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
-    } finally {
-      // Clean up memory
-      resizedImage = null;
-      blob = null;
-      arrayBuffer = null;
     }
   }
 
   /**
-   * Resizes an image optimized for memory usage - tries without base64 first
-   * @param imageUri - The URI of the image to resize
-   * @returns Promise with the resized image data
-   */
-  private static async resizeImageOptimized(imageUri: string): Promise<ImageManipulator.ImageResult> {
-    try {
-      // First try without base64 to save memory
-      const manipulatedImage = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [
-          {
-            resize: {
-              height: this.MAX_IMAGE_HEIGHT,
-            }
-          }
-        ],
-        {
-          compress: 0.8,
-          format: ImageManipulator.SaveFormat.JPEG,
-          base64: false,
-        }
-      );
-      
-      // Test if we can fetch the URI
-      try {
-        const testResponse = await fetch(manipulatedImage.uri);
-        if (testResponse.ok) {
-          await testResponse.blob(); // Release the test blob immediately
-          return manipulatedImage;
-        }
-      } catch {
-        // If fetch fails, fall back to base64 method
-      }
-    } catch (error) {
-      console.warn('Optimized resize failed, falling back to base64:', error);
-    }
-    
-    // Fallback to include base64
-    return this.resizeImage(imageUri);
-  }
-  
-  /**
-   * Resizes an image to have a maximum height of 400px while maintaining aspect ratio (with base64 fallback)
+   * Resizes an image to have a maximum height of 400px while maintaining aspect ratio
    * @param imageUri - The URI of the original image
    * @returns Promise with manipulated image result
    */

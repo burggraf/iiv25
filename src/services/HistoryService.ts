@@ -231,27 +231,11 @@ class HistoryService implements CacheEventListener {
       return false;
     }
     
-    // Safely convert lastViewedAt to Date object if it's a string
-    let lastViewedDate: Date;
-    if (item.lastViewedAt instanceof Date) {
-      lastViewedDate = item.lastViewedAt;
-    } else if (typeof item.lastViewedAt === 'string') {
-      lastViewedDate = new Date(item.lastViewedAt);
-    } else {
-      // Invalid date format, treat as not recently viewed
-      return false;
-    }
-    
-    // Check if the date is valid
-    if (isNaN(lastViewedDate.getTime())) {
-      return false;
-    }
-    
     const threeSecondsAgo = Date.now() - (3 * 1000); // 3 seconds (reduced from 10)
-    const wasRecentlyViewed = lastViewedDate.getTime() > threeSecondsAgo;
+    const wasRecentlyViewed = item.lastViewedAt.getTime() > threeSecondsAgo;
     
     if (wasRecentlyViewed) {
-      console.log(`📚 Product ${barcode} was recently viewed at ${lastViewedDate.toISOString()}`);
+      console.log(`📚 Product ${barcode} was recently viewed at ${item.lastViewedAt.toISOString()}`);
     }
     
     return wasRecentlyViewed;
@@ -504,8 +488,7 @@ class HistoryService implements CacheEventListener {
             ...item.cachedProduct,
             lastScanned: new Date(item.cachedProduct.lastScanned)
           },
-          isNew: item.isNew || false, // Default to false for existing items
-          lastViewedAt: item.lastViewedAt ? new Date(item.lastViewedAt) : undefined
+          isNew: item.isNew || false // Default to false for existing items
         }));
       } else {
         // Old format - Product[] - migrate to new format
