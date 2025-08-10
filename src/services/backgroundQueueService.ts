@@ -461,18 +461,58 @@ class BackgroundQueueServiceClass extends EventEmitter {
       // Race between processing and timeout
       const result = await Promise.race([processingPromise, timeoutPromise]);
       
-      if (__DEV__) console.log(`✅ [BackgroundQueue] Job ${job.id.slice(-6)} completed successfully`);
+      // Check if the job actually succeeded based on result data
+      const isJobActuallySuccessful = () => {
+        if (!result) return false;
+        
+        switch (job.jobType) {
+          case 'product_photo_upload':
+            // Photo uploads are successful only if validation passed and no error
+            return result.success === true && !result.error;
+          case 'ingredient_parsing':
+            // Ingredient parsing is successful if it found valid ingredients
+            return result.isValidIngredientsList === true;
+          case 'product_creation':
+            // Product creation is successful if it created the product
+            return result.success === true;
+          default:
+            return result.success === true;
+        }
+      };
       
-      // Job completed successfully - reset backoff
-      this.processingBackoff = 1000;
+      const actuallySucceeded = isJobActuallySuccessful();
       
-      job.status = 'completed';
-      job.completedAt = new Date();
-      job.resultData = result;
+      if (actuallySucceeded) {
+        if (__DEV__) console.log(`✅ [BackgroundQueue] Job ${job.id.slice(-6)} completed successfully`);
+        
+        // Job completed successfully - reset backoff
+        this.processingBackoff = 1000;
+        
+        job.status = 'completed';
+        job.completedAt = new Date();
+        job.resultData = result;
+      } else {
+        // Job completed but with failure result (e.g., validation error)
+        console.log(`❌ [BackgroundQueue] Job ${job.id.slice(-6)} completed but failed validation or processing`);
+        console.log(`❌ [BackgroundQueue] Result:`, { 
+          success: result?.success, 
+          error: result?.error,
+          validationError: result?.validationError 
+        });
+        
+        job.status = 'failed';
+        job.completedAt = new Date();
+        job.resultData = result;
+        job.errorMessage = result?.error || 'Job completed but failed validation';
+      }
       
       try {
         await this.moveJobToCompleted(job);
-        if (__DEV__) console.log(`📦 [BackgroundQueue] Job ${job.id.slice(-6)} moved to completed storage`);
+        if (actuallySucceeded) {
+          if (__DEV__) console.log(`📦 [BackgroundQueue] Completed job ${job.id.slice(-6)} moved to completed storage`);
+        } else {
+          console.log(`📦 [BackgroundQueue] Failed job ${job.id.slice(-6)} moved to completed storage`);
+        }
       } catch (error) {
         console.error(`📦 [BackgroundQueue] Error moving job ${job.id.slice(-6)} to completed:`, error);
         // Continue anyway - we don't want to lose the job
@@ -484,27 +524,49 @@ class BackgroundQueueServiceClass extends EventEmitter {
       
       // CRITICAL: Save the updated active jobs to storage IMMEDIATELY after removal
       await this.saveJobsToStorage();
-      if (__DEV__) console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} completion`);
+      if (__DEV__) console.log(`💾 [BackgroundQueue] Updated active jobs saved to storage after job ${job.id.slice(-6)} ${actuallySucceeded ? 'completion' : 'failure'}`);
       
-      if (__DEV__) {
-        console.log(`🎉 [BackgroundQueue] *** EMITTING JOB_COMPLETED EVENT ***`);
-        console.log(`🎉 [BackgroundQueue] Event details:`, {
+      // Emit appropriate event based on actual success/failure
+      if (actuallySucceeded) {
+        if (__DEV__) {
+          console.log(`🎉 [BackgroundQueue] *** EMITTING JOB_COMPLETED EVENT ***`);
+          console.log(`🎉 [BackgroundQueue] Event details:`, {
+            jobId: job.id?.slice(-8) || 'NO_ID',
+            jobType: job.jobType,
+            upc: job.upc,
+            status: job.status,
+            hasResultData: !!job.resultData,
+            resultSuccess: job.resultData?.success
+          });
+        }
+        
+        this.emit('job_completed', job);
+        console.log(`📡 [BackgroundQueue] job_completed event emitted for job ${job.id.slice(-6)}`);
+        
+        // Send success notification
+        this.sendLocalNotification(job, 'completed').catch(error => {
+          console.error(`📱 [BackgroundQueue] Error sending notification for job ${job.id.slice(-6)}:`, error);
+        });
+      } else {
+        console.log(`💥 [BackgroundQueue] *** EMITTING JOB_FAILED EVENT ***`);
+        console.log(`💥 [BackgroundQueue] Failed job details:`, {
           jobId: job.id?.slice(-8) || 'NO_ID',
           jobType: job.jobType,
           upc: job.upc,
           status: job.status,
-          hasResultData: !!job.resultData,
-          resultSuccess: job.resultData?.success
+          timestamp: new Date().toISOString(),
+          errorMessage: job.errorMessage,
+          validationError: result?.validationError
+        });
+        
+        this.emit('job_failed', job);
+        console.log(`📡 [BackgroundQueue] job_failed event emitted for job ${job.id.slice(-6)}`);
+        
+        // Send failure notification
+        this.sendLocalNotification(job, 'failed').catch(error => {
+          console.error(`📱 [BackgroundQueue] Error sending failure notification for job ${job.id.slice(-6)}:`, error);
         });
       }
-      
-      this.emit('job_completed', job);
-      console.log(`📡 [BackgroundQueue] job_completed event emitted for job ${job.id.slice(-6)}`);
-      
-      // Send local notification (non-blocking)
-      this.sendLocalNotification(job, 'completed').catch(error => {
-        console.error(`📱 [BackgroundQueue] Error sending notification for job ${job.id.slice(-6)}:`, error);
-      });
       
     } catch (error) {
       console.error(`❌ [BackgroundQueue] Job ${job.id.slice(-6)} failed:`, error);
