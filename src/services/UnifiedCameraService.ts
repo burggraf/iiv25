@@ -60,15 +60,6 @@ class UnifiedCameraService {
   private listeners: EventListener = {};
   private currentOwner: CameraOwnership | null = null;
   private listenerCleanupTimers: Map<(...args: any[]) => void, ReturnType<typeof setTimeout>> = new Map();
-  private performanceMetrics: {
-    modeTransitions: Array<{ from: CameraMode; to: CameraMode; timestamp: number; duration: number }>;
-    barcodeScansEnabled: number;
-    lastScannerActivation: number | null;
-  } = {
-    modeTransitions: [],
-    barcodeScansEnabled: 0,
-    lastScannerActivation: null
-  };
 
   private constructor() {
     
@@ -202,8 +193,6 @@ class UnifiedCameraService {
    * @param owner - Identifier for the component requesting camera control
    */
   async switchToMode(mode: CameraMode, customConfig?: Partial<CameraConfig>, owner?: string): Promise<boolean> {
-    const startTime = Date.now();
-    
     try {
       const ownerName = owner || 'unknown';
       console.log(`🎥 UnifiedCamera: ${ownerName} requesting switch to mode '${mode}'`);
@@ -225,22 +214,6 @@ class UnifiedCameraService {
 
       const previousMode = this.state.mode;
       const newConfig = { ...this.modeConfigs[mode], ...customConfig };
-      
-      // Detect transition back to scanner from photo modes - needs camera reset
-      const isReturningToScanner = (
-        mode === 'scanner' && 
-        (previousMode === 'product-photo' || previousMode === 'ingredients-photo')
-      );
-      
-      if (isReturningToScanner) {
-        console.log(`🎥 UnifiedCamera: Detected return to scanner from ${previousMode} - triggering camera reset`);
-        // Emit camera reset event for components to handle hardware reset
-        this.emit('cameraReset', {
-          fromMode: previousMode,
-          toMode: mode,
-          reason: 'photo_workflow_complete'
-        });
-      }
       
       // Update ownership
       if (mode !== 'inactive') {
@@ -269,55 +242,19 @@ class UnifiedCameraService {
         previousMode,
         currentMode: mode,
         config: newConfig,
-        needsCameraReset: isReturningToScanner,
       });
 
-      // Handle activation/deactivation with optional warmup for scanner mode
+      // Handle activation/deactivation
       if (mode === 'inactive') {
         await this.deactivateCamera();
       } else {
         await this.activateCamera();
-        
-        // Track scanner activation for performance monitoring
-        if (mode === 'scanner') {
-          this.performanceMetrics.lastScannerActivation = Date.now();
-          this.performanceMetrics.barcodeScansEnabled++;
-        }
-        
-        // Add warmup period for scanner mode after photo workflows
-        if (isReturningToScanner) {
-          console.log(`🎥 UnifiedCamera: Starting scanner warmup period`);
-          // Give camera hardware time to stabilize after mode switch
-          await new Promise(resolve => setTimeout(resolve, 500));
-          console.log(`🎥 UnifiedCamera: Scanner warmup complete`);
-        }
       }
-      
-      // Record performance metrics
-      const duration = Date.now() - startTime;
-      this.performanceMetrics.modeTransitions.push({
-        from: previousMode,
-        to: mode,
-        timestamp: startTime,
-        duration
-      });
-      
-      // Keep only last 50 transitions for memory management
-      if (this.performanceMetrics.modeTransitions.length > 50) {
-        this.performanceMetrics.modeTransitions = this.performanceMetrics.modeTransitions.slice(-50);
-      }
-      
-      console.log(`🎥 UnifiedCamera: ${ownerName} successfully switched to mode '${mode}' (${duration}ms)`);
-      
-      // Log performance warning if mode switch took too long
-      if (duration > 1000) {
-        console.warn(`⚠️ UnifiedCamera: Slow mode transition detected (${duration}ms) from ${previousMode} to ${mode}`);
-      }
-      
+
+      console.log(`🎥 UnifiedCamera: ${ownerName} successfully switched to mode '${mode}'`);
       return true;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`🎥 UnifiedCamera: Failed to switch to mode '${mode}' after ${duration}ms:`, error);
+      console.error(`🎥 UnifiedCamera: Failed to switch to mode '${mode}':`, error);
       this.state.error = error instanceof Error ? error.message : 'Unknown error';
       this.emit('error', this.state.error);
       return false;
@@ -495,73 +432,6 @@ class UnifiedCameraService {
   isValidModeTransition(fromMode: CameraMode, toMode: CameraMode): boolean {
     // All transitions are valid for now, but can be restricted later if needed
     return true;
-  }
-
-  /**
-   * Get camera performance diagnostics
-   */
-  getPerformanceMetrics() {
-    const now = Date.now();
-    const recentTransitions = this.performanceMetrics.modeTransitions.filter(
-      t => now - t.timestamp < 5 * 60 * 1000 // Last 5 minutes
-    );
-    
-    const scannerToPhotoTransitions = recentTransitions.filter(
-      t => t.from === 'scanner' && (t.to === 'product-photo' || t.to === 'ingredients-photo')
-    );
-    
-    const photoToScannerTransitions = recentTransitions.filter(
-      t => (t.from === 'product-photo' || t.from === 'ingredients-photo') && t.to === 'scanner'
-    );
-    
-    return {
-      totalModeTransitions: this.performanceMetrics.modeTransitions.length,
-      recentTransitions: recentTransitions.length,
-      barcodeScansEnabled: this.performanceMetrics.barcodeScansEnabled,
-      lastScannerActivation: this.performanceMetrics.lastScannerActivation,
-      averageTransitionTime: recentTransitions.length > 0 
-        ? Math.round(recentTransitions.reduce((sum, t) => sum + t.duration, 0) / recentTransitions.length)
-        : 0,
-      slowTransitions: recentTransitions.filter(t => t.duration > 1000).length,
-      photoWorkflowTransitions: {
-        scannerToPhoto: scannerToPhotoTransitions.length,
-        photoToScanner: photoToScannerTransitions.length,
-        avgPhotoToScannerTime: photoToScannerTransitions.length > 0
-          ? Math.round(photoToScannerTransitions.reduce((sum, t) => sum + t.duration, 0) / photoToScannerTransitions.length)
-          : 0
-      },
-      currentMode: this.state.mode,
-      currentOwner: this.currentOwner?.owner || null,
-      timeInCurrentMode: this.currentOwner 
-        ? now - this.currentOwner.timestamp
-        : null,
-    };
-  }
-
-  /**
-   * Log camera health diagnostics
-   */
-  logHealthDiagnostics(): void {
-    const metrics = this.getPerformanceMetrics();
-    console.log('🎥 UnifiedCamera Health Diagnostics:', {
-      currentState: {
-        mode: this.state.mode,
-        isActive: this.state.isActive,
-        owner: this.currentOwner?.owner || 'none',
-        timeInCurrentMode: metrics.timeInCurrentMode ? `${metrics.timeInCurrentMode}ms` : 'N/A'
-      },
-      performance: {
-        totalTransitions: metrics.totalModeTransitions,
-        recentTransitions: metrics.recentTransitions,
-        avgTransitionTime: `${metrics.averageTransitionTime}ms`,
-        slowTransitions: metrics.slowTransitions,
-        barcodeScansEnabled: metrics.barcodeScansEnabled
-      },
-      photoWorkflows: metrics.photoWorkflowTransitions,
-      lastScannerActivation: metrics.lastScannerActivation 
-        ? new Date(metrics.lastScannerActivation).toISOString() 
-        : 'Never'
-    });
   }
 }
 
