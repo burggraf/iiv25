@@ -64,15 +64,14 @@ export function distillIngredients(ingredients: string[]): string[] {
         .map(sub => sub.trim())
         .filter(sub => sub.length > 0);
 
-      // Create expanded ingredients: "apple juice", "raspberry juice", "grape juice"
-      for (const sub of subIngredientList) {
-        const expandedIngredient = `${baseIngredient} ${sub} ${suffix}`.trim();
-        expandedIngredients.push(expandedIngredient);
-      }
-
-      // Also keep the base ingredient if it makes sense
+      // Add the base ingredient first
       if (baseIngredient.trim().length > 0) {
         expandedIngredients.push(`${baseIngredient} ${suffix}`.trim());
+      }
+
+      // Add each parenthetical ingredient separately (not concatenated with base)
+      for (const sub of subIngredientList) {
+        expandedIngredients.push(`${sub} ${suffix}`.trim());
       }
     } else {
       // No parentheses, keep as-is
