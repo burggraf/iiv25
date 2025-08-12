@@ -152,25 +152,6 @@ export default function NotificationSettingsModal({ visible, onClose }: Notifica
             </View>
           </View>
 
-          {preferences?.expo_push_token && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Debug Info</Text>
-              <View style={styles.card}>
-                <View style={styles.debugInfo}>
-                  <Text style={styles.debugLabel}>User ID:</Text>
-                  <Text style={styles.debugValue} numberOfLines={2} ellipsizeMode="middle">
-                    {user?.id}
-                  </Text>
-                </View>
-                <View style={[styles.debugInfo, { marginTop: 8 }]}>
-                  <Text style={styles.debugLabel}>Push Token:</Text>
-                  <Text style={styles.debugValue} numberOfLines={3} ellipsizeMode="middle">
-                    {preferences.expo_push_token}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
@@ -292,20 +273,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
-  },
-  debugInfo: {
-    marginBottom: 12,
-  },
-  debugLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
-  },
-  debugValue: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#333',
   },
   aboutText: {
     fontSize: 14,
