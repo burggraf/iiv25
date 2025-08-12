@@ -48,11 +48,12 @@ export class NotificationService {
 
   /**
    * Register for push notifications and get the Expo push token
+   * Returns object with token and permission status for better handling
    */
-  async registerForPushNotifications(): Promise<string | null> {
+  async registerForPushNotifications(): Promise<{ token: string | null; permissionGranted: boolean }> {
     if (!Device.isDevice) {
       console.log('Must use physical device for Push Notifications');
-      return null;
+      return { token: null, permissionGranted: false };
     }
 
     // Set up Android notification channel
@@ -83,7 +84,7 @@ export class NotificationService {
 
     if (finalStatus !== 'granted') {
       console.log('Push notification permissions not granted');
-      return null;
+      return { token: null, permissionGranted: false };
     }
 
     try {
@@ -92,17 +93,17 @@ export class NotificationService {
       
       if (!projectId) {
         console.error('Project ID not found in Constants');
-        return null;
+        return { token: null, permissionGranted: true };
       }
 
       // Get the Expo push token
       const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
       console.log('Expo push token:', token);
-      return token;
+      return { token, permissionGranted: true };
 
     } catch (error) {
       console.error('Error getting push token:', error);
-      return null;
+      return { token: null, permissionGranted: true };
     }
   }
 
@@ -129,6 +130,33 @@ export class NotificationService {
       return true;
     } catch (error) {
       console.error('Error saving push token:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Save record when user declines push notification permissions
+   */
+  async saveUserPermissionDeclined(userId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('user_notification_preferences')
+        .upsert({
+          user_id: userId,
+          expo_push_token: null,
+          notifications_enabled: false,
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) {
+        console.error('Error saving permission declined:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error saving permission declined:', error);
       return false;
     }
   }
@@ -279,15 +307,23 @@ export class NotificationService {
    */
   async initializeForUser(userId: string): Promise<void> {
     // Register for push notifications
-    const pushToken = await this.registerForPushNotifications();
+    const { token, permissionGranted } = await this.registerForPushNotifications();
     
-    if (pushToken) {
-      // Save the token to database
-      await this.saveUserPushToken(userId, pushToken);
+    if (token && permissionGranted) {
+      // Save the token to database with notifications enabled
+      await this.saveUserPushToken(userId, token);
+    } else if (!permissionGranted) {
+      // User explicitly declined permissions - create record with notifications disabled
+      await this.saveUserPermissionDeclined(userId);
+    } else {
+      // Permission granted but token failed (technical issue) - create record but mark as disabled for now
+      await this.saveUserPermissionDeclined(userId);
     }
 
-    // Set up listeners
-    this.setupNotificationListeners();
+    // Set up listeners only if permissions were granted
+    if (permissionGranted) {
+      this.setupNotificationListeners();
+    }
   }
 
   /**
