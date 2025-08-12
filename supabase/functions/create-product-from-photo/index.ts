@@ -432,11 +432,11 @@ Deno.serve(async (req) => {
         const imageUrl = urlData.publicUrl;
         console.log('🔗 Generated image URL:', imageUrl);
 
-        // Update product with image URL
+        // Update product with image URL (store [SUPABASE] marker, not full URL)
         const { data: updatedProduct, error: updateError } = await supabaseService
           .from('products')
           .update({ 
-            imageurl: imageUrl,
+            imageurl: '[SUPABASE]',
             lastupdated: new Date().toISOString()
           })
           .eq('ean13', product.ean13)
@@ -459,13 +459,13 @@ Deno.serve(async (req) => {
               userid: user.id,
               type: 'update_product_image_validated',
               input: normalizedUpc,
-              result: imageUrl,
+              result: '[SUPABASE]',
               metadata: {
                 upc: normalizedUpc,
                 productName,
                 brand,
                 confidence,
-                imageUrl,
+                imageUrl: '[SUPABASE]',
                 apiCost: totalCost.toFixed(6)
               },
             });
@@ -480,7 +480,7 @@ Deno.serve(async (req) => {
           productName,
           brand,
           confidence,
-          imageUrl,
+          imageUrl: '[SUPABASE]',
           apiCost: {
             inputTokens,
             outputTokens,
