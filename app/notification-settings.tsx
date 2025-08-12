@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
+import Logo from '../src/components/Logo';
 import { useAuth } from '../src/context/AuthContext';
 import { notificationService } from '../src/services/NotificationService';
 import { Database } from '../src/lib/database.types';
@@ -89,13 +90,21 @@ export default function NotificationSettingsScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header with Back Button */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          // Always go back to home with user modal open
+          router.replace('/(tabs)/?openSubscription=true');
+        }} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>Notification Settings</Text>
+        <View style={styles.headerContent}>
+          <Logo size={32} />
+          <Text style={styles.title}>Notification Settings</Text>
+        </View>
         <View style={styles.placeholder} />
       </View>
 
@@ -103,58 +112,64 @@ export default function NotificationSettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notifications</Text>
-        
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Push Notifications</Text>
-            <Text style={styles.settingDescription}>
-              Receive notifications about your scans and account updates
-            </Text>
+        <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Push Notifications</Text>
+              <Text style={styles.settingDescription}>
+                Receive notifications about your scans and account updates
+              </Text>
+            </View>
+            <Switch
+              value={preferences?.notifications_enabled ?? true}
+              onValueChange={updateNotificationSetting}
+              trackColor={{ false: '#E5E5EA', true: '#4CAF50' }}
+              thumbColor="#ffffff"
+            />
           </View>
-          <Switch
-            value={preferences?.notifications_enabled ?? true}
-            onValueChange={updateNotificationSetting}
-            trackColor={{ false: '#E5E5EA', true: '#4CAF50' }}
-            thumbColor="#ffffff"
-          />
-        </View>
 
-        {preferences?.notifications_enabled && (
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={testNotification}
-          >
-            <Text style={styles.testButtonText}>Test Notification</Text>
-          </TouchableOpacity>
-        )}
+          {preferences?.notifications_enabled && (
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={testNotification}
+            >
+              <Text style={styles.testButtonText}>Test Notification</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {preferences?.expo_push_token && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Debug Info</Text>
-          <View style={styles.debugInfo}>
-            <Text style={styles.debugLabel}>User ID:</Text>
-            <Text style={styles.debugValue} numberOfLines={2} ellipsizeMode="middle">
-              {user?.id}
-            </Text>
-          </View>
-          <View style={[styles.debugInfo, { marginTop: 8 }]}>
-            <Text style={styles.debugLabel}>Push Token:</Text>
-            <Text style={styles.debugValue} numberOfLines={3} ellipsizeMode="middle">
-              {preferences.expo_push_token}
-            </Text>
+          <View style={styles.card}>
+            <View style={styles.debugInfo}>
+              <Text style={styles.debugLabel}>User ID:</Text>
+              <Text style={styles.debugValue} numberOfLines={2} ellipsizeMode="middle">
+                {user?.id}
+              </Text>
+            </View>
+            <View style={[styles.debugInfo, { marginTop: 8 }]}>
+              <Text style={styles.debugLabel}>Push Token:</Text>
+              <Text style={styles.debugValue} numberOfLines={3} ellipsizeMode="middle">
+                {preferences.expo_push_token}
+              </Text>
+            </View>
           </View>
         </View>
       )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.aboutText}>
-          Push notifications help you stay updated with your scanning activity and important account information.
-        </Text>
+        <View style={styles.card}>
+          <Text style={styles.aboutText}>
+            Push notifications help you stay updated with your scanning activity and important account information.
+          </Text>
+        </View>
       </View>
       </ScrollView>
-    </View>
+      </View>
+    </>
   );
 }
 
@@ -179,22 +194,26 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    borderRadius: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
+    marginLeft: 8,
     color: '#333',
-    flex: 1,
-    textAlign: 'center',
   },
   placeholder: {
     width: 40,
   },
   content: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    padding: 20,
+    backgroundColor: 'white',
   },
   loadingText: {
     fontSize: 16,
@@ -203,16 +222,26 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   section: {
+    marginBottom: 28,
+  },
+  card: {
     backgroundColor: 'white',
-    marginTop: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#1a1a1a',
     marginBottom: 16,
+    flexShrink: 1,
   },
   settingRow: {
     flexDirection: 'row',
@@ -249,11 +278,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   debugInfo: {
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    marginBottom: 12,
   },
   debugLabel: {
     fontSize: 12,
