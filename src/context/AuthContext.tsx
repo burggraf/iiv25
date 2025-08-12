@@ -10,6 +10,7 @@ import * as Linking from 'expo-linking'
 import { SubscriptionService } from '../services/subscriptionService'
 import deviceIdService from '../services/deviceIdService'
 import { EmailConfirmationService } from '../services/emailConfirmationService'
+import { notificationService } from '../services/NotificationService'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as Crypto from 'expo-crypto'
 import { Platform } from 'react-native'
@@ -187,6 +188,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 							console.log('Initial session - Device ID:', deviceId, 'User ID:', session.user.id)
 							await SubscriptionService.handleAuthStateChange(deviceId, session.user.id)
 							console.log('Initial session subscription update completed successfully')
+
+							// Initialize notifications for user
+							console.log('Initializing notifications for user:', session.user.id)
+							await notificationService.initializeForUser(session.user.id)
+							console.log('Notifications initialized successfully')
 						} catch (subscriptionError) {
 							console.error('Failed to update subscription on initial session:', subscriptionError)
 							console.error('Initial session error details:', (subscriptionError as Error).message, (subscriptionError as Error).stack)
@@ -231,6 +237,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 						console.log('Device ID obtained:', deviceId, 'User ID:', session?.user?.id)
 						await SubscriptionService.handleAuthStateChange(deviceId, session?.user?.id)
 						console.log('Subscription update completed successfully')
+
+						// Handle notification service based on auth event
+						if (event === 'SIGNED_IN' && session?.user) {
+							console.log('User signed in, initializing notifications:', session.user.id)
+							await notificationService.initializeForUser(session.user.id)
+							console.log('Notifications initialized for signed in user')
+						} else if (event === 'SIGNED_OUT') {
+							console.log('User signed out, cleaning up notifications')
+							notificationService.cleanup()
+							console.log('Notifications cleaned up')
+						}
 					} catch (error) {
 						console.error('Failed to update subscription on auth change:', error)
 						console.error('Error details:', (error as Error).message, (error as Error).stack)

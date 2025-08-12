@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -10,7 +11,7 @@ export type Database = {
   // Allows to automatically instanciate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.12 (cd3cf9e)"
   }
   graphql_public: {
     Tables: {
@@ -123,6 +124,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_history: {
+        Row: {
+          body: string
+          data: Json | null
+          id: string
+          notification_type: string
+          sent_at: string | null
+          status: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          data?: Json | null
+          id?: string
+          notification_type: string
+          sent_at?: string | null
+          status?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          data?: Json | null
+          id?: string
+          notification_type?: string
+          sent_at?: string | null
+          status?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           analysis: string | null
@@ -195,6 +229,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_notification_preferences: {
+        Row: {
+          created_at: string | null
+          expo_push_token: string | null
+          id: string
+          notifications_enabled: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expo_push_token?: string | null
+          id?: string
+          notifications_enabled?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expo_push_token?: string | null
+          id?: string
+          notifications_enabled?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_subscription: {
         Row: {
           created_at: string | null
@@ -234,7 +295,16 @@ export type Database = {
     }
     Functions: {
       admin_actionlog_paginated: {
-        Args: { page_size?: number; page_offset?: number }
+        Args: {
+          page_size?: number
+          page_offset?: number
+          filter_types?: string[]
+          filter_input?: string
+          filter_result?: string
+          filter_user?: string
+          filter_start_date?: string
+          filter_end_date?: string
+        }
         Returns: Json
       }
       admin_actionlog_recent: {
@@ -266,6 +336,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      admin_create_or_update_profile_by_email: {
+        Args: {
+          user_email: string
+          new_subscription_level: string
+          new_expires_at?: string
+        }
+        Returns: Json
+      }
       admin_delete_ingredient: {
         Args: { ingredient_title: string }
         Returns: boolean
@@ -280,6 +358,10 @@ export type Database = {
           title: string
           class: string
         }[]
+      }
+      admin_get_newest_ingredients: {
+        Args: { page_size?: number; page_offset?: number }
+        Returns: Json
       }
       admin_get_product: {
         Args: { product_upc: string }
@@ -376,6 +458,17 @@ export type Database = {
           issues: string
         }[]
       }
+      admin_search_profiles: {
+        Args: { query?: string; limit_count?: number }
+        Returns: {
+          id: string
+          email: string
+          subscription_level: string
+          expires_at: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       admin_update_ingredient: {
         Args: {
           ingredient_title: string
@@ -386,6 +479,14 @@ export type Database = {
       }
       admin_update_product: {
         Args: { product_upc: string; updates: Json }
+        Returns: boolean
+      }
+      admin_update_profile: {
+        Args: {
+          profile_id: string
+          new_subscription_level: string
+          new_expires_at?: string
+        }
         Returns: boolean
       }
       admin_update_user_subscription: {
@@ -404,6 +505,7 @@ export type Database = {
         Returns: {
           id: string
           user_id: string
+          user_email: string
           subscription_level: string
           created_at: string
           updated_at: string

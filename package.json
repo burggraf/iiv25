@@ -58,7 +58,7 @@
     "expo-constants": "~17.1.7",
     "expo-crypto": "~14.1.5",
     "expo-dev-client": "~5.2.4",
-    "expo-device": "^7.1.4",
+    "expo-device": "~7.1.4",
     "expo-file-system": "~18.1.11",
     "expo-font": "~13.3.2",
     "expo-haptics": "~14.1.4",
@@ -91,7 +91,8 @@
     "react-native-webview": "13.13.5",
     "sharp": "^0.34.3",
     "use-latest-callback": "^0.2.4",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "expo-notifications": "~0.31.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
