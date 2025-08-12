@@ -117,6 +117,8 @@ export class NotificationService {
           user_id: userId,
           expo_push_token: pushToken,
           notifications_enabled: true,
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) {
@@ -164,6 +166,8 @@ export class NotificationService {
         .upsert({
           user_id: userId,
           ...preferences,
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) {

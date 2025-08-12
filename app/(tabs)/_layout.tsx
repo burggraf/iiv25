@@ -7,7 +7,6 @@ import BarcodeIcon from '../../src/components/icons/BarcodeIcon';
 import ManualIcon from '../../src/components/icons/ManualIcon';
 import HistoryIcon from '../../src/components/icons/HistoryIcon';
 import SearchIcon from '../../src/components/icons/SearchIcon';
-import SettingsIcon from '../../src/components/icons/SettingsIcon';
 import { useApp } from '../../src/context/AppContext';
 
 export default function TabLayout() {
@@ -108,18 +107,6 @@ export default function TabLayout() {
           title: 'Search',
           tabBarIcon: ({ focused }) => (
             <SearchIcon 
-              size={24} 
-              color={focused ? WHITE_COLOR : GREEN_COLOR} 
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ focused }) => (
-            <SettingsIcon 
               size={24} 
               color={focused ? WHITE_COLOR : GREEN_COLOR} 
             />

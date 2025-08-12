@@ -8,14 +8,18 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
-import { useAuth } from '../../src/context/AuthContext';
-import { notificationService } from '../../src/services/NotificationService';
-import { Database } from '../../src/lib/database.types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useAuth } from '../src/context/AuthContext';
+import { notificationService } from '../src/services/NotificationService';
+import { Database } from '../src/lib/database.types';
 
 type NotificationPreferences = Database['public']['Tables']['user_notification_preferences']['Row'];
 
-export default function SettingsScreen() {
+export default function NotificationSettingsScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,10 +89,17 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header with Back Button */}
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Notification Settings</Text>
+        <View style={styles.placeholder} />
       </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notifications</Text>
@@ -142,25 +153,48 @@ export default function SettingsScreen() {
           Push notifications help you stay updated with your scanning activity and important account information.
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'white',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  backButton: {
+    padding: 8,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#4CAF50',
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    borderRadius: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
   },
   loadingText: {
     fontSize: 16,

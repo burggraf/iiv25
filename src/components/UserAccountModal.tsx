@@ -299,6 +299,17 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 								Manage Subscription
 							</Text>
 						</TouchableOpacity>
+
+						<TouchableOpacity 
+							style={styles.actionButton} 
+							onPress={() => {
+								onClose();
+								router.push('/notification-settings');
+							}}>
+							<Text style={styles.actionButtonText}>
+								Manage Notifications
+							</Text>
+						</TouchableOpacity>
 					</View>
 
 					{/* App Information */}
