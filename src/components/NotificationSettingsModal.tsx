@@ -7,27 +7,33 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, Stack } from 'expo-router';
-import Logo from '../src/components/Logo';
-import { useAuth } from '../src/context/AuthContext';
-import { notificationService } from '../src/services/NotificationService';
-import { Database } from '../src/lib/database.types';
+import Logo from './Logo';
+import { useAuth } from '../context/AuthContext';
+import { notificationService } from '../services/NotificationService';
+import { Database } from '../lib/database.types';
 
 type NotificationPreferences = Database['public']['Tables']['user_notification_preferences']['Row'];
 
-export default function NotificationSettingsScreen() {
+interface NotificationSettingsModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function NotificationSettingsModal({ visible, onClose }: NotificationSettingsModalProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPreferences();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+    if (visible && user?.id) {
+      loadPreferences();
+    }
+  }, [visible, user?.id]);
 
   const loadPreferences = async () => {
     if (!user?.id) return;
@@ -83,93 +89,102 @@ export default function NotificationSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading settings...</Text>
-      </View>
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={visible}
+        onRequestClose={onClose}
+        presentationStyle="fullScreen">
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+          <Text style={styles.loadingText}>Loading settings...</Text>
+        </View>
+      </Modal>
     );
   }
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
+    <Modal
+      animationType="slide"
+      transparent={false}
+      visible={visible}
+      onRequestClose={onClose}
+      presentationStyle="fullScreen">
       <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header with Back Button */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => {
-          // Always go back to home with user modal open
-          router.replace('/(tabs)/?openSubscription=true');
-        }} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Logo size={32} />
-          <Text style={styles.title}>Notification Settings</Text>
+        {/* Header with Close Button */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+            <Ionicons name="close" size={24} color="#333" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Logo size={32} />
+            <Text style={styles.title}>Notification Settings</Text>
+          </View>
+          <View style={styles.placeholder} />
         </View>
-        <View style={styles.placeholder} />
-      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <View style={styles.card}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingLabel}>Push Notifications</Text>
+                  <Text style={styles.settingDescription}>
+                    Receive notifications about your scans and account updates
+                  </Text>
+                </View>
+                <Switch
+                  value={preferences?.notifications_enabled ?? true}
+                  onValueChange={updateNotificationSetting}
+                  trackColor={{ false: '#E5E5EA', true: '#4CAF50' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        <View style={styles.card}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Push Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications about your scans and account updates
-              </Text>
+              {preferences?.notifications_enabled && (
+                <TouchableOpacity
+                  style={styles.testButton}
+                  onPress={testNotification}
+                >
+                  <Text style={styles.testButtonText}>Test Notification</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <Switch
-              value={preferences?.notifications_enabled ?? true}
-              onValueChange={updateNotificationSetting}
-              trackColor={{ false: '#E5E5EA', true: '#4CAF50' }}
-              thumbColor="#ffffff"
-            />
           </View>
 
-          {preferences?.notifications_enabled && (
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={testNotification}
-            >
-              <Text style={styles.testButtonText}>Test Notification</Text>
-            </TouchableOpacity>
+          {preferences?.expo_push_token && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Debug Info</Text>
+              <View style={styles.card}>
+                <View style={styles.debugInfo}>
+                  <Text style={styles.debugLabel}>User ID:</Text>
+                  <Text style={styles.debugValue} numberOfLines={2} ellipsizeMode="middle">
+                    {user?.id}
+                  </Text>
+                </View>
+                <View style={[styles.debugInfo, { marginTop: 8 }]}>
+                  <Text style={styles.debugLabel}>Push Token:</Text>
+                  <Text style={styles.debugValue} numberOfLines={3} ellipsizeMode="middle">
+                    {preferences.expo_push_token}
+                  </Text>
+                </View>
+              </View>
+            </View>
           )}
-        </View>
-      </View>
 
-      {preferences?.expo_push_token && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Debug Info</Text>
-          <View style={styles.card}>
-            <View style={styles.debugInfo}>
-              <Text style={styles.debugLabel}>User ID:</Text>
-              <Text style={styles.debugValue} numberOfLines={2} ellipsizeMode="middle">
-                {user?.id}
-              </Text>
-            </View>
-            <View style={[styles.debugInfo, { marginTop: 8 }]}>
-              <Text style={styles.debugLabel}>Push Token:</Text>
-              <Text style={styles.debugValue} numberOfLines={3} ellipsizeMode="middle">
-                {preferences.expo_push_token}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About</Text>
+            <View style={styles.card}>
+              <Text style={styles.aboutText}>
+                Push notifications help you stay updated with your scanning activity and important account information.
               </Text>
             </View>
           </View>
-        </View>
-      )}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.card}>
-          <Text style={styles.aboutText}>
-            Push notifications help you stay updated with your scanning activity and important account information.
-          </Text>
-        </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       </View>
-      </ScrollView>
-      </View>
-    </>
+    </Modal>
   );
 }
 
@@ -188,7 +203,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  backButton: {
+  closeButton: {
     padding: 8,
     width: 40,
     height: 40,
@@ -212,7 +227,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 24,
     backgroundColor: 'white',
   },
   loadingText: {
@@ -222,26 +237,27 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 32,
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
+    backgroundColor: '#FAFBFC',
+    borderRadius: 12,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#E5E9F0',
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 16,
+    color: '#2C3E50',
+    marginBottom: 18,
     flexShrink: 1,
+    letterSpacing: -0.3,
   },
   settingRow: {
     flexDirection: 'row',
@@ -295,5 +311,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  bottomPadding: {
+    height: 40,
   },
 });

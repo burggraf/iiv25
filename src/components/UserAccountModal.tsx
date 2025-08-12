@@ -17,6 +17,7 @@ import Constants from 'expo-constants'
 
 import Logo from './Logo'
 import ManageSubscriptionModal from './ManageSubscriptionModal'
+import NotificationSettingsModal from './NotificationSettingsModal'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -40,6 +41,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 	const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null)
 	const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
 	const [showManageSubscription, setShowManageSubscription] = useState(false)
+	const [showNotificationSettings, setShowNotificationSettings] = useState(false)
 	const [isVerifyingEmail, setIsVerifyingEmail] = useState(false)
 
 	useEffect(() => {
@@ -302,10 +304,7 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 
 						<TouchableOpacity 
 							style={styles.actionButton} 
-							onPress={() => {
-								onClose();
-								router.push('/notification-settings');
-							}}>
+							onPress={() => setShowNotificationSettings(true)}>
 							<Text style={styles.actionButtonText}>
 								Manage Notifications
 							</Text>
@@ -350,6 +349,12 @@ export default function UserAccountModal({ visible, onClose, onSubscriptionChang
 				onClose={() => setShowManageSubscription(false)}
 				onSubscriptionChanged={handleSubscriptionChanged}
 			/>
+
+			{/* Notification Settings Modal */}
+			<NotificationSettingsModal
+				visible={showNotificationSettings}
+				onClose={() => setShowNotificationSettings(false)}
+			/>
 		</Modal>
 	)
 }
@@ -393,17 +398,19 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		flex: 1,
-		padding: 20,
+		padding: 24,
+		backgroundColor: 'white',
 	},
 	section: {
-		marginBottom: 28,
+		marginBottom: 32,
 	},
 	sectionTitle: {
-		fontSize: 22,
+		fontSize: 20,
 		fontWeight: '700',
-		color: '#1a1a1a',
-		marginBottom: 16,
+		color: '#2C3E50',
+		marginBottom: 18,
 		flexShrink: 1,
+		letterSpacing: -0.3,
 	},
 	sectionSubtitle: {
 		fontSize: 16,
@@ -412,34 +419,34 @@ const styles = StyleSheet.create({
 		lineHeight: 22,
 	},
 	card: {
-		backgroundColor: 'white',
-		borderRadius: 16,
+		backgroundColor: '#FAFBFC',
+		borderRadius: 12,
 		padding: 20,
 		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
-		elevation: 3,
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.05,
+		shadowRadius: 3,
+		elevation: 2,
 		borderWidth: 1,
-		borderColor: '#f0f0f0',
+		borderColor: '#E5E9F0',
 	},
 	cardRow: {
 		flexDirection: 'row',
 		alignItems: 'flex-start',
-		marginBottom: 12,
+		marginBottom: 16,
 		minHeight: 24,
 	},
 	cardLabel: {
-		fontSize: 16,
-		color: '#666',
+		fontSize: 15,
+		color: '#5A6C7D',
 		fontWeight: '500',
-		width: 140,
+		width: 120,
 		flexShrink: 0,
 		marginRight: 16,
 	},
 	cardValue: {
-		fontSize: 16,
-		color: '#1a1a1a',
+		fontSize: 15,
+		color: '#2C3E50',
 		fontWeight: '600',
 		flex: 1,
 		flexWrap: 'wrap',
@@ -451,25 +458,30 @@ const styles = StyleSheet.create({
 		flexWrap: 'wrap',
 	},
 	actionButton: {
-		backgroundColor: '#007AFF',
-		borderRadius: 16,
-		padding: 18,
+		backgroundColor: '#4CAF50',
+		borderRadius: 12,
+		paddingVertical: 16,
+		paddingHorizontal: 24,
 		alignItems: 'center',
-		marginBottom: 12,
-		shadowColor: '#007AFF',
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.2,
-		shadowRadius: 8,
-		elevation: 4,
+		marginBottom: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 3,
+		borderWidth: 0,
 	},
 	actionButtonText: {
 		color: 'white',
-		fontSize: 18,
-		fontWeight: '700',
+		fontSize: 16,
+		fontWeight: '600',
+		letterSpacing: 0.5,
 	},
 	signOutButton: {
-		backgroundColor: '#FF3B30',
-		shadowColor: '#FF3B30',
+		backgroundColor: '#FF4757',
+		shadowColor: '#000',
+		borderWidth: 1,
+		borderColor: '#FF3742',
 	},
 	signOutButtonText: {
 		color: 'white',
@@ -485,7 +497,7 @@ const styles = StyleSheet.create({
 		alignItems: 'flex-start',
 	},
 	verifyEmailText: {
-		color: '#007AFF',
+		color: '#4CAF50',
 		fontSize: 14,
 		textDecorationLine: 'underline',
 		fontWeight: '600',
