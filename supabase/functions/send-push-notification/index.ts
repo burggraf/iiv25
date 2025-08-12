@@ -20,6 +20,103 @@ interface ExpoMessage {
   badge?: number
 }
 
+interface AuthResult {
+  success: boolean
+  error?: string
+  status: number
+}
+
+/**
+ * Validates authentication for the push notification endpoint
+ * Supports multiple authentication methods:
+ * 1. API Key in X-API-Key header
+ * 2. Supabase JWT token in Authorization header
+ * 3. Service role key in Authorization header
+ */
+async function validateAuthentication(req: Request): Promise<AuthResult> {
+  const apiKey = req.headers.get('X-API-Key')
+  const authorization = req.headers.get('Authorization')
+  
+  // Method 1: Check for admin API key
+  const adminApiKey = Deno.env.get('ADMIN_API_KEY')
+  if (adminApiKey && apiKey === adminApiKey) {
+    return { success: true, status: 200 }
+  }
+  
+  // Method 2: Check for service role key
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (authorization && serviceRoleKey) {
+    const token = authorization.replace('Bearer ', '')
+    if (token === serviceRoleKey) {
+      return { success: true, status: 200 }
+    }
+  }
+  
+  // Method 3: Validate Supabase JWT token and check for admin role
+  if (authorization && authorization.startsWith('Bearer ')) {
+    const token = authorization.replace('Bearer ', '')
+    
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      )
+      
+      // Verify the JWT token
+      const { data: { user }, error } = await supabaseClient.auth.getUser(token)
+      
+      if (error || !user) {
+        return { 
+          success: false, 
+          error: 'Invalid or expired token', 
+          status: 401 
+        }
+      }
+      
+      // Check if user has admin role (you can customize this check)
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('subscription_level')
+        .eq('id', user.id)
+        .single()
+      
+      if (profileError) {
+        console.error('Error checking user profile:', profileError)
+        return { 
+          success: false, 
+          error: 'Unable to verify user permissions', 
+          status: 403 
+        }
+      }
+      
+      // Allow admin users (you can modify this logic based on your needs)
+      if (profile?.subscription_level === 'admin' || user.email?.endsWith('@isitvegan.com')) {
+        return { success: true, status: 200 }
+      }
+      
+      return { 
+        success: false, 
+        error: 'Insufficient permissions. Admin access required.', 
+        status: 403 
+      }
+      
+    } catch (error) {
+      console.error('JWT validation error:', error)
+      return { 
+        success: false, 
+        error: 'Token validation failed', 
+        status: 401 
+      }
+    }
+  }
+  
+  return { 
+    success: false, 
+    error: 'Authentication required. Provide X-API-Key or Authorization header.', 
+    status: 401 
+  }
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -27,6 +124,17 @@ serve(async (req) => {
   }
 
   try {
+    // Security: Validate authentication
+    const authResult = await validateAuthentication(req)
+    if (!authResult.success) {
+      return new Response(
+        JSON.stringify({ error: authResult.error }),
+        { 
+          status: authResult.status, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
